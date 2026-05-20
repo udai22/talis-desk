@@ -78,6 +78,7 @@ class AgentMessage:
     related_trade_idea_id: Optional[str]
     valid_from: datetime
     transaction_from: datetime
+    topic: Optional[str] = None
 
 
 # ============================================================================
@@ -132,6 +133,7 @@ def _row_to_message(row: sqlite3.Row) -> AgentMessage:
         related_trade_idea_id=d.get("related_trade_idea_id"),
         valid_from=_from_iso(d.get("valid_from")) or _utc_now(),
         transaction_from=_from_iso(d.get("transaction_from")) or _utc_now(),
+        topic=d.get("topic"),
     )
 
 
@@ -149,6 +151,7 @@ def post_message(
     related_artifact_id: Optional[str] = None,
     expires_in_hours: int = 72,
     dedupe_key: Optional[str] = None,
+    topic: Optional[str] = None,
 ) -> AgentMessage:
     """Post a durable message to another agent (`to_agent_or_topic="semis"`)
     or to a topic (`"#hot_investigations"`).
@@ -182,30 +185,68 @@ def post_message(
     expires_at = now + timedelta(hours=expires_in_hours) if expires_in_hours else None
     msg_id = f"msg_{uuid4().hex[:12]}"
 
-    conn.execute(
-        "INSERT INTO agent_messages "
-        "(id, from_agent, to_agent_or_topic, message_kind, payload, posted_at, "
-        " read_by, expires_at, dedupe_key, related_artifact_id, "
-        " related_hypothesis_id, related_trade_idea_id, valid_from, "
-        " transaction_from) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (
-            msg_id,
-            from_agent,
-            to_agent_or_topic,
-            kind,
-            json.dumps(payload),
-            _iso(now),
-            "[]",
-            _iso(expires_at) if expires_at else None,
-            dedupe_key,
-            related_artifact_id,
-            related_hypothesis_id,
-            related_trade_idea_id,
-            _iso(now),
-            _iso(now),
-        ),
-    )
+    # Auto-derive topic from `to_agent_or_topic` if not explicit. Anything
+    # starting with `#`, `topic:`, or `bb_topic:` is a topic channel.
+    resolved_topic = topic
+    if resolved_topic is None:
+        if to_agent_or_topic.startswith(("#", "topic:", "bb_topic:")):
+            resolved_topic = to_agent_or_topic
+
+    # Defensive: older desk.db builds (pre v6) may not have the `topic`
+    # column. Detect and degrade gracefully.
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(agent_messages)")}
+    has_topic = "topic" in cols
+    if has_topic:
+        conn.execute(
+            "INSERT INTO agent_messages "
+            "(id, from_agent, to_agent_or_topic, message_kind, payload, posted_at, "
+            " read_by, expires_at, dedupe_key, related_artifact_id, "
+            " related_hypothesis_id, related_trade_idea_id, valid_from, "
+            " transaction_from, topic) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                msg_id,
+                from_agent,
+                to_agent_or_topic,
+                kind,
+                json.dumps(payload),
+                _iso(now),
+                "[]",
+                _iso(expires_at) if expires_at else None,
+                dedupe_key,
+                related_artifact_id,
+                related_hypothesis_id,
+                related_trade_idea_id,
+                _iso(now),
+                _iso(now),
+                resolved_topic,
+            ),
+        )
+    else:
+        conn.execute(
+            "INSERT INTO agent_messages "
+            "(id, from_agent, to_agent_or_topic, message_kind, payload, posted_at, "
+            " read_by, expires_at, dedupe_key, related_artifact_id, "
+            " related_hypothesis_id, related_trade_idea_id, valid_from, "
+            " transaction_from) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                msg_id,
+                from_agent,
+                to_agent_or_topic,
+                kind,
+                json.dumps(payload),
+                _iso(now),
+                "[]",
+                _iso(expires_at) if expires_at else None,
+                dedupe_key,
+                related_artifact_id,
+                related_hypothesis_id,
+                related_trade_idea_id,
+                _iso(now),
+                _iso(now),
+            ),
+        )
     conn.commit()
 
     row = conn.execute(
@@ -316,6 +357,69 @@ def mark_read(message_id: str, reader_id: str) -> bool:
     )
     conn.commit()
     return True
+
+
+# ============================================================================
+# Convenience: cycle summary (kept from tic for parity with the dashboard)
+# ============================================================================
+
+# ============================================================================
+# Pull-mode task claiming — bitemporal blackboard topic channels (v6)
+# ============================================================================
+
+def pull_unclaimed_tasks(
+    topic_pattern: str,
+    max_n: int = 50,
+    claimant_id: Optional[str] = None,
+    include_claimed: bool = False,
+) -> list[AgentMessage]:
+    """Pull tasks from one or more topic channels for self-selection.
+
+    `topic_pattern` accepts SQL LIKE wildcards:
+      - `bb_topic:scout_output`          -> exact match
+      - `bb_topic:verified:macro:*`      -> all macro verified topics
+      - `#hot_investigations`            -> hashtag channel
+
+    `claimant_id` (optional) — if set, returns only messages where this
+    agent isn't yet in `read_by`. The caller is responsible for calling
+    `mark_read(msg_id, claimant_id)` once the task is consumed to claim it.
+
+    `include_claimed=True` returns everything matching, regardless of
+    read_by (useful for monitor / replay).
+    """
+    if not topic_pattern:
+        raise ValueError("topic_pattern required")
+    # Translate `*` wildcards into SQL LIKE syntax.
+    like = topic_pattern.replace("*", "%")
+    conn = get_desk_store().conn
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(agent_messages)")}
+    has_topic = "topic" in cols
+    now_iso = _iso(_utc_now())
+    if has_topic:
+        sql = (
+            "SELECT * FROM agent_messages "
+            "WHERE transaction_to IS NULL "
+            "AND (topic LIKE ? OR to_agent_or_topic LIKE ?) "
+            "AND (expires_at IS NULL OR expires_at > ?) "
+            "ORDER BY posted_at DESC LIMIT ?"
+        )
+        rows = conn.execute(sql, (like, like, now_iso, int(max_n))).fetchall()
+    else:
+        sql = (
+            "SELECT * FROM agent_messages "
+            "WHERE transaction_to IS NULL "
+            "AND to_agent_or_topic LIKE ? "
+            "AND (expires_at IS NULL OR expires_at > ?) "
+            "ORDER BY posted_at DESC LIMIT ?"
+        )
+        rows = conn.execute(sql, (like, now_iso, int(max_n))).fetchall()
+    out: list[AgentMessage] = []
+    for r in rows:
+        m = _row_to_message(r)
+        if not include_claimed and claimant_id and claimant_id in m.read_by:
+            continue
+        out.append(m)
+    return out
 
 
 # ============================================================================

@@ -14,6 +14,11 @@ Usage:
 By default runs sequentially so each specialist sees the prior ones'
 scratchpad messages (cross-talk lift). Parallel mode is faster but
 each specialist runs against an identical pre-state.
+
+The default DB is persistent (`~/.talis/desk.db`). Use `--temp-db` only
+for disposable smokes. Persistent state is not optional for the real
+desk: hydration/dehydration, Brier history, tool affinity, and research
+wiki synthesis all depend on cross-run continuity.
 """
 from __future__ import annotations
 
@@ -55,6 +60,64 @@ SPECIALIST_REGISTRY = {
                                "register_polymarket_divergence_v1"),
     "anomaly_scanner": ("talis_desk.specialists.anomaly_scanner_v1",
                          "register_anomaly_scanner_v1"),
+    "equity_fundamentals": ("talis_desk.specialists.equity_fundamentals_v1",
+                             "register_equity_fundamentals_v1"),
+    "catalyst_tracker": ("talis_desk.specialists.catalyst_tracker_v1",
+                          "register_catalyst_tracker_v1"),
+    "flow_positioning": ("talis_desk.specialists.flow_positioning_v1",
+                          "register_flow_positioning_v1"),
+    "pair_trade": ("talis_desk.specialists.pair_trade_v1",
+                    "register_pair_trade_v1"),
+    "mega_cap": ("talis_desk.specialists.mega_cap_v1",
+                  "register_mega_cap_v1"),
+    # Long-horizon structural specialists. Recommended cadence is WEEKLY
+    # (override the default daily loop). See each persona module's
+    # RECOMMENDED_CADENCE constant and prompt.md ROLE section.
+    "structural_thiel_lky": ("talis_desk.specialists.structural_thiel_lky_v1",
+                              "register_structural_thiel_lky_v1"),
+    "structural_osho":      ("talis_desk.specialists.structural_osho_v1",
+                              "register_structural_osho_v1"),
+    # Heliobiology + chronobiology applied to markets via statistical
+    # correlation testing. Lineage: Paracelsus x Tchijevsky x Osho.
+    # Anti-woo discipline; null results are first-class output. WEEKLY
+    # cadence (override the default daily loop). See
+    # osho_astrology_tracer_v1/prompt.md ANTI-WOO MANIFESTO.
+    "osho_astrology_tracer": ("talis_desk.specialists.osho_astrology_tracer_v1",
+                              "register_osho_astrology_tracer_v1"),
+    # Quant-flavored specialists — anchor the systematic side of the desk.
+    # Pure statistical arbitrage (cointegration + OU half-life + Kelly).
+    "stat_arb":            ("talis_desk.specialists.stat_arb_v1",
+                             "register_stat_arb_v1"),
+    # Systematic factor strategy (Fama-French / Carhart / AQR factor zoo).
+    "factor_strategy":     ("talis_desk.specialists.factor_strategy_v1",
+                             "register_factor_strategy_v1"),
+    # López de Prado-rigorous time-series signal construction.
+    "time_series_signal":  ("talis_desk.specialists.time_series_signal_v1",
+                             "register_time_series_signal_v1"),
+    # Deep vol-surface modeling (term, skew, dispersion, vol-of-vol).
+    "vol_quant":           ("talis_desk.specialists.vol_quant_v1",
+                             "register_vol_quant_v1"),
+    # Retail-translation specialist — distills the 19 institutional
+    # specialists into actionable signal for $5k-$50k Talis user
+    # accounts. Common-name catalysts, fade-or-follow logic, explicit
+    # dollar P&L, HL slippage at $500 notional. DAILY cadence.
+    "retail_alpha":        ("talis_desk.specialists.retail_alpha_v1",
+                             "register_retail_alpha_v1"),
+    # Money rotation & velocity — liquidity-cycle quant. Tracks where the
+    # marginal dollar of M2 / Fed liquidity expansion lands across asset
+    # classes; computes ΔMcap/ΔM2 absorption ratio + rotation velocity
+    # (transition probability matrix). See money_rotation_v1/prompt.md.
+    "money_rotation":      ("talis_desk.specialists.money_rotation_v1",
+                             "register_money_rotation_v1"),
+    # Material-info surveillance — real-time HL vehicle flow + SEC filings
+    # + headlines synthesized into a single confluence feed. Designed to
+    # surface signal 6+ hours BEFORE crypto/equity twitter aggregates it.
+    # REFUSES single-channel signals; every publish cites the confluence
+    # window explicitly. See material_info_surveillance_v1/prompt.md.
+    "material_info_surveillance": (
+        "talis_desk.specialists.material_info_surveillance_v1",
+        "register_material_info_surveillance_v1",
+    ),
 }
 
 
@@ -133,7 +196,9 @@ def run_one_cycle(specialist_id: str, cycle_id: str, budget_usd: float,
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--db", type=str, default=None,
-                   help="desk.db path; default tempdir/desk.db")
+                   help="desk.db path; default ~/.talis/desk.db")
+    p.add_argument("--temp-db", action="store_true",
+                   help="use a disposable tempdir/desk.db for smokes only")
     p.add_argument("--scope", type=str, default="market")
     p.add_argument("--cycle-id", type=str, default=None)
     p.add_argument("--budget", type=float, default=5.0,
@@ -146,9 +211,12 @@ def main() -> int:
     p.add_argument("--live", dest="paper_only", action="store_false")
     args = p.parse_args()
 
-    if args.db is None:
+    if args.db is None and args.temp_db:
         tmpdir = tempfile.mkdtemp(prefix="full_desk_")
         db_path = Path(tmpdir) / "desk.db"
+    elif args.db is None:
+        db_path = Path.home() / ".talis" / "desk.db"
+        db_path.parent.mkdir(parents=True, exist_ok=True)
     else:
         db_path = Path(args.db)
         db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -170,6 +238,19 @@ def main() -> int:
     from talis_desk.store import DeskStore
     import talis_desk.store as _store_mod
     _store_mod._STORE = DeskStore(db_path=db_path)
+
+    # Best-effort durability: start Litestream WAL replication if the
+    # binary is available; otherwise fall back to a snapshot uploader at
+    # cycle end. Either way this is non-fatal — local-only desks still run.
+    try:
+        from talis_desk.storage.litestream_runner import maybe_start_or_snapshot
+        _rep_status = maybe_start_or_snapshot(db_path)
+        print(
+            f"  storage_replication = mode={_rep_status.get('mode')} "
+            f"pid={_rep_status.get('pid')} url={_rep_status.get('url')}"
+        )
+    except Exception as _rep_err:
+        print(f"  storage_replication = SKIPPED ({type(_rep_err).__name__}: {_rep_err})")
 
     # ------------------------------------------------------------------
     # PREFLIGHT — Regenerate the tool atlas BEFORE specialists run. This is
@@ -272,6 +353,24 @@ def main() -> int:
     out_path.write_text(brief.markdown)
     print(f"  markdown_path       = {out_path}")
 
+    # Project the canonical desk.db into a persistent, navigable wiki after
+    # every run. This is deliberately non-fatal: the brief and manifest still
+    # matter if the wiki projection has a rendering bug.
+    wiki_root = None
+    wiki_pages_written = 0
+    wiki_error = None
+    banner("GENERATE RESEARCH WIKI")
+    try:
+        from talis_desk.wiki import generate_wiki
+        wiki = generate_wiki(db_path=db_path, cycle_id=cycle_id)
+        wiki_root = str(wiki.root)
+        wiki_pages_written = wiki.pages_written
+        print(f"  wiki_root           = {wiki_root}")
+        print(f"  wiki_pages_written  = {wiki_pages_written}")
+    except Exception as exc:
+        wiki_error = repr(exc)
+        print(f"  WARNING: wiki generation failed: {wiki_error}")
+
     # Also persist a JSON manifest of the run so the user can audit.
     manifest_path = Path(f"/tmp/talis_full_desk_manifest_{ts}.json")
     import json
@@ -286,6 +385,9 @@ def main() -> int:
                     for r in results],
         "brief_id": brief.id,
         "brief_path": str(out_path),
+        "wiki_root": wiki_root,
+        "wiki_pages_written": wiki_pages_written,
+        "wiki_error": wiki_error,
         "totals": {
             "specialists_ok": len(ok),
             "total_cost_usd": total_cost,

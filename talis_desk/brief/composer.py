@@ -64,6 +64,7 @@ import concurrent.futures
 import hashlib
 import json
 import logging
+import os
 import sqlite3
 import sys
 import time
@@ -297,6 +298,46 @@ def compose_brief(
 
     conn = conn or get_desk_store().conn
 
+    # --- Sub-cycle auto-expansion -----------------------------------------
+    # When the caller passes ONLY a base `cycle_id` (no explicit
+    # `cycle_ids`), expand to all sub-cycles matching `{cycle_id}__*`. Each
+    # specialist persists rows under `{base}__{specialist_id}` (see
+    # `run_full_desk.run_one_cycle`); without this expansion the brief
+    # would aggregate zero rows. Best-effort: if some specialists haven't
+    # completed yet, we still aggregate the ones that have.
+    if cycle_id and not cycle_ids:
+        prefix = f"{cycle_id}__"
+        seen_ids: set[str] = {cycle_id}
+        expanded: list[str] = [cycle_id]
+        for tbl in (
+            "tool_call_log",
+            "hypotheses",
+            "trade_ideas",
+            "debates",
+            "specialist_states",
+            "research_reports",
+        ):
+            try:
+                rows = conn.execute(
+                    f"SELECT DISTINCT cycle_id FROM {tbl} "
+                    f"WHERE cycle_id LIKE ? AND transaction_to IS NULL",
+                    (prefix + "%",),
+                ).fetchall()
+            except sqlite3.OperationalError:
+                # Table may not exist on pre-migration desks.
+                continue
+            for r in rows:
+                cid = r[0] if not hasattr(r, "keys") else r["cycle_id"]
+                if cid and cid not in seen_ids:
+                    seen_ids.add(cid)
+                    expanded.append(cid)
+        if len(expanded) > 1:
+            cycle_ids = expanded
+            logger.info(
+                "brief.compose_brief: auto-expanded cycle_id=%s -> %d sub-cycles",
+                cycle_id, len(expanded),
+            )
+
     # --- Pull data ---------------------------------------------------------
     open_book = _fetch_open_trade_book(conn, ctx)
     closed_book = _fetch_closed_trade_book(conn, anchor, CLOSED_BOOK_LOOKBACK_DAYS)
@@ -308,6 +349,8 @@ def compose_brief(
     cycle_stats = _fetch_cycle_stats(conn, cycle_id, anchor,
                                       cycle_ids=cycle_ids)
     source_health = _fetch_source_health()  # talis-tic; degraded if missing
+    calendar_gate = _fetch_calendar_gate(anchor)
+    calendar_gate_payload = _calendar_gate_to_payload(calendar_gate)
 
     # Fetch candidate artifacts BEFORE headline synthesis so the LLM can see
     # them. The brief sections themselves are gated on non-empty further down.
@@ -326,6 +369,10 @@ def compose_brief(
     cited_claim_ids = _gather_cited_claim_ids(open_book, hot_hyps, debates)
     quality_flags = _bubble_quality_flags(conn, cited_claim_ids, open_book,
                                            hot_hyps, ctx)
+    if not calendar_gate_payload.get("available"):
+        quality_flags = sorted(set(
+            quality_flags + list(calendar_gate_payload.get("quality_flags") or [])
+        ))
 
     # --- Headline synthesis (one LLM call) --------------------------------
     # When there are no trade ideas + no hot hypotheses but we DO have
@@ -349,6 +396,7 @@ def compose_brief(
         "n_watchlist": len(watchlist_setups),
         "n_blocked": len(blocked_ideas),
         "n_reports": len(research_reports),
+        "calendar_gate": calendar_gate_payload,
         "as_of": _iso(anchor),
         "scope": scope,
     }
@@ -397,6 +445,22 @@ def compose_brief(
             "compose_brief: headline unavailable, emitting brief without "
             "a synthesized headline. reason=%s", headline_unavailable_reason,
         )
+
+    # Hard catalyst gate: if today has a critical catalyst, the brief must
+    # lead with it even when the desk's specialist output ignored it. This is
+    # source-derived text, not a stubbed model hallucination.
+    if calendar_gate and calendar_gate.severity == "critical":
+        override = calendar_gate.headline_override_text
+        if override:
+            if headline_text and override not in headline_text:
+                headline_text = f"{override}\n\n{headline_text}"
+            else:
+                headline_text = override
+            headline_meta = {
+                **headline_meta,
+                "calendar_gate_forced": True,
+                "calendar_must_lead": calendar_gate.must_lead_brief_with,
+            }
 
     if cost_usd > BRIEF_COST_HARD_USD:
         raise BriefCostExceededError(
@@ -455,6 +519,8 @@ def compose_brief(
     # surface of the brief going forward.
     if research_reports:
         sections["research_reports"] = _render_research_reports(research_reports)
+    if calendar_gate and calendar_gate.severity != "none":
+        sections["calendar_gate"] = _render_calendar_gate(calendar_gate_payload)
     sections["source_health"] = render_source_health(source_health)
     sections["cycle_stats"] = render_cycle_stats({
         **cycle_stats,
@@ -463,6 +529,23 @@ def compose_brief(
     sections["methodology"] = render_methodology_notes(quality_flags, anchor)
 
     markdown = render_brief_markdown(sections)
+    calendar_coverage: dict[str, Any] = {}
+    if calendar_gate:
+        try:
+            from .calendar_gate import validate_brief_covers_calendar
+            calendar_coverage = validate_brief_covers_calendar(
+                markdown, calendar_gate,
+            )
+            missed_flags = calendar_coverage.get("quality_flags") or []
+            if missed_flags:
+                quality_flags = sorted(set(quality_flags + list(missed_flags)))
+                sections["methodology"] = render_methodology_notes(
+                    quality_flags, anchor,
+                )
+                markdown = render_brief_markdown(sections)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("compose_brief: calendar coverage validation failed: %s", e)
+            calendar_coverage = {"error": str(e)[:240]}
 
     # --- Structured payload (drives JSON output + downstream consumers) ---
     structured_payload: dict[str, Any] = {
@@ -479,6 +562,8 @@ def compose_brief(
         "cycle_stats": cycle_stats,
         "reward_summary": reward_summary,
         "quality_flags": quality_flags,
+        "calendar_gate": calendar_gate_payload,
+        "calendar_coverage": calendar_coverage,
         "scope": scope,
         "as_of": _iso(anchor),
         "is_quiet_cycle": is_quiet,
@@ -1355,6 +1440,95 @@ def _fetch_source_health() -> list[dict[str, Any]]:
                 "consecutive_failures": info.get("consecutive_failures"),
             })
     return degraded
+
+
+def _fetch_calendar_gate(anchor: datetime) -> Any:
+    """Run the must-lead catalyst gate against talis-tic's events table.
+
+    Returns a CalendarGateResult or None. Failures degrade into a quality
+    flag surfaced by the structured payload rather than blocking the brief.
+    SEC EDGAR live checks are opt-in because they can add network latency;
+    local TIC events remain the default hard gate.
+    """
+    try:
+        from .._tic_config import get_tic_root
+        from .calendar_gate import check_calendar_today
+
+        tic_db = get_tic_root() / "tic" / "tic.db"
+        if not tic_db.exists():
+            logger.warning("compose_brief: calendar gate tic.db missing: %s", tic_db)
+            return None
+        include_sec = (
+            os.environ.get("TALIS_DESK_CALENDAR_GATE_SEC_EDGAR", "0").strip()
+            in {"1", "true", "TRUE", "yes", "YES"}
+        )
+        with sqlite3.connect(str(tic_db)) as tic_conn:
+            tic_conn.row_factory = sqlite3.Row
+            return check_calendar_today(
+                anchor,
+                tic_conn,
+                include_sec_edgar=include_sec,
+            )
+    except Exception as e:  # noqa: BLE001
+        logger.warning("compose_brief: calendar gate unavailable (%s)", e)
+        return None
+
+
+def _calendar_gate_to_payload(calendar_gate: Any) -> dict[str, Any]:
+    if calendar_gate is None:
+        return {
+            "available": False,
+            "severity": "unknown",
+            "triggers": [],
+            "quality_flags": ["calendar_gate_unavailable"],
+        }
+    return {
+        "available": True,
+        "severity": getattr(calendar_gate, "severity", "unknown"),
+        "triggers": list(getattr(calendar_gate, "triggers", []) or []),
+        "must_lead_brief_with": getattr(
+            calendar_gate, "must_lead_brief_with", None,
+        ),
+        "headline_override_text": getattr(
+            calendar_gate, "headline_override_text", None,
+        ),
+        "quality_flags": list(
+            getattr(calendar_gate, "quality_flag_if_missed", []) or []
+        ),
+    }
+
+
+def _render_calendar_gate(payload: dict[str, Any]) -> str:
+    """Render today's critical/high catalysts as an explicit brief section."""
+    if not payload or not payload.get("available"):
+        return ""
+    sev = payload.get("severity") or "unknown"
+    triggers = payload.get("triggers") or []
+    if sev == "none" and not triggers:
+        return ""
+    lines = [f"## Calendar Gate — {str(sev).upper()}"]
+    must = payload.get("must_lead_brief_with")
+    if must:
+        lines.append(f"- Must lead: {must}")
+    severity_rank = {"critical": 0, "high": 1, "medium": 2, "none": 3, "unknown": 4}
+    ordered_triggers = sorted(
+        triggers,
+        key=lambda t: (
+            severity_rank.get(str(t.get("severity") or "unknown"), 9),
+            str(t.get("event_time_iso") or ""),
+        ),
+    )
+    for t in ordered_triggers[:12]:
+        label = t.get("ticker") or t.get("release") or t.get("headline") or "event"
+        kind = t.get("kind") or "event"
+        t_sev = t.get("severity") or "unknown"
+        when = t.get("event_time_iso") or "today"
+        src = t.get("source") or "unknown_source"
+        lines.append(f"- {t_sev}: {label} ({kind}) — {when} [{src}]")
+    qf = payload.get("quality_flags") or []
+    if qf:
+        lines.append("- Gate flags: " + ", ".join(str(x) for x in qf[:6]))
+    return "\n".join(lines)
 
 
 # ============================================================================

@@ -10,6 +10,7 @@ from .scratchpad import (
     mark_read,
     post_message,
     post_to_scratchpad_for_cycle,
+    pull_unclaimed_tasks,
     read_unread_messages,
 )
 
@@ -19,5 +20,6 @@ __all__ = [
     "read_unread_messages",
     "mark_read",
     "post_to_scratchpad_for_cycle",
+    "pull_unclaimed_tasks",
     "cycle_summary",
 ]
