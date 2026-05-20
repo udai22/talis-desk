@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+desk.db*
+.DS_Store
+agents/*/fs/scratch/
+agents/*/fs/cache/
+*.log

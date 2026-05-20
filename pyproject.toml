@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "talis-desk"
+version = "0.1.0"
+description = "Talis SOTA Research Desk — autonomous Hyperliquid alpha research organism. Layer 2 of the Talis stack (sits on top of talis-tic data layer)."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{name = "Talis"}]
+license = {text = "Proprietary"}
+dependencies = [
+  "pydantic>=2.0",
+  "anthropic>=0.40",
+  "openai>=1.0",
+  "stumpy>=1.13",
+  "numpy",
+  "pandas",
+  "scipy",
+  "statsmodels",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff", "mypy"]
+postgres = ["psycopg[binary]>=3.2", "pgvector"]
+
+# talis-tic is a sibling repo. For dev install with:
+#   pip install -e /Users/udaikhattar/jarvis-ios/docs/research/brief_experiments
+# (until we publish talis-tic as a proper package)
