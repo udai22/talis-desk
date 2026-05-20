@@ -629,9 +629,9 @@ async def _call_director_llm_async(
       {"text": str, "model_used": str, "fallback_used": bool,
        "error": Optional[str], "parsed": dict, "chain_position": int}
     """
-    sib = "/Users/udaikhattar/jarvis-ios/docs/research/brief_experiments"
-    if sib not in sys.path:
-        sys.path.insert(0, sib)
+    # Codex finding #16: centralized path resolution.
+    from .._tic_config import ensure_tic_on_path
+    ensure_tic_on_path()
     from tic.desk.models import chat as _chat  # type: ignore
 
     # Build chain: caller-supplied primary + secondary, then canonical chain.

@@ -92,9 +92,9 @@ def _ensure_tic_on_path() -> None:
         return
     except ImportError:
         pass
-    sibling = "/Users/udaikhattar/jarvis-ios/docs/research/brief_experiments"
-    if sibling not in sys.path:
-        sys.path.insert(0, sibling)
+    # Codex finding #16: centralized path resolution.
+    from .._tic_config import ensure_tic_on_path as _impl
+    _impl()
 
 
 def _claim_attr(claim: ClaimLike, name: str, default: Any = None) -> Any:

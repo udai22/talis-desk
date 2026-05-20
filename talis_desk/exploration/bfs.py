@@ -879,6 +879,19 @@ def explore_adversarial(
             )
             # Charge the cycle for the scorer call (cost accounting).
             inv.cost_used_usd += float(evidence_score.cost_usd or 0.0)
+            # Codex finding #15: also charge the desk-wide daily ledger.
+            # Best-effort — a ledger failure must not break the BFS loop.
+            if (evidence_score.cost_usd or 0.0) > 0:
+                try:
+                    from ..cost_ledger import get_cost_ledger
+                    get_cost_ledger().record(
+                        amount_usd=float(evidence_score.cost_usd),
+                        stage="explore_evidence",
+                        specialist_id=inv.seed.specialist_id,
+                        cycle_id=context.cycle_id,
+                    )
+                except Exception:
+                    pass
             # Override the synthetic heat.contradiction_score with the REAL
             # signed delta. Keep posterior_delta/surprise/novelty from the
             # heat call so hot-branch spawning thresholds still work.

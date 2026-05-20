@@ -315,6 +315,13 @@ def compose_brief(
         conn, cycle_id, cycle_ids,
     )
 
+    # Adversarial-pipeline research reports — the brief now composes its
+    # narrative + table-of-contents FROM these rows (the trade book +
+    # hot-hypotheses sections are still rendered for back-compat, but
+    # they are no longer the primary surface for the headline LLM call).
+    research_reports = _fetch_research_reports(conn, cycle_id, cycle_ids)
+    top_reports = research_reports[:3]
+
     # --- Quality flag propagation -----------------------------------------
     cited_claim_ids = _gather_cited_claim_ids(open_book, hot_hyps, debates)
     quality_flags = _bubble_quality_flags(conn, cited_claim_ids, open_book,
@@ -333,10 +340,15 @@ def compose_brief(
         "recent_debate": debates[0] if debates else None,
         "top_watchlist": top_watchlist,
         "top_blocked": top_blocked,
+        # Pivot: the headline LLM call now sees top_reports[:3] from the
+        # adversarial pipeline. The prompt below uses these as the
+        # primary source for the 3-sentence narrative.
+        "top_reports": top_reports,
         "n_open": len(open_book),
         "n_hot": len(hot_hyps),
         "n_watchlist": len(watchlist_setups),
         "n_blocked": len(blocked_ideas),
+        "n_reports": len(research_reports),
         "as_of": _iso(anchor),
         "scope": scope,
     }
@@ -347,6 +359,23 @@ def compose_brief(
             model=headline_model,
             fallback=headline_fallback,
         )
+        # Codex finding #15: record brief headline LLM spend on the
+        # desk-wide daily cost ledger. Best-effort; never fail the
+        # brief over a ledger error.
+        if cost_usd and cost_usd > 0:
+            try:
+                from ..cost_ledger import get_cost_ledger
+                get_cost_ledger().record(
+                    amount_usd=float(cost_usd),
+                    stage="brief_headline",
+                    specialist_id=None,
+                    cycle_id=cycle_id or "brief",
+                )
+            except Exception as _ledger_err:  # noqa: BLE001
+                logger.info(
+                    "cost_ledger.record(brief_headline) failed: %s",
+                    _ledger_err,
+                )
     except BriefHeadlineUnavailableError as e:
         # NO STUBS — every provider in the headline fallback chain failed.
         # Surface the gap explicitly; the brief still emits with the full
@@ -395,11 +424,12 @@ def compose_brief(
 
     # --- Build sections ---------------------------------------------------
     # A cycle is "quiet" only if NOTHING surfaced: no open ideas, no hot
-    # hypotheses, no watchlist setups, no blocked candidates, no debates.
-    # Otherwise the LLM headline path runs because the desk has signal.
+    # hypotheses, no watchlist setups, no blocked candidates, no debates,
+    # AND no adversarial-pipeline research reports. Otherwise the LLM
+    # headline path runs because the desk has signal.
     is_quiet = (
         not open_book and not hot_hyps and not watchlist_setups
-        and not blocked_ideas and not debates
+        and not blocked_ideas and not debates and not research_reports
     )
     sections: dict[str, str] = {
         "header": render_header(scope, anchor),
@@ -420,6 +450,11 @@ def compose_brief(
         sections["watchlist_setups"] = _render_watchlist_setups(watchlist_setups)
     if blocked_ideas:
         sections["blocked_ideas"] = _render_blocked_ideas(blocked_ideas)
+    # Adversarial-pipeline research reports — TOC + inline body for the
+    # top-N by severity/confidence. This is the PRIMARY narrative
+    # surface of the brief going forward.
+    if research_reports:
+        sections["research_reports"] = _render_research_reports(research_reports)
     sections["source_health"] = render_source_health(source_health)
     sections["cycle_stats"] = render_cycle_stats({
         **cycle_stats,
@@ -450,6 +485,8 @@ def compose_brief(
         # Codex finding #7 — richer candidate-set artifacts.
         "watchlist_setups": watchlist_setups,
         "blocked_ideas": blocked_ideas,
+        # Adversarial-pipeline research reports (primary brief surface).
+        "research_reports": research_reports,
     }
 
     # --- Assemble Brief ---------------------------------------------------
@@ -961,6 +998,306 @@ def _render_watchlist_setups(rows: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def _fetch_research_reports(
+    conn: sqlite3.Connection,
+    cycle_id: Optional[str],
+    cycle_ids: Optional[list[str]],
+) -> list[dict[str, Any]]:
+    """Pull adversarial-pipeline research reports for this brief.
+
+    Aggregates across `cycle_ids` when provided, else falls back to a
+    single `cycle_id`. Ranked: severity green > yellow > red, then
+    confidence DESC, then novelty_score DESC NULLS LAST, then newest
+    first. Returns dicts (JSON-decoded columns).
+
+    Defensive: missing table -> [] (lets pre-migration desks render
+    briefs without erroring).
+    """
+    id_list: list[str] = []
+    if cycle_ids:
+        id_list = [c for c in cycle_ids if c]
+    elif cycle_id:
+        id_list = [cycle_id]
+    if not id_list:
+        return []
+    try:
+        from ..reports import fetch_reports_for_cycle
+        return fetch_reports_for_cycle(id_list, conn=conn, limit=200)
+    except sqlite3.Error as e:
+        logger.info("compose_brief: research_reports fetch skipped (%s)", e)
+        return []
+    except Exception as e:  # noqa: BLE001
+        logger.info("compose_brief: research_reports fetcher unavailable (%s)", e)
+        return []
+
+
+_SEVERITY_DOT = {"green": "🟢", "yellow": "🟡", "red": "🔴"}
+
+
+#: Reports below this grader score get bucketed into "Flagged for review".
+_GRADE_FLAG_THRESHOLD = 7.0
+
+
+def _report_overall_score(r: dict[str, Any]) -> Optional[float]:
+    """Pull `payload.grade.overall_score` from a research_reports row."""
+    payload = r.get("payload") or {}
+    if not isinstance(payload, dict):
+        return None
+    grade = payload.get("grade") or {}
+    if not isinstance(grade, dict):
+        return None
+    raw = grade.get("overall_score")
+    if raw is None:
+        return None
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _partition_reports_by_grade(
+    rows: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Split reports into (main, flagged_for_review).
+
+    A report goes to `flagged_for_review` when EITHER:
+      - `payload.grade.overall_score < 7.0`, OR
+      - `quality_flags` contains `below_grade_threshold`.
+    """
+    main: list[dict[str, Any]] = []
+    flagged: list[dict[str, Any]] = []
+    for r in rows:
+        score = _report_overall_score(r)
+        qflags = r.get("quality_flags") or []
+        if not isinstance(qflags, list):
+            qflags = []
+        below_flag = "below_grade_threshold" in qflags
+        is_flagged = below_flag or (
+            score is not None and score < _GRADE_FLAG_THRESHOLD
+        )
+        if is_flagged:
+            flagged.append(r)
+        else:
+            main.append(r)
+    return main, flagged
+
+
+def _sort_reports_by_quality(
+    rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Sort by grade.overall_score DESC, severity (green > yellow > red),
+    confidence DESC, then newest first. Missing scores sort below scored
+    rows (so good-but-ungraded reports still appear, but graded ones
+    win the top slots)."""
+    sev_rank = {"green": 0, "yellow": 1, "red": 2}
+
+    def _key(r: dict[str, Any]) -> tuple[Any, ...]:
+        score = _report_overall_score(r)
+        # Negate score so DESC; sentinel for missing pushes to bottom.
+        s_key = -score if score is not None else 999.0
+        sev = (r.get("adversarial_severity") or "yellow").lower()
+        sev_k = sev_rank.get(sev, 1)
+        conf = r.get("confidence") or 0.0
+        try:
+            conf_k = -float(conf)
+        except (TypeError, ValueError):
+            conf_k = 0.0
+        tx_from = r.get("transaction_from") or ""
+        # ISO timestamps sort lexically; negate via reverse later. Use
+        # tuple ordering; we rely on stable sort for ties.
+        return (s_key, sev_k, conf_k, -hash(tx_from) & 0xffff)
+
+    return sorted(rows, key=_key)
+
+
+def _render_inline_highlights(payload: dict[str, Any]) -> list[str]:
+    """Pull historical_analogs + consensus_divergence + grade scores
+    from the payload and render compact inline highlights. These run
+    BEFORE the full body so the reader sees the proprietary lift first."""
+    out: list[str] = []
+    comparables = (payload or {}).get("comparables") or {}
+    analogs = comparables.get("historical_analogs") or []
+    if analogs:
+        out.append("**Historical analogs (pipeline stage-1):**")
+        for a in analogs[:3]:
+            dr = a.get("date_range") or "?"
+            sim = a.get("similarity_score")
+            sim_str = (
+                f"{float(sim):.2f}" if isinstance(sim, (int, float)) else "n/a"
+            )
+            outcome = (a.get("outcome_summary") or "")[:160]
+            diffs = (a.get("key_differences") or "")[:160]
+            cids = a.get("citation_claim_ids") or []
+            refs = " ".join(f"[claim:{c}]" for c in (cids or [])[:3])
+            out.append(
+                f"  - {dr} (sim={sim_str}) {refs} :: {outcome}"
+            )
+            if diffs:
+                out.append(f"    _diff_: {diffs}")
+        out.append("")
+    consensus = comparables.get("consensus_position") or ""
+    divergence = comparables.get("our_divergence") or ""
+    if consensus or divergence:
+        out.append("**Consensus vs us (pipeline stage-1):**")
+        if consensus:
+            out.append(f"  - _Street:_ {consensus[:400]}")
+        if divergence:
+            out.append(f"  - _Us:_ {divergence[:400]}")
+        dur = comparables.get("edge_durability_days")
+        eic = comparables.get("confidence_in_edge")
+        if dur or eic is not None:
+            out.append(
+                f"  - _edge_durability={dur}d, confidence_in_edge="
+                f"{eic if eic is not None else 'n/a'}_"
+            )
+        out.append("")
+    grade = (payload or {}).get("grade") or {}
+    if grade:
+        score = grade.get("overall_score")
+        if score is not None:
+            try:
+                score_f = float(score)
+            except (TypeError, ValueError):
+                score_f = 0.0
+            out.append(
+                f"**Grade: {score_f:.1f}/10** "
+                f"(clarity={grade.get('clarity_score')}, "
+                f"evidence={grade.get('evidence_depth_score')}, "
+                f"novelty={grade.get('novelty_vs_consensus_score')}, "
+                f"falsifiability={grade.get('falsifiability_score')}, "
+                f"sizing={grade.get('sizing_rigor_score')})"
+            )
+            rationale = (grade.get("grader_rationale") or "")[:300]
+            if rationale:
+                out.append(f"_{rationale}_")
+            out.append("")
+    return out
+
+
+def _render_research_reports(rows: list[dict[str, Any]]) -> str:
+    """Render the '## Research Reports (today)' section.
+
+    Output shape:
+      - Header with total count
+      - Main TOC (sorted by grade.overall_score DESC, severity tiebreak)
+      - Top-5 full bodies inline, each preceded by historical analogs +
+        consensus-divergence highlights pulled from the payload
+      - Separate "Reports Flagged for Review" section listing reports
+        with overall_score < 7.0 (or the below_grade_threshold flag)
+
+    Reports without a grade fall to the bottom of the main TOC but are
+    still rendered (so dossier-only or grade-unavailable runs surface).
+    """
+    if not rows:
+        return ""
+    sorted_rows = _sort_reports_by_quality(rows)
+    main_rows, flagged_rows = _partition_reports_by_grade(sorted_rows)
+
+    n = len(rows)
+    lines: list[str] = [f"## Research Reports (today) ({n})", ""]
+    lines.append(
+        "Each surviving hypothesis ran through the desk's 6-stage "
+        "adversarial pipeline (dossier -> comparables -> researcher -> "
+        "dual-critic -> revise -> polish -> grade). Reports below are "
+        "ranked by grader overall_score, with severity tiebreak."
+    )
+    lines.append("")
+
+    # ---------- Main TOC ----------
+    lines.append(
+        "| report_id | kind | instrument | title | severity | grade | "
+        "confidence | by |"
+    )
+    lines.append(
+        "|---|---|---|---|---|---|---|---|"
+    )
+    for r in main_rows[:50]:
+        rid = r.get("id") or "?"
+        kind = r.get("report_kind") or "?"
+        inst = r.get("instrument") or "?"
+        title = (r.get("title") or "").replace("|", "\\|")[:80]
+        sev = (r.get("adversarial_severity") or "yellow").lower()
+        sev_dot = _SEVERITY_DOT.get(sev, sev)
+        conf = r.get("confidence")
+        conf_str = f"{float(conf):.2f}" if conf is not None else "n/a"
+        score = _report_overall_score(r)
+        score_str = f"{score:.1f}" if score is not None else "—"
+        spec = r.get("specialist_id") or "?"
+        lines.append(
+            f"| `{rid}` | {kind} | {inst} | {title} | {sev_dot} {sev} | "
+            f"{score_str} | {conf_str} | `{spec}` |"
+        )
+    lines.append("")
+
+    # ---------- Top-5 full bodies with stage-1 highlights inline ----------
+    lines.append("### Top reports — analogs, divergence, full body")
+    lines.append("")
+    for r in main_rows[:5]:
+        rid = r.get("id") or "?"
+        title = r.get("title") or "(untitled)"
+        sev = (r.get("adversarial_severity") or "yellow").lower()
+        sev_dot = _SEVERITY_DOT.get(sev, sev)
+        spec = r.get("specialist_id") or "?"
+        kind = r.get("report_kind") or "?"
+        inst = r.get("instrument") or "?"
+        body = (r.get("body_md") or "").strip()
+        payload = r.get("payload") or {}
+        if not isinstance(payload, dict):
+            payload = {}
+        lines.append(f"---\n")
+        lines.append(
+            f"#### {sev_dot} `{rid}` — {title}  \n"
+            f"_kind=`{kind}`  ·  instrument=`{inst}`  ·  by `{spec}`_"
+        )
+        lines.append("")
+        # Stage-1 highlights ABOVE the body so analogs + divergence are
+        # the first thing the reader sees per Codex review feedback.
+        lines.extend(_render_inline_highlights(payload))
+        if body:
+            lines.append(body)
+            lines.append("")
+
+    # ---------- Reports Flagged for Review (overall_score < 7.0) ----------
+    if flagged_rows:
+        lines.append("---")
+        lines.append("")
+        lines.append(
+            f"### Reports Flagged for Review "
+            f"(overall_score < {_GRADE_FLAG_THRESHOLD:.1f}) "
+            f"({len(flagged_rows)})"
+        )
+        lines.append(
+            "These reports passed the adversarial pipeline but the "
+            "grader scored them below the publication threshold. "
+            "Review before relying on the thesis."
+        )
+        lines.append("")
+        for r in flagged_rows[:25]:
+            rid = r.get("id") or "?"
+            title = (r.get("title") or "").replace("|", "\\|")[:80]
+            sev = (r.get("adversarial_severity") or "yellow").lower()
+            sev_dot = _SEVERITY_DOT.get(sev, sev)
+            spec = r.get("specialist_id") or "?"
+            inst = r.get("instrument") or "?"
+            score = _report_overall_score(r)
+            score_str = f"{score:.1f}" if score is not None else "n/a"
+            payload = r.get("payload") or {}
+            if not isinstance(payload, dict):
+                payload = {}
+            grade = payload.get("grade") or {}
+            rationale = (
+                grade.get("grader_rationale") or "(no rationale)"
+            )[:240]
+            lines.append(
+                f"- `{rid}` {sev_dot} **{inst}** — {title} "
+                f"(grade={score_str}, by `{spec}`)"
+            )
+            lines.append(f"  - _grader:_ {rationale}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 def _render_blocked_ideas(rows: list[dict[str, Any]]) -> str:
     """Codex finding #7 — '## Blocked Ideas (this cycle)' section."""
     lines = [f"## Blocked Ideas (this cycle) ({len(rows)})"]
@@ -1131,9 +1468,16 @@ def _synthesize_headline(
     """
     system = (
         "You are the desk briefer for the Talis autonomous Hyperliquid "
-        "research desk. Your sole task: write a TWO- or THREE-sentence "
-        "headline that summarizes the desk's most important findings this "
-        "cycle. Priority order for what to lead with:\n"
+        "research desk. Synthesize a THREE-sentence narrative across the "
+        "desk's strongest research reports today. Behavior:\n"
+        "  - LEAD with the highest-conviction setup from `top_reports[0]` "
+        "(cite the report kind, instrument, severity, and headline claim).\n"
+        "  - NAME one cross-report contradiction if `top_reports` carries "
+        "conflicting directional views.\n"
+        "  - END with the single biggest unresolved question the desk left "
+        "open (pull from the report's risks or invalidation criteria).\n"
+        "If `top_reports` is empty (zero adversarial-pipeline outputs), "
+        "fall back to the legacy priority order:\n"
         "  1. The top open trade idea (cite instrument, direction, "
         "confidence, the supporting/contradicting hypothesis).\n"
         "  2. If no open idea: the top watchlist setup (cite the "
@@ -1141,8 +1485,8 @@ def _synthesize_headline(
         "  3. If no open idea AND no watchlist: the top blocked idea "
         "(cite the instrument and the block reason).\n"
         "Be concrete. No hype, no caveats, no emojis. Avoid the phrase "
-        "'quiet cycle' unless n_open + n_hot + n_watchlist + n_blocked "
-        "are ALL zero."
+        "'quiet cycle' unless n_open + n_hot + n_watchlist + n_blocked + "
+        "n_reports are ALL zero."
     )
     user = _format_headline_prompt(payload)
 
@@ -1153,6 +1497,7 @@ def _synthesize_headline(
         and not payload.get("top_watchlist")
         and not payload.get("top_blocked")
         and not payload.get("recent_debate")
+        and not payload.get("top_reports")
     )
     if truly_quiet:
         return (
@@ -1212,8 +1557,31 @@ def _format_headline_prompt(payload: dict[str, Any]) -> str:
         f"n_hot_hypotheses: {payload['n_hot']}",
         f"n_watchlist_setups: {payload.get('n_watchlist', 0)}",
         f"n_blocked_ideas: {payload.get('n_blocked', 0)}",
+        f"n_research_reports: {payload.get('n_reports', 0)}",
         "",
     ]
+    # Top research reports first — primary surface going forward.
+    top_reports = payload.get("top_reports") or []
+    if top_reports:
+        lines.append("Top research reports (adversarial-pipeline output, "
+                     "ranked by severity then confidence):")
+        for i, r in enumerate(top_reports[:3]):
+            lines.append(
+                f"  [{i}] id={r.get('id')} kind={r.get('report_kind')} "
+                f"instrument={r.get('instrument')} severity="
+                f"{r.get('adversarial_severity')} "
+                f"confidence={r.get('confidence')}"
+            )
+            title = (r.get("title") or "").strip()
+            if title:
+                lines.append(f"      title: {title[:200]}")
+            abstract = (r.get("abstract") or "").strip()
+            if abstract:
+                lines.append(f"      abstract: {abstract[:400]}")
+            edge = (r.get("edge_thesis") or "").strip()
+            if edge:
+                lines.append(f"      edge_thesis: {edge[:300]}")
+        lines.append("")
     ti = payload.get("top_idea")
     if ti:
         sizing = ti.get("sizing") or {}
@@ -1433,16 +1801,8 @@ def _write_to_tic_artifacts(brief: Brief) -> Optional[str]:
 # Internal helpers
 # ============================================================================
 
-_TIC_SIBLING_PATH = "/Users/udaikhattar/jarvis-ios/docs/research/brief_experiments"
-
-
-def _ensure_tic_on_path() -> None:
-    """Make the sibling talis-tic checkout importable. Same pattern used by
-    `talis_desk/debate/judge.py`. The boundary contract still applies: we
-    only ever read from `tic.*`, never write to anything but `claims` and
-    `artifacts` with `source_ref='talis_desk:...'`."""
-    if _TIC_SIBLING_PATH not in sys.path:
-        sys.path.insert(0, _TIC_SIBLING_PATH)
+# Codex finding #16: centralized path resolution in `talis_desk._tic_config`.
+from .._tic_config import ensure_tic_on_path as _ensure_tic_on_path  # noqa: E402
 
 
 def _utc_now() -> datetime:

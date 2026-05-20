@@ -26,10 +26,15 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 
-# talis-tic must be importable before any talis_desk imports that lazy-load it
-TIC_PATH = "/Users/udaikhattar/jarvis-ios/docs/research/brief_experiments"
-if TIC_PATH not in sys.path:
-    sys.path.insert(0, TIC_PATH)
+# talis-tic must be importable before any talis_desk imports that lazy-load it.
+# Codex finding #16: centralized in `talis_desk._tic_config`; resolves
+# `TALIS_TIC_ROOT` (env) and falls back to the legacy dev path with a
+# deprecation warning. Kept as `TIC_PATH` for back-compat with downstream
+# references in this script.
+from talis_desk._tic_config import ensure_tic_on_path as _ensure_tic_on_path  # noqa: E402
+from talis_desk._tic_config import get_tic_root as _get_tic_root  # noqa: E402
+_ensure_tic_on_path()
+TIC_PATH = str(_get_tic_root())
 
 
 SPECIALIST_REGISTRY = {
@@ -42,6 +47,14 @@ SPECIALIST_REGISTRY = {
                      "register_smart_money_v1"),
     "sentiment_event": ("talis_desk.specialists.sentiment_event_v1",
                          "register_sentiment_event_v1"),
+    "rrg_rotation": ("talis_desk.specialists.rrg_rotation_v1",
+                      "register_rrg_rotation_v1"),
+    "options_vol": ("talis_desk.specialists.options_vol_v1",
+                     "register_options_vol_v1"),
+    "polymarket_divergence": ("talis_desk.specialists.polymarket_divergence_v1",
+                               "register_polymarket_divergence_v1"),
+    "anomaly_scanner": ("talis_desk.specialists.anomaly_scanner_v1",
+                         "register_anomaly_scanner_v1"),
 }
 
 
@@ -101,6 +114,8 @@ def run_one_cycle(specialist_id: str, cycle_id: str, budget_usd: float,
             "n_debates_triggered": len(result.synthesis.debate_triggers),
             "n_debates_opened": len(result.synthesis.opened_debate_ids),
             "opened_debate_ids": list(result.synthesis.opened_debate_ids),
+            "n_reports": len(getattr(result.synthesis, "report_ids", []) or []),
+            "report_ids": list(getattr(result.synthesis, "report_ids", []) or []),
             "kill_switch": result.kill_switch_triggered,
             "quality_flags": result.quality_flags,
             "next_state_id": result.next_state_id,
@@ -218,12 +233,14 @@ def main() -> int:
     total_msgs = sum(r["n_peer_messages"] for r in ok)
     total_debates = sum(r["n_debates_triggered"] for r in ok)
     total_debates_opened = sum(r.get("n_debates_opened", 0) for r in ok)
+    total_reports = sum(r.get("n_reports", 0) for r in ok)
     print(f"  specialists_ok     = {len(ok)}/{len(results)}")
     print(f"  specialists_failed = {len(failed)}")
     print(f"  total_cost_usd     = ${total_cost:.4f}")
     print(f"  total_tool_calls   = {total_tools}")
     print(f"  total_hypotheses   = {total_hyps}")
     print(f"  total_trade_ideas  = {total_ideas}")
+    print(f"  total_research_reports = {total_reports}")
     print(f"  total_peer_msgs    = {total_msgs}")
     print(f"  total_debate_trigs = {total_debates}")
     print(f"  total_debates_opened = {total_debates_opened}")
@@ -278,6 +295,7 @@ def main() -> int:
             "total_peer_msgs": total_msgs,
             "total_debate_trigs": total_debates,
             "total_debates_opened": total_debates_opened,
+            "total_research_reports": total_reports,
         },
     }
     manifest_path.write_text(json.dumps(manifest, indent=2, default=str))
@@ -298,6 +316,7 @@ def _print_result_summary(r: dict) -> None:
         f"cost=${r['cost_usd']:.4f} tools={r['tool_calls']:>3d} "
         f"hyps={r['n_hypotheses']:>2d} ideas={r['n_trade_ideas']:>2d} "
         f"resolved={r['n_resolved']:>2d} "
+        f"reports={r.get('n_reports', 0):>2d} "
         f"deb_trig={r['n_debates_triggered']:>2d} "
         f"deb_open={r.get('n_debates_opened', 0):>2d} "
         f"msgs={r['n_peer_messages']:>2d} elapsed={r['elapsed_s']:.1f}s"

@@ -238,9 +238,9 @@ def main() -> int:
     # repo is on sys.path before we touch the atlas. The loop runner's
     # chat() bridge does this too, but we do it eagerly so the synthetic
     # persona builder works as well.
-    _tic_sibling = "/Users/udaikhattar/jarvis-ios/docs/research/brief_experiments"
-    if _tic_sibling not in sys.path:
-        sys.path.insert(0, _tic_sibling)
+    # Codex finding #16: centralized path resolution.
+    from .._tic_config import ensure_tic_on_path as _impl
+    _impl()
 
     db_path = _isolated_store()
     print(f"smoke db: {db_path}")

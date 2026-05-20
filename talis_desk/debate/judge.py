@@ -269,10 +269,9 @@ async def _call_judge_llm_async(
     multi-provider fallback chain. NO STUBS — if every provider in the chain
     returns empty/unparseable, raise JudgeUnavailableError so the caller
     knows the verdict is missing rather than silently faking one."""
-    import sys
-    sib = "/Users/udaikhattar/jarvis-ios/docs/research/brief_experiments"
-    if sib not in sys.path:
-        sys.path.insert(0, sib)
+    # Codex finding #16: route through the centralized helper.
+    from .._tic_config import ensure_tic_on_path
+    ensure_tic_on_path()
     from tic.desk.models import chat as _chat  # type: ignore
 
     chain = _build_provider_chain(judge_model)
@@ -296,6 +295,18 @@ async def _call_judge_llm_async(
             parsed["judge_model"] = res.get("model_used", model)
             parsed["judge_provider"] = res.get("provider", model.split(":", 1)[0])
             parsed["_fallback_position"] = i   # 0 = primary; >0 = fell back
+            # Codex finding #15: surface a coarse cost estimate so the
+            # caller can record it on the desk-wide cost ledger.
+            try:
+                in_chars = len(system or "") + len(user or "")
+                out_chars = len(text or "")
+                # Use a generic $6/Mtok midpoint when chat() doesn't surface a
+                # per-call cost; this matches the rough table used elsewhere
+                # in the desk (runner.py / idea_synthesizer.py).
+                tokens = (in_chars + out_chars) / 4.0
+                parsed["_cost_usd_estimate"] = (tokens / 1_000_000.0) * 6.0
+            except Exception:
+                parsed["_cost_usd_estimate"] = 0.0
             return parsed
         except Exception as e:  # noqa: BLE001
             last_error = f"{model}: {e!s}"

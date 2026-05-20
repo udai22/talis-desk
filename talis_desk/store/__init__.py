@@ -13,12 +13,15 @@ See wiki/REPO_BOUNDARY.md for the full contract.
 from __future__ import annotations
 
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-from ..schema.sota import apply_sota_schema
+from ..schema.migrations import apply_migrations
+from ..schema.sota import apply_sota_schema  # re-exported for back-compat
 
 DEFAULT_DESK_DB_PATH = Path.home() / ".talis" / "desk.db"
+DEFAULT_BACKUP_DIR = Path.home() / ".talis" / "backups"
 
 
 class DeskStore:
@@ -27,6 +30,10 @@ class DeskStore:
     Separate from TICStore (`tic.db`). Reads from TIC happen through a
     TICStore handle the caller passes in; this class doesn't reach into
     the TIC database directly.
+
+    Codex finding #17: schema management is now versioned via
+    `talis_desk.schema.migrations.apply_migrations`. The legacy
+    `apply_sota_schema` remains available as a back-compat alias.
     """
 
     def __init__(self, db_path: Optional[Path] = None,
@@ -38,8 +45,8 @@ class DeskStore:
                                      check_same_thread=False)
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.row_factory = sqlite3.Row
-        # Apply the SOTA schema idempotently
-        apply_sota_schema(self.conn, dialect=self.dialect)
+        # Apply versioned migrations (idempotent; no-op when up-to-date).
+        apply_migrations(self.conn, dialect=self.dialect)
 
     def close(self) -> None:
         self.conn.close()
@@ -54,6 +61,30 @@ class DeskStore:
             if sidecar.exists():
                 sidecar.unlink()
         self.__init__(db_path=self.db_path, dialect=self.dialect)
+
+    def backup(self, backup_dir: Optional[Path] = None) -> Path:
+        """Snapshot the desk.db to a timestamped file via `VACUUM INTO`.
+
+        Codex finding #17: cron-able backup. The method itself just
+        executes the SQL — scheduling is an ops concern. Returns the
+        absolute Path of the snapshot file.
+
+        `VACUUM INTO` works while the source DB is open and produces a
+        clean (defragmented, no WAL sidecar) copy.
+        """
+        if self.dialect != "sqlite":
+            raise NotImplementedError(
+                "backup() is sqlite-only; use pg_dump for postgres."
+            )
+        dest_dir = Path(backup_dir) if backup_dir else DEFAULT_BACKUP_DIR
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        dest = dest_dir / f"desk-{ts}.db"
+        # `VACUUM INTO` requires a literal-style path argument; sqlite3
+        # `?` placeholders don't bind here. Quote-escape just in case.
+        path_lit = str(dest).replace("'", "''")
+        self.conn.execute(f"VACUUM INTO '{path_lit}'")
+        return dest
 
 
 _STORE: Optional[DeskStore] = None

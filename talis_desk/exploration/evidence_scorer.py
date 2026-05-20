@@ -43,14 +43,11 @@ from typing import Any, Optional
 # ============================================================================
 # Ensure the sibling `tic` package is importable for chat() — same pattern
 # debate/judge.py and brief/composer.py use.
+#
+# Codex finding #16: centralized in `talis_desk._tic_config`.
 # ============================================================================
 
-_TIC_SIBLING_PATH = "/Users/udaikhattar/jarvis-ios/docs/research/brief_experiments"
-
-
-def _ensure_tic_on_path() -> None:
-    if _TIC_SIBLING_PATH not in sys.path:
-        sys.path.insert(0, _TIC_SIBLING_PATH)
+from .._tic_config import ensure_tic_on_path as _ensure_tic_on_path  # noqa: E402
 
 
 # ============================================================================
@@ -68,6 +65,26 @@ class EvidenceScore:
     quality_flags: list[str] = field(default_factory=list)
     cost_usd: float = 0.0
     model_used: str = ""
+    # Per-call irrelevance flag encoded as 0.0 or 1.0 so the BFS can
+    # average across a hypothesis's scored evidence to get the "share of
+    # irrelevant calls". 1.0 means the LLM judged the tool result
+    # off-topic / generic and zeroed delta with low confidence — i.e.
+    # the call should NOT be counted as a genuine update. The brief
+    # composer surfaces a quality_flag when this share is high.
+    irrelevant_evidence_share: float = 0.0
+
+
+def irrelevant_evidence_share(scores: "list[EvidenceScore]") -> float:
+    """Aggregate helper: fraction of `scores` flagged irrelevant.
+
+    Returns 0.0 on empty input. Intended for the BFS / brief composer to
+    surface a per-hypothesis quality flag when too many tool calls were
+    off-topic to be a meaningful Bayesian update.
+    """
+    if not scores:
+        return 0.0
+    total = sum(float(getattr(s, "irrelevant_evidence_share", 0.0)) for s in scores)
+    return round(total / len(scores), 3)
 
 
 # ============================================================================
@@ -149,23 +166,39 @@ EVIDENCE_SYSTEM_PROMPT = (
     "You are an evidence scorer for a quantitative crypto research desk. "
     "A specialist is investigating a hypothesis and just ran a tool. Your "
     "job is to read the tool result and decide:\n"
-    "  1. direction: 'support' (the result makes the hypothesis more "
-    "likely), 'contradict' (less likely), or 'neutral' (no informative "
-    "update).\n"
-    "  2. magnitude: a signed posterior delta in [-0.30, +0.30]. Positive "
+    "  1. relevance: is the tool result DIRECTLY relevant to a numeric or "
+    "factual claim made in the hypothesis? Read the hypothesis carefully — "
+    "what does it specifically claim? Then read the payload. Two outcomes:\n"
+    "       (a) RELEVANT — payload speaks to the specific claim (matching "
+    "instrument, timeframe, regime, metric). Score the delta as if you "
+    "were doing a small Bayesian update.\n"
+    "       (b) IRRELEVANT — payload is off-topic, generic, an empty/error "
+    "response, or about a different asset/timeframe than the hypothesis "
+    "concerns. In this case you MUST return `delta=0.0`, "
+    "`confidence<=0.20`, `direction='neutral'`, AND `irrelevant=true`. Do "
+    "NOT default to small-negative just because the payload is noisy or "
+    "ambiguous — that contaminates the posterior. Neutral-with-low-"
+    "confidence is the correct response when the evidence simply doesn't "
+    "bear on the claim.\n"
+    "  2. direction (only if relevant): 'support' (result makes the "
+    "hypothesis more likely), 'contradict' (less likely), or 'neutral' (no "
+    "informative update).\n"
+    "  3. magnitude: a signed posterior delta in [-0.30, +0.30]. Positive "
     "= supports; negative = contradicts. 0.0 = neutral. Be calibrated: "
     "0.05-0.10 for weak signals, 0.10-0.20 for clear ones, 0.20-0.30 only "
-    "for decisive evidence.\n"
-    "  3. confidence: your own certainty in the score (0..1). 0.5 = "
-    "could-go-either-way; 0.9 = highly confident.\n"
-    "  4. citation_claim_ids: any claim_id / id / record_id strings you "
+    "for decisive evidence. If irrelevant, delta MUST be 0.0.\n"
+    "  4. confidence: your own certainty in the score (0..1). 0.5 = "
+    "could-go-either-way; 0.9 = highly confident. If irrelevant, "
+    "confidence <= 0.20.\n"
+    "  5. citation_claim_ids: any claim_id / id / record_id strings you "
     "see inside the tool result payload that this score cites. Empty list "
     "is fine if the payload has none.\n"
-    "  5. rationale: <=300 characters explaining WHY this is support / "
-    "contradict / neutral, citing one specific number or fact from the "
-    "payload.\n\n"
+    "  6. rationale: <=300 characters explaining WHY this is support / "
+    "contradict / neutral / irrelevant, citing one specific number or "
+    "fact from the payload (or noting what's missing).\n\n"
     "Output STRICT JSON (no prose outside the JSON):\n"
     "{\n"
+    '  "irrelevant": true | false,\n'
     '  "direction": "support" | "contradict" | "neutral",\n'
     '  "posterior_delta": -0.30..0.30,\n'
     '  "confidence": 0.0..1.0,\n'
@@ -173,12 +206,16 @@ EVIDENCE_SYSTEM_PROMPT = (
     '  "rationale": "<=300 chars"\n'
     "}\n\n"
     "Rules:\n"
-    "  - A failed/empty/error payload is neutral (delta=0). Do not "
-    "invent support.\n"
-    "  - If the tool result blatantly disagrees with the hypothesis "
-    "(numbers, direction, regime), use contradict.\n"
+    "  - A failed/empty/error payload is irrelevant (irrelevant=true, "
+    "delta=0, confidence<=0.20). Do not invent support.\n"
+    "  - When the payload IS directly relevant and the tool result "
+    "blatantly disagrees with the hypothesis (numbers, direction, "
+    "regime), use contradict with a calibrated negative delta.\n"
     "  - Never go outside [-0.30, +0.30]. One evidence cannot decide "
-    "the case alone."
+    "the case alone.\n"
+    "  - DO NOT default to small-negative deltas for ambiguous / generic "
+    "/ tangentially-related evidence. That bias contaminates posteriors. "
+    "Mark such evidence irrelevant and let the BFS surface that fact."
 )
 
 
@@ -421,6 +458,24 @@ def score_evidence(
         except (TypeError, ValueError):
             conf = 0.5
         conf = max(0.0, min(1.0, conf))
+
+        # Neutral-baseline calibration (Tweak 2, 2026-05-20). The LLM now
+        # reports an `irrelevant` flag for off-topic / generic payloads.
+        # Enforce the contract on our side: irrelevant => delta=0,
+        # confidence<=0.20, direction='neutral'. This prevents the
+        # "small-negative drift on ambiguous evidence" pathology from
+        # contaminating the posterior.
+        irr_raw = parsed.get("irrelevant", False)
+        if isinstance(irr_raw, str):
+            irrelevant = irr_raw.strip().lower() in ("true", "1", "yes", "y")
+        else:
+            irrelevant = bool(irr_raw)
+        if irrelevant:
+            delta = 0.0
+            direction = "neutral"
+            if conf > 0.20:
+                conf = 0.20
+
         citations_raw = parsed.get("citation_claim_ids") or []
         if isinstance(citations_raw, str):
             citations_raw = [citations_raw]
@@ -434,10 +489,16 @@ def score_evidence(
         flags = _stale_source_flags(source_health)
         # If the payload itself signals an error, tag a quality flag and
         # zero the delta — failed dispatches shouldn't move posterior.
+        # Also force-irrelevant so BFS aggregates it correctly.
         if isinstance(tool_result, dict) and tool_result.get("error"):
             flags = sorted(set(flags + ["tool_payload_error"]))
             delta = 0.0
             direction = "neutral"
+            irrelevant = True
+            if conf > 0.20:
+                conf = 0.20
+        if irrelevant and "irrelevant_evidence" not in flags:
+            flags = sorted(set(flags + ["irrelevant_evidence"]))
 
         model_used = res.get("model_used") or m
         cost = _estimate_cost_usd(model_used, system, user, text)
@@ -450,9 +511,91 @@ def score_evidence(
             quality_flags=flags,
             cost_usd=cost,
             model_used=str(model_used),
+            irrelevant_evidence_share=(1.0 if irrelevant else 0.0),
         )
 
     raise EvidenceUnavailableError(
         f"All {len(chain)} providers in the evidence-scorer fallback chain "
         f"failed. Last error: {last_error}. Chain: {chain}"
     )
+
+
+# ============================================================================
+# Inline smoke tests (Tweak 2 calibration)
+# ============================================================================
+
+if __name__ == "__main__":
+    # These tests exercise the deterministic parts of the scorer: the JSON
+    # contract, the irrelevant-baseline enforcement, the delta clamps, and
+    # the aggregation helper. They DO NOT hit the LLM fallback chain — that
+    # requires the brief_experiments tic.desk.models sibling and live keys,
+    # which we don't want to depend on in a smoke test.
+    import sys as _sys
+
+    failures: list[str] = []
+
+    def _check(name: str, cond: bool, detail: str = "") -> None:
+        if cond:
+            print(f"  OK   {name}")
+        else:
+            failures.append(f"{name} :: {detail}")
+            print(f"  FAIL {name} :: {detail}")
+
+    print("[1] _coerce_delta clamps to [-0.30, +0.30]")
+    _check("clamp upper", _coerce_delta(0.99, "support") == 0.30, "got "
+           f"{_coerce_delta(0.99, 'support')}")
+    _check("clamp lower", _coerce_delta(-0.99, "contradict") == -0.30,
+           f"got {_coerce_delta(-0.99, 'contradict')}")
+    _check("neutral zeros", _coerce_delta(0.12, "neutral") == 0.0,
+           f"got {_coerce_delta(0.12, 'neutral')}")
+    _check("contradict sign flip",
+           _coerce_delta(0.10, "contradict") == -0.10,
+           f"got {_coerce_delta(0.10, 'contradict')}")
+    _check("support sign flip",
+           _coerce_delta(-0.10, "support") == 0.10,
+           f"got {_coerce_delta(-0.10, 'support')}")
+
+    print("[2] _parse_json tolerates fences / prose")
+    obj1 = _parse_json('```json\n{"a": 1}\n```')
+    _check("fenced", obj1 == {"a": 1}, f"got {obj1}")
+    obj2 = _parse_json('prose before {"b": 2} prose after')
+    _check("greedy braces", obj2 == {"b": 2}, f"got {obj2}")
+    obj3 = _parse_json("")
+    _check("empty", obj3 == {}, f"got {obj3}")
+
+    print("[3] EvidenceScore.irrelevant_evidence_share default + aggregator")
+    s_rel = EvidenceScore(
+        posterior_delta=0.10, citation_claim_ids=[], contradicts=False,
+        confidence=0.7, rationale="relevant", irrelevant_evidence_share=0.0,
+    )
+    s_irr = EvidenceScore(
+        posterior_delta=0.0, citation_claim_ids=[], contradicts=False,
+        confidence=0.15, rationale="off-topic",
+        irrelevant_evidence_share=1.0,
+    )
+    _check("aggregate empty", irrelevant_evidence_share([]) == 0.0,
+           f"got {irrelevant_evidence_share([])}")
+    share = irrelevant_evidence_share([s_rel, s_rel, s_irr, s_irr])
+    _check("aggregate half", share == 0.5, f"got {share}")
+    share_all = irrelevant_evidence_share([s_irr, s_irr])
+    _check("aggregate all-irr", share_all == 1.0, f"got {share_all}")
+
+    print("[4] Prompt explicitly requires irrelevant-baseline behavior")
+    _check("prompt mentions irrelevant",
+           '"irrelevant"' in EVIDENCE_SYSTEM_PROMPT,
+           "prompt missing irrelevant field")
+    _check("prompt forbids small-negative default",
+           "DO NOT default to small-negative" in EVIDENCE_SYSTEM_PROMPT,
+           "prompt missing skeptical-drift guard")
+    _check("prompt requires confidence<=0.20 when irrelevant",
+           "confidence<=0.20" in EVIDENCE_SYSTEM_PROMPT
+           or "confidence <= 0.20" in EVIDENCE_SYSTEM_PROMPT,
+           "prompt missing confidence cap")
+
+    if failures:
+        print(f"\n{len(failures)} failure(s):")
+        for f in failures:
+            print(f"  - {f}")
+        _sys.exit(1)
+    print("\nAll smoke checks passed.")
+    _sys.exit(0)

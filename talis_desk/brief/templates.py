@@ -404,6 +404,9 @@ def render_brief_markdown(sections: dict[str, str]) -> str:
     order = [
         "header",
         "headline",
+        # Adversarial-pipeline reports lead the structured surfaces —
+        # the brief composes its narrative + TOC from these rows now.
+        "research_reports",
         "open_trade_book",
         "closed_trade_book",
         "hot_hypotheses",

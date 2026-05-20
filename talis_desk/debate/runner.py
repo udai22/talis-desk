@@ -545,6 +545,29 @@ def judge_debate(debate_id: str, judge_model: Optional[str] = None) -> DebateVer
             )
         raise
 
+    # Codex finding #15: record debate verdict LLM cost in the desk-wide
+    # daily ledger. Estimate is coarse — see _call_judge_llm_async for the
+    # token-rate math. Best-effort; never let a ledger failure crash a
+    # judged debate.
+    _judge_cost = float(parsed.get("_cost_usd_estimate") or 0.0)
+    if _judge_cost > 0:
+        try:
+            from ..cost_ledger import get_cost_ledger
+            # Debate rows don't carry a specialist_id directly — fall back
+            # to the first participant for attribution.
+            _judge_specialist = (deb.participants or [None])[0]
+            get_cost_ledger().record(
+                amount_usd=_judge_cost,
+                stage="debate",
+                specialist_id=_judge_specialist,
+                # Debates aren't pinned to a single cycle_id (cross-cycle
+                # triggers); use the debate id so the ledger row is still
+                # traceable to the artifact that incurred the spend.
+                cycle_id=f"debate:{deb.id}",
+            )
+        except Exception:
+            pass
+
     # All paths through _call_judge_llm now return a real LLM parsed verdict.
     # Validate winner is one of the participants (or null for a tie).
     winner = parsed.get("winner")

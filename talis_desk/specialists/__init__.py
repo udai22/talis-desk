@@ -56,6 +56,38 @@ from .sentiment_event_v1 import (
     CURATED_TOOL_URIS as SENTIMENT_EVENT_CURATED_TOOL_URIS,
 )
 
+# Re-export the rrg_rotation persona constructor.
+from .rrg_rotation_v1 import (
+    build_rrg_rotation_v1,
+    register_rrg_rotation_v1,
+    INITIAL_PRIORS as RRG_ROTATION_INITIAL_PRIORS,
+    CURATED_TOOL_URIS as RRG_ROTATION_CURATED_TOOL_URIS,
+)
+
+# Re-export the options_vol persona constructor.
+from .options_vol_v1 import (
+    build_options_vol_v1,
+    register_options_vol_v1,
+    INITIAL_PRIORS as OPTIONS_VOL_INITIAL_PRIORS,
+    CURATED_TOOL_URIS as OPTIONS_VOL_CURATED_TOOL_URIS,
+)
+
+# Re-export the polymarket_divergence persona constructor.
+from .polymarket_divergence_v1 import (
+    build_polymarket_divergence_v1,
+    register_polymarket_divergence_v1,
+    INITIAL_PRIORS as POLYMARKET_DIVERGENCE_INITIAL_PRIORS,
+    CURATED_TOOL_URIS as POLYMARKET_DIVERGENCE_CURATED_TOOL_URIS,
+)
+
+# Re-export the anomaly_scanner persona constructor.
+from .anomaly_scanner_v1 import (
+    build_anomaly_scanner_v1,
+    register_anomaly_scanner_v1,
+    INITIAL_PRIORS as ANOMALY_SCANNER_INITIAL_PRIORS,
+    CURATED_TOOL_URIS as ANOMALY_SCANNER_CURATED_TOOL_URIS,
+)
+
 __all__ = [
     "SpecialistPersona",
     "SpecialistState",
@@ -78,4 +110,20 @@ __all__ = [
     "register_sentiment_event_v1",
     "SENTIMENT_EVENT_INITIAL_PRIORS",
     "SENTIMENT_EVENT_CURATED_TOOL_URIS",
+    "build_rrg_rotation_v1",
+    "register_rrg_rotation_v1",
+    "RRG_ROTATION_INITIAL_PRIORS",
+    "RRG_ROTATION_CURATED_TOOL_URIS",
+    "build_options_vol_v1",
+    "register_options_vol_v1",
+    "OPTIONS_VOL_INITIAL_PRIORS",
+    "OPTIONS_VOL_CURATED_TOOL_URIS",
+    "build_polymarket_divergence_v1",
+    "register_polymarket_divergence_v1",
+    "POLYMARKET_DIVERGENCE_INITIAL_PRIORS",
+    "POLYMARKET_DIVERGENCE_CURATED_TOOL_URIS",
+    "build_anomaly_scanner_v1",
+    "register_anomaly_scanner_v1",
+    "ANOMALY_SCANNER_INITIAL_PRIORS",
+    "ANOMALY_SCANNER_CURATED_TOOL_URIS",
 ]

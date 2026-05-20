@@ -50,18 +50,17 @@ class BenchmarkResult:
 def _ensure_tic_on_path() -> None:
     """Make `tic.desk.tools.hl_history_tools` importable.
 
-    talis-tic is a sibling checkout (`/Users/udaikhattar/jarvis-ios/docs/research/brief_experiments/`)
-    and not pip-installed in this dev env, so we add it to sys.path on demand.
-    Guarded so we don't shadow a real installation if/when one shows up.
+    Codex finding #16: path resolution is centralized in
+    `talis_desk._tic_config`. Guarded so we don't shadow a real
+    installation if/when one shows up.
     """
     try:
         import tic.desk.tools.hl_history_tools  # noqa: F401
         return
     except ImportError:
         pass
-    sibling = "/Users/udaikhattar/jarvis-ios/docs/research/brief_experiments"
-    if sibling not in sys.path:
-        sys.path.insert(0, sibling)
+    from .._tic_config import ensure_tic_on_path as _impl
+    _impl()
 
 
 def _coin_return_pct(coin: str, start: datetime, end: datetime) -> Optional[float]:

@@ -643,9 +643,9 @@ def _call_mutation_llm(
     meta: dict[str, Any] = {"model_used": model, "provider": "?",
                             "fallback_used": False, "error": None}
     try:
-        sib = "/Users/udaikhattar/jarvis-ios/docs/research/brief_experiments"
-        if sib not in sys.path:
-            sys.path.insert(0, sib)
+        # Codex finding #16: centralized path resolution.
+        from .._tic_config import ensure_tic_on_path
+        ensure_tic_on_path()
         from tic.desk.models import chat as _chat  # type: ignore
     except Exception as e:  # noqa: BLE001
         meta["error"] = f"models_import_failed: {e}"

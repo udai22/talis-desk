@@ -9,6 +9,18 @@ __version__ = "0.1.0"
 
 from .store import DeskStore, get_desk_store
 from .schema import apply_sota_schema
+from .schema.migrations import (
+    SCHEMA_VERSION,
+    apply_migrations,
+    get_schema_version,
+    set_schema_version,
+)
+from .cost_ledger import (
+    CostLedger,
+    DailyCostCapExceededError,
+    get_cost_ledger,
+    reset_cost_ledger_for_test,
+)
 from .replay import build_replay_context
 from .tool_atlas import (
     regenerate_tool_atlas,
@@ -107,6 +119,22 @@ from .specialists import (
     register_sentiment_event_v1,
     SENTIMENT_EVENT_INITIAL_PRIORS,
     SENTIMENT_EVENT_CURATED_TOOL_URIS,
+    build_rrg_rotation_v1,
+    register_rrg_rotation_v1,
+    RRG_ROTATION_INITIAL_PRIORS,
+    RRG_ROTATION_CURATED_TOOL_URIS,
+    build_options_vol_v1,
+    register_options_vol_v1,
+    OPTIONS_VOL_INITIAL_PRIORS,
+    OPTIONS_VOL_CURATED_TOOL_URIS,
+    build_polymarket_divergence_v1,
+    register_polymarket_divergence_v1,
+    POLYMARKET_DIVERGENCE_INITIAL_PRIORS,
+    POLYMARKET_DIVERGENCE_CURATED_TOOL_URIS,
+    build_anomaly_scanner_v1,
+    register_anomaly_scanner_v1,
+    ANOMALY_SCANNER_INITIAL_PRIORS,
+    ANOMALY_SCANNER_CURATED_TOOL_URIS,
 )
 from .loop import (
     CycleHydration,
@@ -155,6 +183,16 @@ __all__ = [
     "DeskStore",
     "get_desk_store",
     "apply_sota_schema",
+    # Codex finding #17: schema versioning + migrations.
+    "SCHEMA_VERSION",
+    "apply_migrations",
+    "get_schema_version",
+    "set_schema_version",
+    # Codex finding #15: desk-wide daily cost ledger.
+    "CostLedger",
+    "DailyCostCapExceededError",
+    "get_cost_ledger",
+    "reset_cost_ledger_for_test",
     "build_replay_context",
     "regenerate_tool_atlas",
     "dispatch_uri",
@@ -242,6 +280,22 @@ __all__ = [
     "register_sentiment_event_v1",
     "SENTIMENT_EVENT_INITIAL_PRIORS",
     "SENTIMENT_EVENT_CURATED_TOOL_URIS",
+    "build_rrg_rotation_v1",
+    "register_rrg_rotation_v1",
+    "RRG_ROTATION_INITIAL_PRIORS",
+    "RRG_ROTATION_CURATED_TOOL_URIS",
+    "build_options_vol_v1",
+    "register_options_vol_v1",
+    "OPTIONS_VOL_INITIAL_PRIORS",
+    "OPTIONS_VOL_CURATED_TOOL_URIS",
+    "build_polymarket_divergence_v1",
+    "register_polymarket_divergence_v1",
+    "POLYMARKET_DIVERGENCE_INITIAL_PRIORS",
+    "POLYMARKET_DIVERGENCE_CURATED_TOOL_URIS",
+    "build_anomaly_scanner_v1",
+    "register_anomaly_scanner_v1",
+    "ANOMALY_SCANNER_INITIAL_PRIORS",
+    "ANOMALY_SCANNER_CURATED_TOOL_URIS",
     # Phase 4: research-cycle orchestrator
     "run_research_cycle",
     "LoopConfig",

@@ -62,6 +62,7 @@ import asyncio
 import concurrent.futures
 import hashlib
 import json
+import logging
 import os
 import re
 import sys
@@ -71,6 +72,12 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable, Optional
 from uuid import uuid4
+
+# Module logger. Used in addition to (not in place of) warnings.warn so the
+# existing test infra that asserts on warnings still works. Structured log
+# fields are emitted via `extra={...}` so an aggregator (stdout collector,
+# Datadog, etc.) can index them as fields rather than parsing the message.
+logger = logging.getLogger(__name__)
 
 from ..agents_native.scratchpad import (
     AgentMessage,
@@ -114,14 +121,13 @@ from ..trade_ideas import (
 # Ensure the sibling `tic` package is importable for chat() — same approach
 # debate/judge.py uses. We add the path lazily so a misconfigured workspace
 # doesn't break import-time; the LLM call sites raise clean errors.
+#
+# Codex finding #16: path resolution is centralized in
+# `talis_desk._tic_config`. We re-export under the historical local name
+# so the rest of this module continues to read unchanged.
 # ============================================================================
 
-_TIC_SIBLING_PATH = "/Users/udaikhattar/jarvis-ios/docs/research/brief_experiments"
-
-
-def _ensure_tic_on_path() -> None:
-    if _TIC_SIBLING_PATH not in sys.path:
-        sys.path.insert(0, _TIC_SIBLING_PATH)
+from .._tic_config import ensure_tic_on_path as _ensure_tic_on_path  # noqa: E402
 
 
 # ============================================================================
@@ -176,8 +182,12 @@ DEFAULT_CONTRADICTION_THRESHOLD = 0.7
 PLAN_MAX_HYPOTHESES = 6
 
 #: Token allowances (chat() honors max_tokens per provider spec). Plan
-#: needs room for JSON with 3-6 hypotheses; reflect is small.
-PLAN_MAX_TOKENS = 2400
+#: needs room for JSON with 3-6 hypotheses; reflect is small. Codex
+#: finding #10 (2026-05-20) added typed `tool_calls.args` blocks to the
+#: planner output, which roughly doubles per-hypothesis token spend —
+#: bumped 2400 -> 4800 so the JSON envelope no longer truncates mid-
+#: hypothesis (which manifested as "unparseable text" PLAN failures).
+PLAN_MAX_TOKENS = 4800
 REFLECT_MAX_TOKENS = 900
 
 
@@ -242,8 +252,20 @@ class HypothesisDraftPlan:
     hypothesis_text: str
     initial_prob: float
     entities: list[str]
-    tool_uris: list[str]            # tools the specialist picked
+    tool_uris: list[str]            # tools the specialist picked (kept for audit/back-compat)
     expected_resolution_hours: int = 24
+    # Diagnostic: signed shift applied to initial_prob by the persona-prior
+    # weighting step in `_parse_plan_payload` (Tweak 3, 2026-05-20). Capped
+    # at +/-0.10. Surfaces in audit payloads / dashboard so users can see
+    # the prior nudge was bounded and bidirectional.
+    prior_shift_applied: float = 0.0
+    prior_shift_keys: list[str] = field(default_factory=list)
+    # Typed {tool_uri, args} payloads the LLM emitted, validated against
+    # each tool's atlas-resident input_schema (codex finding #10,
+    # 2026-05-20). Preferred path for the BFS frontier builder; when empty,
+    # the back-compat path raises PlanToolResolutionError rather than
+    # guessing arg names.
+    tool_calls: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -261,6 +283,11 @@ class CycleHydration:
     atlas_pinned: bool
     open_hypotheses: list[Hypothesis]
     persona_state_id: str
+    # Persona's "world model" priors (dict from persona_state["initial_priors"]).
+    # Read by PLAN to apply a small directional shift on initial_prob when the
+    # hypothesis text aligns with / contradicts a known prior. Bounded; NOT
+    # confirmation bias — evidence scorer still drives the posterior.
+    persona_priors: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -296,6 +323,11 @@ class CycleSynthesis:
     #: `debates.id` rows the orchestrator created via `open_debate()` /
     #: `run_full_debate_cycle()`. Surfaces in the brief.
     opened_debate_ids: list[str] = field(default_factory=list)
+    #: Adversarial-pipeline research report ids (`rpt_<hex>`). One per
+    #: surviving hypothesis the pipeline could process. The daily brief
+    #: composes its TOC + body from these rows instead of from raw
+    #: hypotheses + ideas.
+    report_ids: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -331,6 +363,34 @@ class ResearchCycleResult:
     quality_flags: list[str] = field(default_factory=list)
     idempotent_short_circuit: bool = False
     paper_only: bool = False
+
+
+# ============================================================================
+# Cost-ledger helper (codex finding #15) — every stage funnels through this
+# best-effort writer so a ledger failure never blocks a cycle. Stage tags
+# match `talis_desk.cost_ledger.CANONICAL_STAGES`.
+# ============================================================================
+
+
+def _record_stage_cost(
+    *,
+    amount: float,
+    stage: str,
+    specialist_id: Optional[str],
+    cycle_id: str,
+) -> None:
+    if not amount or amount <= 0:
+        return
+    try:
+        from ..cost_ledger import get_cost_ledger
+        get_cost_ledger().record(
+            amount_usd=float(amount),
+            stage=stage,
+            specialist_id=specialist_id,
+            cycle_id=cycle_id,
+        )
+    except Exception as exc:  # noqa: BLE001
+        warnings.warn(f"cost_ledger.record({stage!r}) failed: {exc}")
 
 
 # ============================================================================
@@ -625,6 +685,13 @@ def hydrate(specialist_id: str, cycle_id: str,
     except Exception:
         open_hyps = []
 
+    # Pull persona's `initial_priors` dict so PLAN can apply a small
+    # prior-shift when a hypothesis aligns with / contradicts a known
+    # directional prior (Tweak 3, 2026-05-20). Empty dict if missing.
+    raw_priors = persona_state.get("initial_priors") or {}
+    if not isinstance(raw_priors, dict):
+        raw_priors = {}
+
     return CycleHydration(
         specialist_id=specialist_id,
         persona_version=persona_version,
@@ -637,6 +704,7 @@ def hydrate(specialist_id: str, cycle_id: str,
         atlas_pinned=True,
         open_hypotheses=open_hyps,
         persona_state_id=persona_state_id,
+        persona_priors=dict(raw_priors),
     )
 
 
@@ -648,9 +716,10 @@ def hydrate(specialist_id: str, cycle_id: str,
 _PLAN_SYSTEM_SUFFIX = (
     "\n\nYou are running the PLAN stage of a research cycle. Propose 3 to "
     "{max_h} hypotheses you want to investigate this cycle. For each "
-    "hypothesis, pick 2-4 tool URIs from the provided atlas that would "
-    "be most informative. Output ONLY valid JSON, no prose, no fences. "
-    "Schema:\n"
+    "hypothesis, pick 2-4 tool calls from the provided atlas that would "
+    "be most informative. Each tool call MUST include the typed `args` "
+    "kwargs matching that tool's `required args` line (see the atlas "
+    "section). Output ONLY valid JSON, no prose, no fences. Schema:\n"
     "{{\n"
     '  "hypotheses": [\n'
     "    {{\n"
@@ -658,11 +727,16 @@ _PLAN_SYSTEM_SUFFIX = (
     '      "hypothesis_text": "full claim with mechanism",\n'
     '      "initial_prob": 0.5,\n'
     '      "entities": ["BTC", "..."],\n'
-    '      "tool_uris": ["tic://tool/.../...@v1", "..."],\n'
+    '      "tool_calls": [\n'
+    '        {{"tool_uri": "tic://tool/.../...@v1", "args": {{"metric_prefix": "WALCL"}}}},\n'
+    '        {{"tool_uri": "tic://tool/.../...@v1", "args": {{"source": "fred"}}}}\n'
+    "      ],\n"
     '      "expected_resolution_hours": 24\n'
     "    }}\n"
     "  ]\n"
-    "}}"
+    "}}\n"
+    "Each tool_call's `args` keys MUST be a superset of that tool's "
+    "`required args`. Calls with missing required keys will be dropped."
 )
 
 
@@ -678,10 +752,26 @@ def _build_plan_user_prompt(h: CycleHydration, loop_config: LoopConfig) -> str:
     if not candidate_rows:
         candidate_rows = atlas.rows
     candidate_rows = candidate_rows[:25]
-    tool_lines = [
-        f"  - {r['tool_uri']}  ({r.get('kind','?')}) — {r.get('description','')[:120]}"
-        for r in candidate_rows
-    ]
+    # Codex finding #10 (2026-05-20): include required-arg hints in the
+    # planner prompt so the LLM can emit typed `tool_calls` with real kwargs.
+    # The previous tool_uris-only schema forced a downstream `entity_symbol`
+    # guess that failed 77/79 dispatches against the 65 tic.db tools (each
+    # of which has a different arg signature). Truncate to the first 4
+    # required props per tool to keep prompt size bounded.
+    tool_lines = []
+    for r in candidate_rows:
+        schema_json = r.get('schema_json') or {}
+        required = schema_json.get('required', []) if isinstance(schema_json, dict) else []
+        props = schema_json.get('properties', {}) if isinstance(schema_json, dict) else {}
+        arg_hints = []
+        for prop_name in required[:4]:
+            pdef = props.get(prop_name, {}) if isinstance(props, dict) else {}
+            arg_hints.append(f"{prop_name}: {pdef.get('type','any')}")
+        arg_str = ", ".join(arg_hints) or "(no required args)"
+        tool_lines.append(
+            f"  - {r['tool_uri']}  ({r.get('kind','?')}) — "
+            f"{r.get('description','')[:100]}\n    required args: {arg_str}"
+        )
 
     brier_lines = []
     for b in h.recent_brier_outcomes[:5]:
@@ -727,9 +817,145 @@ def _build_plan_user_prompt(h: CycleHydration, loop_config: LoopConfig) -> str:
     )
 
 
+# ============================================================================
+# Persona-prior shift (Tweak 3, 2026-05-20)
+# ============================================================================
+
+# Hypothesis-text tokens that imply a bullish / upside / long stance.
+_BULLISH_TOKENS: tuple[str, ...] = (
+    "long", "bullish", "buy ", "buy-", "rally", "breakout", "upside",
+    "squeeze", "moon", "pump", "uptrend", "higher", "buy_", "going up",
+    "trend up", "reversal up", "bottoming",
+)
+
+# Hypothesis-text tokens that imply a bearish / downside / short stance.
+_BEARISH_TOKENS: tuple[str, ...] = (
+    "short", "bearish", "sell ", "sell-", "dump", "downside", "breakdown",
+    "drop", "crash", "downtrend", "lower", "sell_", "going down",
+    "trend down", "topping", "rolling over", "rejection",
+)
+
+# Map known prior values -> directional polarity:
+#   +1 bullish-for-risk, -1 bearish-for-risk, 0 sideways / non-directional.
+# ONLY values in this table can generate a shift; everything else is
+# silently neutral. Keep this tight — we'd rather skip a shift than
+# mis-classify a prior.
+_PRIOR_VALUE_POLARITY: dict[str, int] = {
+    # macro_regime regime strings
+    "restrictive": -1,
+    "accommodative": +1,
+    "decelerating": -1,
+    "accelerating": +1,
+    "tightening": -1,
+    "easing": +1,
+    "draining": -1,
+    "expanding": +1,
+    "strong_but_topping": -1,
+    "weak_but_bottoming": +1,
+    "strong": -1,                # USD strong typically bearish for risk
+    "weak": +1,
+    # btc_regime values (sideways = no directional signal)
+    "sideways_since_2026_04": 0,
+    "sideways": 0,
+    "trending_up": +1,
+    "trending_down": -1,
+    # microstructure / sentiment / smart_money common values
+    "stable": 0,
+    "balanced": 0,
+    "moderate": 0,
+    "bullish": +1,
+    "bearish": -1,
+    "risk_on": +1,
+    "risk_off": -1,
+}
+
+# Per-key prior shift magnitude. Each matching prior contributes this much;
+# the sum is clamped to PRIOR_SHIFT_CAP_ABS.
+_PRIOR_SHIFT_PER_MATCH = 0.05
+PRIOR_SHIFT_CAP_ABS = 0.10
+
+
+def _hypothesis_stance(text: str) -> int:
+    """Return +1 bullish, -1 bearish, 0 unclear.
+
+    Bidirectional matches (both bullish and bearish tokens) collapse to 0
+    — we won't shift a prior on an ambiguous hypothesis.
+    """
+    t = (text or "").lower()
+    has_bull = any(tok in t for tok in _BULLISH_TOKENS)
+    has_bear = any(tok in t for tok in _BEARISH_TOKENS)
+    if has_bull and not has_bear:
+        return +1
+    if has_bear and not has_bull:
+        return -1
+    return 0
+
+
+def _apply_persona_prior_shift(
+    hypothesis_text: str,
+    persona_priors: dict[str, Any],
+) -> tuple[float, list[str]]:
+    """Compute a signed prior-shift in [-PRIOR_SHIFT_CAP_ABS, +CAP] based
+    on whether the hypothesis's directional stance aligns with /
+    contradicts any persona prior whose value has known polarity.
+
+    Match rules (must satisfy ALL):
+      - Hypothesis text mentions the prior key (case-insensitive substring;
+        also matches the key prefix before `_regime` so `btc_regime` is
+        picked up when the text says "BTC").
+      - Hypothesis has a clear bullish/bearish stance (else shift=0).
+      - Prior value is a string with known polarity in
+        `_PRIOR_VALUE_POLARITY` (else that key contributes 0).
+
+    Contribution per match: + _PRIOR_SHIFT_PER_MATCH when stance aligns
+    with prior polarity, - _PRIOR_SHIFT_PER_MATCH when opposed. Sum
+    clamped to ±PRIOR_SHIFT_CAP_ABS.
+
+    Returns (shift, matched_keys). matched_keys contains only keys that
+    actually contributed (polarity != 0 AND stance != 0).
+
+    This is NOT confirmation bias — the evidence scorer still drives the
+    posterior. A wrong prior just means a slightly faster contradiction.
+    """
+    if not isinstance(persona_priors, dict) or not persona_priors:
+        return 0.0, []
+    stance = _hypothesis_stance(hypothesis_text)
+    if stance == 0:
+        return 0.0, []
+    text_lower = (hypothesis_text or "").lower()
+    shift = 0.0
+    matched: list[str] = []
+    for key, value in persona_priors.items():
+        if not isinstance(key, str):
+            continue
+        key_lower = key.lower()
+        prefix = key_lower.split("_regime", 1)[0]
+        key_hit = key_lower in text_lower
+        prefix_hit = bool(prefix) and prefix in text_lower
+        if not (key_hit or prefix_hit):
+            continue
+        # Only string-valued priors carry directional polarity; bools,
+        # ints, lists are skipped (they aren't directional regimes).
+        if not isinstance(value, str):
+            continue
+        polarity = _PRIOR_VALUE_POLARITY.get(value.lower())
+        if not polarity:
+            continue
+        contribution = _PRIOR_SHIFT_PER_MATCH * (1 if stance == polarity else -1)
+        shift += contribution
+        matched.append(key)
+    if shift > PRIOR_SHIFT_CAP_ABS:
+        shift = PRIOR_SHIFT_CAP_ABS
+    elif shift < -PRIOR_SHIFT_CAP_ABS:
+        shift = -PRIOR_SHIFT_CAP_ABS
+    return round(shift, 3), matched
+
+
 def _parse_plan_payload(payload: Any, persona_uris: list[str],
                         atlas: ToolAtlasSnapshot,
-                        min_n: int) -> list[HypothesisDraftPlan]:
+                        min_n: int,
+                        persona_priors: Optional[dict[str, Any]] = None,
+                        ) -> list[HypothesisDraftPlan]:
     """Validate the parsed JSON payload into HypothesisDraftPlan list.
 
     Bad fields are repaired conservatively (clamp probs to [0,1], coerce
@@ -746,6 +972,11 @@ def _parse_plan_payload(payload: Any, persona_uris: list[str],
          `PlanToolResolutionError` so the cycle aborts rather than
          silently dispatching tools that will all fail with
          `tool_uri_not_in_atlas`.
+
+    If `persona_priors` is non-empty, each hypothesis's `initial_prob` is
+    nudged by `_apply_persona_prior_shift` (capped at ±0.10) so that
+    persona world-model regimes inform the starting posterior. The shift
+    is recorded on the draft plan for downstream audit.
     """
     if not isinstance(payload, dict):
         return []
@@ -753,6 +984,20 @@ def _parse_plan_payload(payload: Any, persona_uris: list[str],
     if not isinstance(hyps, list):
         return []
     atlas_uris = {r["tool_uri"] for r in atlas.rows}
+    # uri -> required-arg name set, for typed tool_calls validation.
+    # The atlas's `schema_json` was JSON-decoded to a dict in
+    # `get_atlas_snapshot_for_cycle`.
+    required_by_uri: dict[str, set[str]] = {}
+    for r in atlas.rows:
+        sj = r.get("schema_json") or {}
+        if isinstance(sj, dict):
+            req = sj.get("required", []) or []
+            if isinstance(req, list):
+                required_by_uri[r["tool_uri"]] = {str(k) for k in req}
+            else:
+                required_by_uri[r["tool_uri"]] = set()
+        else:
+            required_by_uri[r["tool_uri"]] = set()
     out: list[HypothesisDraftPlan] = []
     for item in hyps[:PLAN_MAX_HYPOTHESES]:
         if not isinstance(item, dict):
@@ -766,37 +1011,67 @@ def _parse_plan_payload(payload: Any, persona_uris: list[str],
         except Exception:
             ip = 0.5
         ip = max(0.02, min(0.98, ip))
+        # Persona-prior shift (Tweak 3, 2026-05-20). Bounded in [-0.10,+0.10];
+        # recorded on the draft for audit. No-op when persona_priors empty.
+        prior_shift, prior_shift_keys = _apply_persona_prior_shift(
+            text, persona_priors or {},
+        )
+        if prior_shift:
+            ip = max(0.02, min(0.98, ip + prior_shift))
         entities = item.get("entities") or []
         if not isinstance(entities, list):
             entities = []
         entities = [str(e) for e in entities][:8]
-        raw_uris = item.get("tool_uris") or []
-        if not isinstance(raw_uris, list):
-            raw_uris = []
-        # Keep only URIs that exist in the frozen atlas.
-        valid_uris = [u for u in raw_uris if u in atlas_uris]
-        # If the LLM gave us nothing usable, walk the persona's curated
-        # subset — but filter THAT against the atlas too. The persona
-        # may carry URIs that vanished from the atlas (renamed, deprecated,
-        # or never re-registered after a TIC refactor); silently accepting
-        # them produced the "1200 known-bad dispatches" pathology.
-        if not valid_uris and persona_uris:
-            valid_uris = [u for u in persona_uris if u in atlas_uris][:2]
-        # Last resort: pick the first atlas row. This is intentionally
-        # narrow — only fires when both the LLM and the persona produced
-        # zero atlas-resident URIs but the atlas itself has rows.
-        if not valid_uris and atlas.rows:
-            valid_uris = [atlas.rows[0]["tool_uri"]]
-        # If we STILL have nothing AND the atlas is empty, the cycle
-        # cannot legitimately make tool calls. Raise loudly.
-        if not valid_uris and not atlas.rows:
-            raise PlanToolResolutionError(
-                "PLAN: tool atlas is empty (0 rows) and no tool URIs "
-                "could be resolved for hypothesis "
-                f"{title!r}. Run `regenerate_tool_atlas()` before the "
-                "cycle starts, or supply a persona with at least one "
-                "atlas-resident `tool_uris` entry."
-            )
+
+        # ----- Typed tool_calls (preferred, codex finding #10) -----
+        # Each entry must be `{"tool_uri": str, "args": dict}`, with the
+        # uri present in the atlas AND args keys covering the schema's
+        # `required` set. Malformed entries are SKIPPED (not crashed) so
+        # one bad call doesn't take out the whole hypothesis.
+        raw_tool_calls = item.get("tool_calls") or []
+        if not isinstance(raw_tool_calls, list):
+            raw_tool_calls = []
+        typed_calls: list[dict[str, Any]] = []
+        for tc in raw_tool_calls:
+            if not isinstance(tc, dict):
+                continue
+            uri = tc.get("tool_uri")
+            args = tc.get("args")
+            if not isinstance(uri, str) or uri not in atlas_uris:
+                continue
+            if not isinstance(args, dict):
+                continue
+            req_set = required_by_uri.get(uri, set())
+            if req_set and not req_set.issubset(set(args.keys())):
+                # Skip — args don't satisfy the schema's required set.
+                continue
+            typed_calls.append({"tool_uri": uri, "args": dict(args)})
+        typed_calls = typed_calls[:4]
+
+        # ----- Drop hypotheses with no typed calls so the PLAN retry loop
+        # in `plan()` fires when the LLM ignored the schema and emitted
+        # only the old `tool_uris` shape. Without this, an unschema'd
+        # hypothesis would sneak past parsing and then raise
+        # PlanToolResolutionError downstream in the BFS frontier builder
+        # (aborting the whole cycle). Dropping here lets the `min_n` floor
+        # trigger a clean schema-aware retry instead. (codex finding #10,
+        # 2026-05-20)
+        if not typed_calls:
+            # Atlas itself empty -> raise; no retry recovers from that.
+            if not atlas.rows:
+                raise PlanToolResolutionError(
+                    "PLAN: tool atlas is empty (0 rows) and no tool URIs "
+                    "could be resolved for hypothesis "
+                    f"{title!r}. Run `regenerate_tool_atlas()` before "
+                    "the cycle starts, or supply a persona with at "
+                    "least one atlas-resident `tool_uris` entry."
+                )
+            continue
+
+        # Mirror typed-call URIs into tool_uris for the audit / display
+        # path (e.g. __main__.py:189 prints uris=len(h.tool_uris) and
+        # `tool_assignments` keys off this list).
+        valid_uris = [tc["tool_uri"] for tc in typed_calls]
         try:
             exp_hours = int(item.get("expected_resolution_hours", 24))
         except Exception:
@@ -808,6 +1083,9 @@ def _parse_plan_payload(payload: Any, persona_uris: list[str],
             entities=entities,
             tool_uris=valid_uris[:4],
             expected_resolution_hours=max(1, min(720, exp_hours)),
+            prior_shift_applied=prior_shift,
+            prior_shift_keys=list(prior_shift_keys),
+            tool_calls=typed_calls,
         ))
     if len(out) < min_n:
         return []
@@ -832,7 +1110,8 @@ def plan(hydration: CycleHydration, loop_config: LoopConfig) -> CyclePlan:
                        fallback=fallback_for_chat)
     parsed = _extract_json(res.text) if res.text else None
     hyps = _parse_plan_payload(parsed, hydration.persona_tool_uris,
-                                hydration.tool_atlas, loop_config.n_hypotheses_min)
+                                hydration.tool_atlas, loop_config.n_hypotheses_min,
+                                persona_priors=hydration.persona_priors)
     total_cost = res.cost_usd
 
     if not hyps:
@@ -846,7 +1125,10 @@ def plan(hydration: CycleHydration, loop_config: LoopConfig) -> CyclePlan:
             "prose, no markdown fences. Schema:\n"
             "{\n  \"hypotheses\": [{\"title\": str, \"hypothesis_text\": str, "
             "\"initial_prob\": float, \"entities\": [str], "
-            "\"tool_uris\": [str], \"expected_resolution_hours\": int}, ...]\n}"
+            "\"tool_calls\": [{\"tool_uri\": str, \"args\": {<typed kwargs>}}], "
+            "\"expected_resolution_hours\": int}, ...]\n}"
+            "\nEach `tool_calls[*].args` MUST cover that tool's required-arg "
+            "keys from the atlas listing."
             f"\n\nOriginal request:\n{user_prompt}"
         )
         res2 = _chat_sync(primary, system_prompt, strict_user,
@@ -856,7 +1138,8 @@ def plan(hydration: CycleHydration, loop_config: LoopConfig) -> CyclePlan:
         parsed2 = _extract_json(res2.text) if res2.text else None
         hyps = _parse_plan_payload(parsed2, hydration.persona_tool_uris,
                                      hydration.tool_atlas,
-                                     loop_config.n_hypotheses_min)
+                                     loop_config.n_hypotheses_min,
+                                     persona_priors=hydration.persona_priors)
         if hyps:
             res = res2
         else:
@@ -1006,9 +1289,32 @@ def explore(hydration: CycleHydration, cycle_plan: CyclePlan, cycle_id: str,
         # LLM assigned. Question_kind alternates confirmatory/contradiction
         # so the >=20% gate is satisfied even before expand_question adds
         # follow-ups.
+        #
+        # Codex finding #10 (2026-05-20): prefer the typed `tool_calls`
+        # the PLAN-stage LLM emitted (uri + schema-validated kwargs). The
+        # old `_default_args_for_uri` helper guessed `{entity_symbol: X}`
+        # for every tool, which failed 77/79 dispatches against the 65
+        # tic.db tools (each has a different arg signature). NO MORE
+        # GUESSING — if typed calls are missing we raise loudly.
+        if h.tool_calls:
+            call_specs: list[tuple[str, dict[str, Any]]] = [
+                (tc["tool_uri"], dict(tc.get("args") or {}))
+                for tc in h.tool_calls
+            ]
+        elif h.tool_uris:
+            # Back-compat path: LLM gave URIs without typed args. Refuse
+            # to dispatch — guessing produces ~100% failure rate.
+            raise PlanToolResolutionError(
+                f"PLAN: hypothesis {h.title!r} resolved {len(h.tool_uris)} "
+                "tool URIs but no typed `tool_calls` payload. Retry PLAN "
+                "with the schema-aware prompt; do not dispatch with "
+                "guessed args."
+            )
+        else:
+            call_specs = []
+
         frontier: list[QuestionNode] = []
-        for j, uri in enumerate(h.tool_uris):
-            kind = "contradiction" if (j == 1 or len(h.tool_uris) == 1 and j == 0) else "confirmatory"
+        for j, (uri, args) in enumerate(call_specs):
             if j == 0:
                 kind = "confirmatory"
             elif j == 1:
@@ -1023,7 +1329,7 @@ def explore(hydration: CycleHydration, cycle_plan: CyclePlan, cycle_id: str,
                 ),
                 question_kind=kind,  # type: ignore[arg-type]
                 tool_uri=uri,
-                args=_default_args_for_uri(uri, h.entities),
+                args=args,
                 prior_prob=h.initial_prob,
             ))
         if not frontier:
@@ -1047,18 +1353,12 @@ def explore(hydration: CycleHydration, cycle_plan: CyclePlan, cycle_id: str,
     return traces, investigations, total_cost, total_calls
 
 
-def _default_args_for_uri(uri: str, entities: list[str]) -> dict[str, Any]:
-    """Best-effort default args for an arbitrary tool URI.
-
-    The atlas carries an input_schema per tool but we don't introspect it
-    here (PLAN should have done that). We pass the first entity as
-    `entity_symbol` for builtin/query-style tools, and {} otherwise.
-    `dispatch_uri` will reject bad-args calls and the BFS captures the
-    error in tool_call_log.error — no silent corruption.
-    """
-    if not entities:
-        return {}
-    return {"entity_symbol": entities[0]}
+# `_default_args_for_uri` was REMOVED (codex finding #10, 2026-05-20).
+# The helper guessed `{entity_symbol: <first_entity>}` for every URI,
+# which failed 77/79 dispatches against the 65 tic.db tools (each with
+# a different required-arg schema). It has been replaced by typed
+# `tool_calls` emitted by the PLAN-stage LLM, validated in
+# `_parse_plan_payload` against each tool's `schema_json.required`.
 
 
 # ============================================================================
@@ -1118,7 +1418,11 @@ _OPPOSING_SPECIALIST_PREFERENCE: dict[str, list[str]] = {
 def _list_registered_specialist_ids() -> list[str]:
     """Return the distinct specialist_ids that have a live persona row in
     `specialist_states`. Used to pick a debate opponent without hard-coding
-    the registry."""
+    the registry.
+
+    Live = state_kind='persona' AND transaction_to IS NULL (the bitemporal
+    "open head" pattern). On query failure we return [] and log — the caller
+    will skip opening a debate rather than fabricate an opponent."""
     try:
         conn = get_desk_store().conn
         rows = conn.execute(
@@ -1126,7 +1430,11 @@ def _list_registered_specialist_ids() -> list[str]:
             "WHERE state_kind = 'persona' AND transaction_to IS NULL"
         ).fetchall()
         return [r["specialist_id"] for r in rows]
-    except Exception:
+    except Exception as e:
+        logger.warning(
+            "list_registered_specialist_ids_failed: %s", e,
+            extra={"event": "registry_query_failed"},
+        )
         return []
 
 
@@ -1147,9 +1455,27 @@ def _pick_opponent_specialist(
     registered), in which case the caller should skip opening the debate
     rather than fabricating a participant.
     """
-    registered = [s for s in _list_registered_specialist_ids()
+    all_registered = _list_registered_specialist_ids()
+    registered = [s for s in all_registered
                    if s and s != triggering_specialist]
     if not registered:
+        # Distinguish "registry empty" from "registry only contains me" so
+        # the operator can tell whether to fix specialist registration or
+        # adjust the debate-trigger policy.
+        reason = (
+            "registry_empty" if not all_registered
+            else "registry_only_self"
+        )
+        logger.warning(
+            "pick_opponent_specialist_none reason=%s trigger=%s registered=%s",
+            reason, triggering_specialist, all_registered,
+            extra={
+                "event": "opponent_none",
+                "reason": reason,
+                "triggering_specialist": triggering_specialist,
+                "registered": all_registered,
+            },
+        )
         return None
 
     # 1) Walk contradicting edges in the bitemporal store.
@@ -1178,8 +1504,15 @@ def _pick_opponent_specialist(
                 cand = hrow["specialist_id"]
                 if cand and cand != triggering_specialist and cand in registered:
                     return cand
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(
+                "pick_opponent_contradicting_edges_query_failed: %s", e,
+                extra={
+                    "event": "opponent_edge_query_failed",
+                    "triggering_specialist": triggering_specialist,
+                    "hypothesis_id": getattr(hypothesis, "id", None),
+                },
+            )
 
     # 2) Static preference map filtered by what's actually registered.
     prefs = _OPPOSING_SPECIALIST_PREFERENCE.get(triggering_specialist, [])
@@ -1187,7 +1520,11 @@ def _pick_opponent_specialist(
         if p in registered:
             return p
 
-    # 3) Any other registered specialist.
+    # 3) Any other registered specialist. On a fresh DB with no
+    # hypothesis_edges the static preference map is the only thing that
+    # fires for known specialists; for unknown specialists we fall through
+    # to "any peer". This is the path that closes the
+    # "21 triggers, 0 debates" gap when the LLM hands us a novel specialist.
     return registered[0]
 
 
@@ -1244,23 +1581,73 @@ def _solicit_debate_argument(
     """Ask an LLM to produce a debate argument for `side`. Uses the same
     fallback chain as PLAN so we never fabricate verdicts or arguments.
     Returns None when every provider in the chain failed — caller treats
-    that as "skip this debate" rather than opening a malformed one."""
+    that as "skip this debate" rather than opening a malformed one.
+
+    Failures are logged with structured fields so the operator can tell
+    whether the gap is provider-side (chat returned no text) or
+    formatting-side (LLM returned prose instead of JSON)."""
     user = _build_debate_argument_prompt(side, specialist_id, hypothesis, trace)
-    res = _chat_sync(
-        plan_model,
-        _DEBATE_ARGUMENT_SYSTEM,
-        user,
-        max_tokens=900,
-        fallback="anthropic:claude-sonnet-4-6",
-    )
+    try:
+        res = _chat_sync(
+            plan_model,
+            _DEBATE_ARGUMENT_SYSTEM,
+            user,
+            max_tokens=900,
+            fallback="anthropic:claude-sonnet-4-6",
+        )
+    except Exception as e:
+        logger.warning(
+            "solicit_debate_argument_chat_raised side=%s specialist=%s hyp=%s err=%s",
+            side, specialist_id, hypothesis.id, e,
+            extra={
+                "event": "debate_argument_chat_raised",
+                "side": side,
+                "specialist_id": specialist_id,
+                "hypothesis_id": hypothesis.id,
+            },
+        )
+        return None
     if not res.text:
+        logger.warning(
+            "solicit_debate_argument_empty side=%s specialist=%s hyp=%s error=%s",
+            side, specialist_id, hypothesis.id, res.error,
+            extra={
+                "event": "debate_argument_empty_text",
+                "side": side,
+                "specialist_id": specialist_id,
+                "hypothesis_id": hypothesis.id,
+                "chat_error": res.error,
+            },
+        )
         return None
     parsed = _extract_json(res.text)
     if not isinstance(parsed, dict):
+        logger.warning(
+            "solicit_debate_argument_unparseable side=%s specialist=%s hyp=%s "
+            "text_preview=%r",
+            side, specialist_id, hypothesis.id, (res.text or "")[:160],
+            extra={
+                "event": "debate_argument_unparseable",
+                "side": side,
+                "specialist_id": specialist_id,
+                "hypothesis_id": hypothesis.id,
+            },
+        )
         return None
     arg_md = str(parsed.get("argument_md") or "").strip()
     crux = str(parsed.get("falsifiable_crux") or "").strip()
     if not arg_md or not crux:
+        logger.warning(
+            "solicit_debate_argument_missing_fields side=%s specialist=%s hyp=%s "
+            "has_arg=%s has_crux=%s",
+            side, specialist_id, hypothesis.id, bool(arg_md), bool(crux),
+            extra={
+                "event": "debate_argument_missing_fields",
+                "side": side,
+                "specialist_id": specialist_id,
+                "hypothesis_id": hypothesis.id,
+            },
+        )
         return None
     return {
         "argument_md": arg_md[:1500],
@@ -1287,9 +1674,18 @@ def _open_real_debate(
     by the judge runner, which is the honest outcome."""
     opponent = _pick_opponent_specialist(triggering_specialist, hypothesis)
     if opponent is None or opponent == triggering_specialist:
-        warnings.warn(
+        msg = (
             f"open_real_debate skipped: no distinct opponent found for "
             f"{triggering_specialist} (hypothesis={hypothesis.id})"
+        )
+        warnings.warn(msg)
+        logger.warning(
+            msg,
+            extra={
+                "event": "open_real_debate_no_opponent",
+                "triggering_specialist": triggering_specialist,
+                "hypothesis_id": hypothesis.id,
+            },
         )
         return None
 
@@ -1303,9 +1699,18 @@ def _open_real_debate(
         plan_model=plan_model,
     )
     if defender_arg is None:
-        warnings.warn(
+        msg = (
             f"open_real_debate skipped: defender LLM unavailable for "
             f"{triggering_specialist}/{hypothesis.id}"
+        )
+        warnings.warn(msg)
+        logger.warning(
+            msg,
+            extra={
+                "event": "open_real_debate_defender_unavailable",
+                "triggering_specialist": triggering_specialist,
+                "hypothesis_id": hypothesis.id,
+            },
         )
         return None
     opponent_arg = _solicit_debate_argument(
@@ -1316,9 +1721,18 @@ def _open_real_debate(
         plan_model=plan_model,
     )
     if opponent_arg is None:
-        warnings.warn(
+        msg = (
             f"open_real_debate skipped: opponent LLM unavailable for "
             f"{opponent}/{hypothesis.id}"
+        )
+        warnings.warn(msg)
+        logger.warning(
+            msg,
+            extra={
+                "event": "open_real_debate_opponent_unavailable",
+                "opponent": opponent,
+                "hypothesis_id": hypothesis.id,
+            },
         )
         return None
 
@@ -1326,7 +1740,12 @@ def _open_real_debate(
         from ..debate.judge import JudgeUnavailableError
         from ..debate.runner import run_full_debate_cycle
     except Exception as e:
-        warnings.warn(f"open_real_debate: debate module import failed: {e}")
+        msg = f"open_real_debate: debate module import failed: {e}"
+        warnings.warn(msg)
+        logger.warning(
+            msg,
+            extra={"event": "open_real_debate_import_failed"},
+        )
         return None
 
     arguments = {
@@ -1356,16 +1775,364 @@ def _open_real_debate(
             context=base_context,
             due_in_minutes=30,
         )
+        logger.info(
+            "open_real_debate_success debate=%s trigger=%s opponent=%s hyp=%s",
+            deb.id, triggering_specialist, opponent, hypothesis.id,
+            extra={
+                "event": "open_real_debate_success",
+                "debate_id": deb.id,
+                "triggering_specialist": triggering_specialist,
+                "opponent": opponent,
+                "hypothesis_id": hypothesis.id,
+            },
+        )
         return deb.id
     except JudgeUnavailableError as e:
+        # Expected when every judge provider is rate-limited / unreachable.
+        # The judge runner already marked the debate row 'expired', so the
+        # row still exists in `debates` for the audit log — we just don't
+        # have a verdict to apply.
         warnings.warn(
             f"open_real_debate: judge unavailable for {hypothesis.id} — "
             f"debate marked expired by judge runner. {e}"
         )
+        logger.warning(
+            "open_real_debate_judge_unavailable hyp=%s err=%s",
+            hypothesis.id, e,
+            extra={
+                "event": "open_real_debate_judge_unavailable",
+                "hypothesis_id": hypothesis.id,
+            },
+        )
         return None
     except Exception as e:
+        # Anything reaching here is a structural bug (DDL drift, schema
+        # validation in submit_debate_argument, etc.). Surface it loudly so
+        # CI catches the regression — but don't crash the synthesize call,
+        # the cycle can still emit ideas + watchlist setups without this
+        # debate.
         warnings.warn(f"open_real_debate: run_full_debate_cycle failed: {e}")
+        logger.exception(
+            "open_real_debate_run_failed hyp=%s opponent=%s",
+            hypothesis.id, opponent,
+            extra={
+                "event": "open_real_debate_run_failed",
+                "hypothesis_id": hypothesis.id,
+                "opponent": opponent,
+            },
+        )
         return None
+
+
+# ============================================================================
+# Codex finding #11 — solicit peer messages from the specialist's voice.
+#
+# Background: today the only peer-message path posts when cumulative
+# posterior delta > 0.2 — a threshold the evidence scorer almost never
+# clears (its |delta| is capped at 0.30 and it's skeptical-by-default). On
+# a fresh DB with 4 specialists + 21 hypotheses we saw 0 peer messages.
+# The persona prompts ask for 0-5 peer messages per cycle, but the runtime
+# never gave the LLM a turn to actually emit them.
+#
+# This helper makes ONE LLM call at the END of synthesize(), in the
+# specialist's voice, asking it to propose 0-3 peer messages addressed to
+# its peers based on the cycle's hypotheses + ideas + blocked candidates
+# + the open hypotheses already posted by peers. Each proposed message is
+# posted via the standard `post_message` path (bitemporal contract + dedup
+# key included) so a re-run of the cycle is a no-op.
+# ============================================================================
+
+_PEER_MESSAGE_SYSTEM = (
+    "You are running ONE turn of a Talis specialist's peer-message phase. "
+    "Speaking in the specialist's voice (their persona system prompt was "
+    "your prior input), propose 0-3 short peer messages addressed to OTHER "
+    "registered specialists. Each message must drive cross-pollination — "
+    "an observation worth knowing, a flag, a sharp question, or a cross-"
+    "ref to your own work. Return ONLY JSON, no prose: "
+    "{\"messages\": [{"
+    "\"to_agent\": str (e.g. \"@macro_regime\" or \"#liquidity\"), "
+    "\"topic\": str (1-3 words), "
+    "\"kind\": str (one of: observation | question | flag | cross_ref | "
+    "request_review | request_devils_advocate | hand_off), "
+    "\"payload\": str (1-2 sentences, <=240 chars)"
+    "}]}"
+)
+
+# Map LLM-emitted shorthand kinds onto the bitemporal scratchpad's strict
+# set. The persona prompts use 'agree' / 'disagree' informally; we route
+# those to cross_ref + flag respectively so the schema check passes.
+_PEER_KIND_ALIASES: dict[str, str] = {
+    "agree":    "cross_ref",
+    "disagree": "flag",
+    "support":  "cross_ref",
+    "object":   "flag",
+    "warn":     "flag",
+    "ask":      "question",
+    "observe":  "observation",
+    "review":   "request_review",
+    "advocate": "request_devils_advocate",
+    "handoff":  "hand_off",
+    "hand-off": "hand_off",
+}
+
+
+def _build_peer_message_prompt(
+    specialist_id: str,
+    persona_prompt: str,
+    own_hypotheses: list[Hypothesis],
+    own_ideas: list[TradeIdea],
+    blocked_idea_ids: list[str],
+    peer_open_topics: list[dict[str, Any]],
+    peer_registry: list[str],
+) -> str:
+    # We deliberately keep this trimmed: ONE call per specialist per cycle
+    # at sonnet-fallback prices is ~$0.005 — adding more context blows the
+    # cost without changing whether the LLM picks a worthwhile flag.
+    hyp_lines: list[str] = []
+    for h in own_hypotheses[:6]:
+        hyp_lines.append(
+            f"  - {h.id} [{(h.posterior_prob or 0.5):.2f}] {h.title[:90]}"
+        )
+    idea_lines: list[str] = []
+    for i in own_ideas[:4]:
+        idea_lines.append(
+            f"  - {i.id} {i.instrument} {i.direction} conf={i.confidence:.2f}"
+        )
+    peer_lines: list[str] = []
+    for p in peer_open_topics[:6]:
+        peer_lines.append(
+            f"  - from={p.get('from')} title={p.get('title','')[:80]}"
+        )
+    other = [s for s in peer_registry if s != specialist_id]
+    return (
+        f"## You\n"
+        f"  specialist_id: {specialist_id}\n"
+        f"  peers_you_can_address: {other}\n"
+        f"\n## Your cycle so far\n"
+        f"  hypotheses:\n" + ("\n".join(hyp_lines) or "  (none)") +
+        f"\n  trade_ideas:\n" + ("\n".join(idea_lines) or "  (none)") +
+        f"\n  blocked_idea_ids: {blocked_idea_ids[:5]}"
+        f"\n\n## Open work from peers (sample)\n"
+        + ("\n".join(peer_lines) or "  (none)") +
+        f"\n\n## Your persona context (snippet for tone only)\n"
+        f"{(persona_prompt or '')[:600]}"
+        f"\n\nReturn JSON now. 0 messages is OK if nothing is worth saying."
+    )
+
+
+def _gather_peer_open_topics(
+    own_specialist_id: str,
+    peer_registry: list[str],
+    limit: int = 8,
+) -> list[dict[str, Any]]:
+    """Pull a small sample of peers' currently-open hypotheses so the LLM
+    can address them directly. We query `hypotheses` rather than walking
+    each peer's inbox; on a fresh DB the inbox is empty until messages
+    actually flow."""
+    if not peer_registry:
+        return []
+    out: list[dict[str, Any]] = []
+    try:
+        conn = get_desk_store().conn
+        others = [s for s in peer_registry if s != own_specialist_id]
+        if not others:
+            return []
+        placeholders = ",".join(["?"] * len(others))
+        rows = conn.execute(
+            f"SELECT id, specialist_id, title, posterior_prob "
+            f"FROM hypotheses "
+            f"WHERE specialist_id IN ({placeholders}) AND status = 'active' "
+            f"  AND transaction_to IS NULL "
+            f"ORDER BY transaction_from DESC LIMIT ?",
+            (*others, limit),
+        ).fetchall()
+        for r in rows:
+            out.append({
+                "from": r["specialist_id"],
+                "hyp_id": r["id"],
+                "title": r["title"],
+                "posterior": r["posterior_prob"],
+            })
+    except Exception as e:
+        logger.warning(
+            "gather_peer_open_topics_failed: %s", e,
+            extra={"event": "peer_open_topics_query_failed"},
+        )
+    return out
+
+
+def _solicit_peer_messages(
+    hydration: CycleHydration,
+    cycle_id: str,
+    own_hypotheses: list[Hypothesis],
+    own_ideas: list[TradeIdea],
+    blocked_idea_ids: list[str],
+    base_context: AgentContext,
+    plan_model: str,
+    max_messages: int = 3,
+) -> list[AgentMessage]:
+    """One LLM call per cycle that asks the specialist to propose peer
+    messages. Returns the AgentMessage rows actually posted (post_message
+    handles dedupe + bitemporal contract). Failures are swallowed + logged
+    so peer messaging is never critical-path.
+
+    NO STUBS: uses the same `_chat_sync` + fallback chain as PLAN. When
+    chat() returns no usable text we log + return [].
+    """
+    # Skip the call entirely if there's nothing to talk about — saves
+    # ~$0.005 per noisy cycle and avoids spamming peers with vacuous
+    # observations.
+    if not own_hypotheses and not own_ideas and not blocked_idea_ids:
+        return []
+
+    peer_registry = _list_registered_specialist_ids()
+    if not peer_registry or all(p == hydration.specialist_id for p in peer_registry):
+        # No other specialists exist yet — silently skip.
+        return []
+
+    peer_open = _gather_peer_open_topics(hydration.specialist_id, peer_registry)
+    user_prompt = _build_peer_message_prompt(
+        specialist_id=hydration.specialist_id,
+        persona_prompt=hydration.persona_prompt or "",
+        own_hypotheses=own_hypotheses,
+        own_ideas=own_ideas,
+        blocked_idea_ids=blocked_idea_ids,
+        peer_open_topics=peer_open,
+        peer_registry=peer_registry,
+    )
+
+    try:
+        res = _chat_sync(
+            plan_model,
+            _PEER_MESSAGE_SYSTEM,
+            user_prompt,
+            max_tokens=800,
+            fallback="anthropic:claude-sonnet-4-6",
+        )
+    except Exception as e:
+        logger.warning(
+            "solicit_peer_messages_chat_raised specialist=%s err=%s",
+            hydration.specialist_id, e,
+            extra={
+                "event": "peer_messages_chat_raised",
+                "specialist_id": hydration.specialist_id,
+            },
+        )
+        return []
+
+    if not res.text:
+        logger.warning(
+            "solicit_peer_messages_empty specialist=%s error=%s",
+            hydration.specialist_id, res.error,
+            extra={
+                "event": "peer_messages_empty",
+                "specialist_id": hydration.specialist_id,
+                "chat_error": res.error,
+            },
+        )
+        return []
+
+    parsed = _extract_json(res.text)
+    # Accept either {messages:[...]} or a bare list.
+    raw_msgs: list[Any] = []
+    if isinstance(parsed, dict):
+        raw_msgs = parsed.get("messages") or []
+    elif isinstance(parsed, list):
+        raw_msgs = parsed
+    if not isinstance(raw_msgs, list) or not raw_msgs:
+        logger.warning(
+            "solicit_peer_messages_unparseable specialist=%s preview=%r",
+            hydration.specialist_id, (res.text or "")[:160],
+            extra={
+                "event": "peer_messages_unparseable",
+                "specialist_id": hydration.specialist_id,
+            },
+        )
+        return []
+
+    posted: list[AgentMessage] = []
+    # Reference set of valid kinds — we import lazily to avoid a hard
+    # coupling at module-import time.
+    try:
+        from ..agents_native.scratchpad import VALID_MESSAGE_KINDS  # type: ignore
+    except Exception:
+        VALID_MESSAGE_KINDS = {
+            "observation", "question", "cross_ref", "flag",
+            "request_review", "request_devils_advocate", "hand_off",
+        }
+
+    for idx, m in enumerate(raw_msgs):
+        if len(posted) >= max_messages:
+            break
+        if not isinstance(m, dict):
+            continue
+        to_raw = str(m.get("to_agent") or "").strip()
+        topic = str(m.get("topic") or "general").strip()[:64] or "general"
+        kind_raw = str(m.get("kind") or "observation").strip().lower()
+        payload_text = str(m.get("payload") or "").strip()[:480]
+        if not to_raw or not payload_text:
+            continue
+        # Normalize the addressee. The scratchpad accepts either an
+        # explicit specialist id ("macro_regime") or a topic ("#liquidity").
+        # We strip a leading '@' and verify against the registry; unknown
+        # addressees fall back to a topic so the message is still
+        # discoverable.
+        addressee: str
+        if to_raw.startswith("#"):
+            addressee = to_raw
+        elif to_raw.startswith("@"):
+            cand = to_raw[1:]
+            addressee = cand if cand in peer_registry else f"#{topic}"
+        else:
+            addressee = to_raw if to_raw in peer_registry else f"#{topic}"
+        # Don't address yourself.
+        if addressee == hydration.specialist_id:
+            continue
+        # Normalize the kind through the alias map; reject anything that
+        # still isn't a valid scratchpad kind.
+        kind = _PEER_KIND_ALIASES.get(kind_raw, kind_raw)
+        if kind not in VALID_MESSAGE_KINDS:
+            kind = "observation"  # safest fallback for an unknown label
+        try:
+            msg = post_message(
+                from_agent=hydration.specialist_id,
+                to_agent_or_topic=addressee,
+                kind=kind,  # type: ignore[arg-type]
+                payload={
+                    "event": "peer_message",
+                    "cycle_id": cycle_id,
+                    "topic": topic,
+                    "content": payload_text,
+                    "from_persona_version": hydration.persona_version,
+                },
+                expires_in_hours=48,
+                # Dedupe per (specialist, cycle, idx) so re-running the
+                # cycle doesn't double-post. cycle_id alone is unique
+                # because synthesize() runs once per (specialist, cycle).
+                dedupe_key=f"{hydration.specialist_id}:peer:{cycle_id}:{idx}",
+            )
+            posted.append(msg)
+        except Exception as e:
+            logger.warning(
+                "solicit_peer_messages_post_failed specialist=%s to=%s err=%s",
+                hydration.specialist_id, addressee, e,
+                extra={
+                    "event": "peer_message_post_failed",
+                    "specialist_id": hydration.specialist_id,
+                    "to": addressee,
+                },
+            )
+
+    logger.info(
+        "solicit_peer_messages specialist=%s posted=%d",
+        hydration.specialist_id, len(posted),
+        extra={
+            "event": "peer_messages_posted",
+            "specialist_id": hydration.specialist_id,
+            "n_posted": len(posted),
+        },
+    )
+    return posted
 
 
 def synthesize(hydration: CycleHydration, cycle_plan: CyclePlan,
@@ -1381,6 +2148,8 @@ def synthesize(hydration: CycleHydration, cycle_plan: CyclePlan,
     - Trigger debates for high-confidence claims & high-confidence ideas;
       when `maybe_trigger_debate()` says yes, ACTUALLY open the debate via
       `run_full_debate_cycle()` (capped at `loop_config.max_debates_per_cycle`).
+    - At the END of the stage, solicit 0-3 LLM-voiced peer messages so
+      specialists actually cross-pollinate (Codex finding #11).
     """
     new_ideas: list[TradeIdea] = []
     updated: list[Hypothesis] = []
@@ -1599,11 +2368,19 @@ def synthesize(hydration: CycleHydration, cycle_plan: CyclePlan,
     # ------------------------------------------------------------------
     if not _supported_synth_inputs and _all_hyps_with_traces:
         # Build candidate inputs from the top-3 highest-posterior hypotheses
-        # with posterior >= 0.50 (don't promote contradicted/noisy).
+        # with posterior >= 0.45 (don't promote contradicted/noisy).
+        # Calibration (2026-05-20): floor lowered from 0.50 -> 0.45. The
+        # evidence scorer's |delta|<=0.30 cap + 4-6 calls averaging ~0.05-0.10
+        # drift means a real-signal hypothesis can finish a cycle slightly
+        # below the 0.5 starting prior (e.g. 0.45-0.49) even when the
+        # underlying claim is meaningfully positive vs the 0.30 contradicted
+        # threshold. The validator's 9 gates (quarter-Kelly, explicit
+        # contradicting evidence, stop+target, etc.) remain the actual
+        # publication bar — weak drafts still route to BlockedIdea.
         ranked = sorted(
             [(float(h.posterior_prob or 0.5), h, t)
              for h, t in _all_hyps_with_traces
-             if float(h.posterior_prob or 0.5) >= 0.50],
+             if float(h.posterior_prob or 0.5) >= 0.45],
             key=lambda x: x[0], reverse=True,
         )
         for posterior_val, hyp, trace_for_hyp in ranked[:3]:
@@ -1654,6 +2431,23 @@ def synthesize(hydration: CycleHydration, cycle_plan: CyclePlan,
         except Exception as e:
             warnings.warn(f"idea_synthesizer crashed: {e!s}")
             synth_result = None
+
+        # Codex finding #15: record synthesizer LLM spend in the desk-wide
+        # daily cost ledger. Best-effort — never let ledger errors break a
+        # cycle.
+        if synth_result is not None and (synth_result.cost_usd or 0.0) > 0.0:
+            try:
+                from ..cost_ledger import get_cost_ledger
+                get_cost_ledger().record(
+                    amount_usd=float(synth_result.cost_usd),
+                    stage="synthesize_idea",
+                    specialist_id=hydration.specialist_id,
+                    cycle_id=cycle_id,
+                )
+            except Exception as _ledger_err:  # noqa: BLE001
+                warnings.warn(
+                    f"cost_ledger.record(synthesize_idea) failed: {_ledger_err}"
+                )
 
         if synth_result is not None:
             # Each validated draft -> emit + maybe-debate.
@@ -1754,6 +2548,60 @@ def synthesize(hydration: CycleHydration, cycle_plan: CyclePlan,
                         f"emit_blocked_idea (synth) failed for {inst}: {e}"
                     )
 
+    # ------------------------------------------------------------------
+    # Codex finding #11 — give the specialist's voice ONE turn to compose
+    # peer messages from its actual cycle artifacts. This runs AFTER the
+    # debate openers + idea synthesizer so the LLM can reference its own
+    # ideas and the blocked candidates by id. Failures are swallowed +
+    # logged inside _solicit_peer_messages; we never crash the cycle for
+    # a peer-message issue (it's not critical-path).
+    # ------------------------------------------------------------------
+    try:
+        own_open_hyps = updated + resolved  # everything visible this cycle
+        proposed_msgs = _solicit_peer_messages(
+            hydration=hydration,
+            cycle_id=cycle_id,
+            own_hypotheses=own_open_hyps,
+            own_ideas=new_ideas,
+            blocked_idea_ids=blocked_idea_ids,
+            base_context=base_context,
+            plan_model=loop_config.plan_model,
+            max_messages=3,
+        )
+        # Append (don't replace) — the threshold-based peer_msgs above are
+        # still useful when they fire.
+        peer_msgs.extend(proposed_msgs)
+    except Exception as e:
+        warnings.warn(f"solicit_peer_messages raised unexpected: {e}")
+        logger.exception(
+            "solicit_peer_messages_unexpected specialist=%s",
+            hydration.specialist_id,
+            extra={
+                "event": "peer_messages_unexpected_raise",
+                "specialist_id": hydration.specialist_id,
+            },
+        )
+
+    # ------------------------------------------------------------------
+    # RESEARCH REPORTS — adversarial pipeline. Every surviving hypothesis
+    # (status='supported' OR candidate-promoted OR watchlist OR blocked)
+    # gets a 3-stage report (researcher -> adversarial critic ->
+    # revision). The daily brief composes its narrative + TOC from these
+    # rows instead of from raw hypotheses + ideas. We aim for 70+ reports
+    # per day across all specialists (4 specialists x 4-6 hypotheses x
+    # 4-6 cycles = ample headroom).
+    # ------------------------------------------------------------------
+    report_ids: list[str] = _run_research_report_pipeline_block(
+        hydration=hydration,
+        cycle_id=cycle_id,
+        all_hyps_with_traces=_all_hyps_with_traces,
+        new_ideas=new_ideas,
+        watchlist_setup_ids=watchlist_setup_ids,
+        blocked_idea_ids=blocked_idea_ids,
+        synth_inputs=_supported_synth_inputs,
+        base_context=base_context,
+    )
+
     return CycleSynthesis(
         new_trade_ideas=new_ideas,
         updated_hypotheses=updated,
@@ -1763,7 +2611,257 @@ def synthesize(hydration: CycleHydration, cycle_plan: CyclePlan,
         opened_debate_ids=opened_debate_ids,
         watchlist_setups=watchlist_setup_ids,
         blocked_ideas=blocked_idea_ids,
+        report_ids=report_ids,
     )
+
+
+def _run_research_report_pipeline_block(
+    *,
+    hydration: CycleHydration,
+    cycle_id: str,
+    all_hyps_with_traces: list[tuple[Any, "ExplorationTrace"]],
+    new_ideas: list[TradeIdea],
+    watchlist_setup_ids: list[str],
+    blocked_idea_ids: list[str],
+    synth_inputs: list[dict[str, Any]],
+    base_context: AgentContext,
+) -> list[str]:
+    """Run the adversarial research-report pipeline for every surviving
+    hypothesis in this cycle.
+
+    Survivor classification:
+      * trade_idea     — hypothesis has a published TradeIdea this cycle
+      * watchlist      — hypothesis emitted a WatchlistSetup this cycle
+      * blocked_thesis — hypothesis emitted a BlockedIdea this cycle
+      * regime_change / anomaly_flag / rotation_call / vol_arb / pair_trade
+        — heuristic from the hypothesis title/text (best-effort)
+      * (default)      — `watchlist` for the rest (still produce a report)
+
+    Failures (per-hypothesis pipeline errors) are logged + skipped; we
+    never abort the cycle for a report failure. Costs are recorded in
+    the desk-wide CostLedger under stage='report_pipeline'.
+    """
+    out: list[str] = []
+    if not all_hyps_with_traces:
+        return out
+
+    # Lazy imports keep the module load fast + avoid pulling tic at
+    # import-time.
+    try:
+        from ..reports import (
+            ReportPipelineUnavailableError,
+            emit_research_report,
+            run_report_pipeline,
+        )
+    except Exception as e:  # noqa: BLE001
+        warnings.warn(
+            f"reports package import failed; skipping research-report "
+            f"pipeline for cycle={cycle_id!r}: {e!s}"
+        )
+        return out
+
+    # Build per-instrument idea index so we can attach the primary
+    # artifact + classify report_kind. (TradeIdea / WatchlistSetup /
+    # BlockedIdea are emitted upstream by name; here we just match by
+    # hypothesis_id / instrument.)
+    ideas_by_hyp: dict[str, TradeIdea] = {}
+    for idea in new_ideas:
+        for hid in (idea.hypothesis_ids or []):
+            ideas_by_hyp.setdefault(hid, idea)
+    # Fetch watchlist + blocked rows we just inserted (read-only) so the
+    # pipeline can attach the primary_artifact_id.
+    wls_rows: dict[str, dict[str, Any]] = {}
+    blk_rows: dict[str, dict[str, Any]] = {}
+    try:
+        conn = get_desk_store().conn
+        if watchlist_setup_ids:
+            placeholders = ",".join("?" * len(watchlist_setup_ids))
+            for r in conn.execute(
+                f"SELECT * FROM watchlist_setups WHERE id IN ({placeholders})",
+                tuple(watchlist_setup_ids),
+            ).fetchall():
+                wls_rows[r["hypothesis_id"]] = dict(r)
+        if blocked_idea_ids:
+            placeholders = ",".join("?" * len(blocked_idea_ids))
+            for r in conn.execute(
+                f"SELECT * FROM blocked_ideas WHERE id IN ({placeholders})",
+                tuple(blocked_idea_ids),
+            ).fetchall():
+                blk_rows[r["hypothesis_id"]] = dict(r)
+    except Exception as e:  # noqa: BLE001
+        warnings.warn(
+            f"report pipeline: failed to hydrate watchlist/blocked rows: {e}"
+        )
+
+    # Index synth_inputs by hypothesis id so we can pull the BFS evidence
+    # list + market snapshot snapshot context cheaply.
+    synth_by_hyp: dict[str, dict[str, Any]] = {}
+    for s in synth_inputs:
+        hyp_obj = s.get("hyp")
+        hid = getattr(hyp_obj, "id", None)
+        if hid:
+            synth_by_hyp[hid] = s
+
+    persona_prompt = hydration.persona_prompt or ""
+
+    for hyp, trace in all_hyps_with_traces:
+        hyp_dict = {
+            "id": hyp.id,
+            "title": hyp.title,
+            "hypothesis_text": hyp.hypothesis_text,
+            "posterior_prob": hyp.posterior_prob,
+            "heat_score": hyp.heat_score,
+            "status": getattr(hyp, "status", None),
+            "entity_ids": list(hyp.entity_ids or []),
+            "claim_ids": list(hyp.claim_ids or []),
+            "tool_call_ids": list(hyp.tool_call_ids or []),
+        }
+        # Build BFS evidence chain from the trace (mirrors the
+        # idea-synthesizer evidence shape).
+        evidence: list[dict[str, Any]] = []
+        for s in (trace.steps or []):
+            if s.tool_call_log_id and s.heat is not None:
+                evidence.append({
+                    "hypothesis_id": hyp.id,
+                    "tool_call_log_id": s.tool_call_log_id,
+                    "tool_uri": s.tool_uri,
+                    "posterior_delta": s.heat.contradiction_score,
+                    "contradicts": (s.edge_kind_emitted == "contradicts"),
+                    "rationale": (s.question_text or "")[:200],
+                })
+
+        # Classify survivor + pick primary_artifact.
+        primary_artifact: Optional[dict[str, Any]] = None
+        report_kind: str = "watchlist"
+        idea_for_hyp = ideas_by_hyp.get(hyp.id)
+        if idea_for_hyp is not None:
+            report_kind = "trade_idea"
+            primary_artifact = {
+                "id": idea_for_hyp.id,
+                "instrument": idea_for_hyp.instrument,
+                "direction": idea_for_hyp.direction,
+                "confidence": idea_for_hyp.confidence,
+                "edge_thesis": idea_for_hyp.edge_thesis,
+                "time_horizon": idea_for_hyp.time_horizon,
+                "status": idea_for_hyp.status,
+            }
+        elif hyp.id in wls_rows:
+            report_kind = "watchlist"
+            wr = wls_rows[hyp.id]
+            primary_artifact = {
+                "id": wr.get("id"),
+                "instrument": wr.get("instrument"),
+                "direction": wr.get("direction"),
+                "watch_condition": wr.get("watch_condition"),
+                "current_posterior": wr.get("current_posterior"),
+            }
+        elif hyp.id in blk_rows:
+            report_kind = "blocked_thesis"
+            br = blk_rows[hyp.id]
+            primary_artifact = {
+                "id": br.get("id"),
+                "instrument": br.get("instrument"),
+                "direction": br.get("direction"),
+                "block_reason": br.get("block_reason"),
+                "what_would_unblock": br.get("what_would_unblock"),
+            }
+        else:
+            # Heuristic fallback: scan title/text for regime/anomaly/etc.
+            text_blob = ((hyp.title or "") + " " + (hyp.hypothesis_text or "")).lower()
+            if "regime" in text_blob:
+                report_kind = "regime_change"
+            elif "anomal" in text_blob or "outlier" in text_blob:
+                report_kind = "anomaly_flag"
+            elif "rotat" in text_blob or "relative" in text_blob:
+                report_kind = "rotation_call"
+            elif "volatil" in text_blob or "funding" in text_blob or "vol-arb" in text_blob:
+                report_kind = "vol_arb"
+            elif "pair" in text_blob or "spread trade" in text_blob:
+                report_kind = "pair_trade"
+            else:
+                report_kind = "watchlist"
+
+        # Pull whatever market snapshot the synthesizer fetched (if any).
+        synth_entry = synth_by_hyp.get(hyp.id)
+        market_snapshot: Optional[dict[str, Any]] = None
+        if synth_entry:
+            # The synth_inputs are per-hyp; the snapshot lives on
+            # IdeaSynthesisResult, not on synth_inputs. Best-effort: keep
+            # market_snapshot=None and let the pipeline render
+            # "(no live market snapshot)". The hypothesis evidence is
+            # still real.
+            market_snapshot = None
+
+        try:
+            result = run_report_pipeline(
+                specialist_id=hydration.specialist_id,
+                persona_prompt=persona_prompt,
+                hypothesis=hyp_dict,
+                primary_artifact=primary_artifact,
+                tool_evidence=evidence,
+                market_snapshot=market_snapshot,
+                source_health={},
+                cycle_id=cycle_id,
+                report_kind=report_kind,  # type: ignore[arg-type]
+            )
+        except ReportPipelineUnavailableError as e:
+            warnings.warn(
+                f"report pipeline unavailable for hyp={hyp.id}; skipping: {e!s}"
+            )
+            continue
+        except Exception as e:  # noqa: BLE001 - keep cycle alive
+            warnings.warn(
+                f"report pipeline crashed for hyp={hyp.id}: {e!s}"
+            )
+            continue
+
+        # Persist + record cost
+        try:
+            emit_research_report(result.report, base_context)
+            out.append(result.report.id)
+        except Exception as e:  # noqa: BLE001
+            warnings.warn(
+                f"emit_research_report failed for hyp={hyp.id}: {e!s}"
+            )
+            continue
+
+        if (result.total_cost_usd or 0.0) > 0.0:
+            try:
+                from ..cost_ledger import get_cost_ledger
+                ledger = get_cost_ledger()
+                # Record each stage of the 6-stage pipeline individually
+                # so the daily cap properly attributes spend. Stage names
+                # are prefixed `report_pipeline_` so they're easy to slice.
+                per_stage = getattr(result, "stage_costs_usd", None) or {}
+                stage_total = 0.0
+                for stage_name, stage_amount in per_stage.items():
+                    amt = float(stage_amount or 0.0)
+                    if amt <= 0.0:
+                        continue
+                    ledger.record(
+                        amount_usd=amt,
+                        stage=f"report_pipeline_{stage_name}",
+                        specialist_id=hydration.specialist_id,
+                        cycle_id=cycle_id,
+                    )
+                    stage_total += amt
+                # If per-stage didn't account for the full cost (e.g.
+                # back-compat path), record the gap under the umbrella
+                # stage so the daily cap remains correct.
+                gap = float(result.total_cost_usd) - stage_total
+                if gap > 0.0001:
+                    ledger.record(
+                        amount_usd=gap,
+                        stage="report_pipeline",
+                        specialist_id=hydration.specialist_id,
+                        cycle_id=cycle_id,
+                    )
+            except Exception as _ledger_err:  # noqa: BLE001
+                warnings.warn(
+                    f"cost_ledger.record(report_pipeline) failed: {_ledger_err}"
+                )
+
+    return out
 
 
 def _unblock_hint_from_gate_errors(errors: list[str]) -> str:
@@ -2271,7 +3369,37 @@ def run_research_cycle(
     t_start = time.perf_counter()
     loop_config = loop_config or LoopConfig()
 
-    # --- 0. Idempotency ----------------------------------------------------
+    # --- 0a. Daily cost cap (codex finding #15) ----------------------------
+    # Check the desk-wide $100/day ceiling BEFORE doing anything. Once
+    # tripped, no new cycles run until the next UTC day. We do this before
+    # idempotency so a re-run of an already-completed cycle (cheap hydrate
+    # only) still short-circuits.
+    try:
+        from ..cost_ledger import (
+            DailyCostCapExceededError,
+            get_cost_ledger,
+        )
+        _ledger = get_cost_ledger()
+        if _ledger.hard_cap_breached():
+            raise DailyCostCapExceededError(
+                f"daily desk-wide LLM spend cap "
+                f"${_ledger.hard_cap_usd:.2f} reached "
+                f"(today_total=${_ledger.today_total():.4f}); "
+                f"refusing to start cycle {cycle_id!r} for "
+                f"{specialist_id!r}."
+            )
+    except DailyCostCapExceededError:
+        raise
+    except Exception as _ledger_init_err:  # noqa: BLE001
+        # If the ledger can't initialize (e.g. desk store not bound), do
+        # not block the cycle — log loudly and continue. We never silently
+        # swallow a real cap breach (re-raised above).
+        warnings.warn(
+            f"cost_ledger init failed in run_research_cycle: "
+            f"{_ledger_init_err}"
+        )
+
+    # --- 0b. Idempotency ---------------------------------------------------
     existing = _check_idempotent_short_circuit(specialist_id, cycle_id)
     if existing is not None:
         # Build a thin result echoing the prior state. We re-hydrate so the
@@ -2320,6 +3448,12 @@ def run_research_cycle(
 
     # --- 2. PLAN -----------------------------------------------------------
     cycle_plan = plan(hydration, loop_config)
+    _record_stage_cost(
+        amount=cycle_plan.llm_cost_usd,
+        stage="plan",
+        specialist_id=specialist_id,
+        cycle_id=cycle_id,
+    )
 
     # --- 3. EXPLORE --------------------------------------------------------
     traces, investigations, expl_cost, expl_calls = explore(
@@ -2328,6 +3462,14 @@ def run_research_cycle(
         cycle_id=cycle_id,
         loop_config=loop_config,
         base_context=base_context,
+    )
+    # Exploration cost is the aggregate of every tool dispatch + evidence
+    # scorer call (recorded inside the BFS loop, see exploration/bfs.py).
+    _record_stage_cost(
+        amount=expl_cost,
+        stage="explore_evidence",
+        specialist_id=specialist_id,
+        cycle_id=cycle_id,
     )
     exploration_trace_id = (
         traces[0].investigation_id if traces else ""
@@ -2356,6 +3498,18 @@ def run_research_cycle(
         cycle_total_cost_usd=pre_reflect_cost,
         loop_config=loop_config,
     )
+    _record_stage_cost(
+        amount=reflection.llm_cost_usd,
+        stage="reflect",
+        specialist_id=specialist_id,
+        cycle_id=cycle_id,
+    )
+
+    # Debate cost is captured by the debate orchestrator's own ledger
+    # writes (see `_open_real_debate` -> `run_full_debate_cycle`); the
+    # cycle aggregate already accounts for it via the per-call cost
+    # estimates returned by `chat()`. The ledger entry stage='debate' is
+    # written from the debate runner side so we don't double-count here.
 
     cycle_total_cost = pre_reflect_cost + reflection.llm_cost_usd
 

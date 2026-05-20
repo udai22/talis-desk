@@ -19,7 +19,9 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-sys.path.insert(0, "/Users/udaikhattar/jarvis-ios/docs/research/brief_experiments")
+# Codex finding #16: centralized path resolution via `talis_desk._tic_config`.
+from talis_desk._tic_config import ensure_tic_on_path as _ensure_tic_on_path  # noqa: E402
+_ensure_tic_on_path()
 
 
 def main() -> int:

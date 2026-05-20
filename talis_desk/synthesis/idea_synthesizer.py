@@ -73,14 +73,12 @@ from ..trade_ideas.model import (
 # ============================================================================
 # Ensure the sibling `tic` package is importable for chat() + HL tools —
 # same pattern debate/judge.py and brief/composer.py use.
+#
+# Codex finding #16: route through the centralized helper instead of a
+# hardcoded path.
 # ============================================================================
 
-_TIC_SIBLING_PATH = "/Users/udaikhattar/jarvis-ios/docs/research/brief_experiments"
-
-
-def _ensure_tic_on_path() -> None:
-    if _TIC_SIBLING_PATH not in sys.path:
-        sys.path.insert(0, _TIC_SIBLING_PATH)
+from .._tic_config import ensure_tic_on_path as _ensure_tic_on_path  # noqa: E402
 
 
 # ============================================================================

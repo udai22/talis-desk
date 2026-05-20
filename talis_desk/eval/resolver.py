@@ -203,11 +203,10 @@ def _fetch_price_path(coin: str, start: datetime, end: datetime) -> dict[str, An
 
     Uses HL candleSnapshot with an interval chosen to keep the result small.
     """
-    import sys as _sys
-    sibling = "/Users/udaikhattar/jarvis-ios/docs/research/brief_experiments"
-    if sibling not in _sys.path:
-        _sys.path.insert(0, sibling)
+    # Codex finding #16: centralized path resolution.
     try:
+        from .._tic_config import ensure_tic_on_path
+        ensure_tic_on_path()
         from tic.desk.tools.hl_history_tools import get_hl_candles
     except Exception as e:
         return {"error": f"import_failed: {e}"}
