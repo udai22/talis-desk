@@ -22,6 +22,20 @@ from .resolver import (
     AlphaAttribution,
 )
 from .benchmark import compute_benchmark_return, BenchmarkResult, HL_TOP10_DEFAULT
+from .novelty import NoveltyScore, score_novelty
+from .rewards import (
+    RewardEntry,
+    SpecialistRewardAggregate,
+    aggregate_specialist_rewards,
+    aggregate_tool_affinity,
+    score_alpha,
+    score_correctness,
+    score_coverage_for_specialist,
+    score_cost_penalty,
+    score_debate_quality,
+    score_novelty as score_novelty_reward,
+    score_playbook_hit,
+)
 
 __all__ = [
     "resolve_trade_idea",
@@ -35,4 +49,19 @@ __all__ = [
     "AlphaAttribution",
     "BenchmarkResult",
     "HL_TOP10_DEFAULT",
+    # Phase 6: novelty
+    "NoveltyScore",
+    "score_novelty",
+    # Phase 6: rewards
+    "RewardEntry",
+    "SpecialistRewardAggregate",
+    "aggregate_specialist_rewards",
+    "aggregate_tool_affinity",
+    "score_alpha",
+    "score_correctness",
+    "score_coverage_for_specialist",
+    "score_cost_penalty",
+    "score_debate_quality",
+    "score_novelty_reward",
+    "score_playbook_hit",
 ]

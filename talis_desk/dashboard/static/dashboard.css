@@ -1,0 +1,8 @@
+/* Talis Desk — Eval Dashboard CSS overlay.
+ * The base layout is inlined in `render.py::_DASHBOARD_CSS`. This file is
+ * loaded as `/static/dashboard.css` and reserved for reviewer-side overrides
+ * (e.g. per-reviewer theme tweaks) without touching the Python renderer.
+ *
+ * Add overrides BELOW. Empty by default so the Python render is the source
+ * of truth.
+ */
