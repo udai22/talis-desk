@@ -187,6 +187,12 @@ class ExplorationStep:
     heat: HotSignalScore
     edge_kind_emitted: str
     spawned_sub_investigation_id: Optional[str] = None
+    # Codex finding #3: explicit dispatch result + error so failed tool calls
+    # never feed posterior updates or evidence edges. `status` is one of
+    # 'ok', 'dispatch_failed'. `error` holds the ToolResult.error message
+    # (e.g. 'tool_uri_not_in_atlas: tic://...').
+    status: str = "ok"
+    error: Optional[str] = None
 
 
 @dataclass
@@ -204,6 +210,12 @@ class ExplorationTrace:
     steps: list[ExplorationStep] = field(default_factory=list)
     sub_investigations: list[str] = field(default_factory=list)
     capped: bool = False  # True if we hit max_calls / cost / wall before frontier emptied
+    # Codex finding #3 / #9: per-trace failure metrics. The kill-switch
+    # cross-checks `n_failed_calls / n_calls` against the source-health
+    # threshold. `aborted_due_to_source_health=True` when the BFS itself
+    # tripped a per-investigation failure circuit-breaker (>50%).
+    n_failed_calls: int = 0
+    aborted_due_to_source_health: bool = False
 
 
 @dataclass
@@ -744,6 +756,13 @@ def explore_adversarial(
     steps: list[ExplorationStep] = []
     sub_invs: list[str] = []
     n_contradiction = 0
+    n_failed_calls = 0
+    aborted_due_to_source_health = False
+    # Codex finding #3: once an investigation has done at least this many
+    # calls AND >50% of them have failed, we abort the investigation early
+    # rather than burn the rest of the budget on dead tools.
+    SOURCE_HEALTH_ABORT_MIN_CALLS = 4
+    SOURCE_HEALTH_ABORT_SHARE = 0.50
     t_start = time.perf_counter()
     capped_reason: Optional[str] = None
     current_posterior = inv.seed.initial_prob
@@ -772,19 +791,129 @@ def explore_adversarial(
         inv.calls_used += 1
         inv.cost_used_usd += float(result.cost_usd or 0.0)
 
-        # 2) Score
+        # Codex finding #3: when the dispatch failed, the tool_call_log row
+        # still gets written (with `error` set) and gets an id, but the
+        # payload is unusable as evidence. Skip scoring, edge-linking, and
+        # posterior updates. Just record a 'dispatch_failed' step + counter
+        # so the kill-switch + trace consumers can see the failure.
+        if not result.ok:
+            n_failed_calls += 1
+            steps.append(ExplorationStep(
+                question_id=q.id,
+                question_text=q.question_text,
+                question_kind=q.question_kind,
+                tool_uri=q.tool_uri,
+                tool_call_log_id=result.tool_call_log_id,
+                cost_usd=float(result.cost_usd or 0.0),
+                duration_ms=int(result.duration_ms or 0),
+                posterior_before=current_posterior,
+                posterior_after=current_posterior,
+                heat=HotSignalScore(
+                    posterior_delta=0.0,
+                    surprise_score=0.0,
+                    contradiction_score=0.0,
+                    novelty_score=0.0,
+                    overall_heat=0.0,
+                ),
+                edge_kind_emitted="none",
+                spawned_sub_investigation_id=None,
+                status="dispatch_failed",
+                error=(result.error or "")[:500],
+            ))
+            # Persist running counters; we still consumed a call slot.
+            _persist_investigation(inv, inv.seed.specialist_id, context.cycle_id)
+            # Early-abort on source-health rot: >50% failure share once we
+            # have a meaningful denominator.
+            if (
+                inv.calls_used >= SOURCE_HEALTH_ABORT_MIN_CALLS
+                and (n_failed_calls / inv.calls_used) > SOURCE_HEALTH_ABORT_SHARE
+            ):
+                aborted_due_to_source_health = True
+                capped_reason = "source_health_failure_share"
+                break
+            # Do NOT expand frontier off a failed call — the question was
+            # never resolved by a real tool. The next iteration picks up
+            # the existing frontier.
+            continue
+
+        # 2) Score — first the cheap heat-signal (surprise / novelty / heat)
+        #    from the synthetic envelope hooks, then layer in a REAL
+        #    LLM-driven evidence score for the signed posterior delta. The
+        #    LLM scorer reads the actual payload + source health and either
+        #    returns a calibrated signed delta or raises
+        #    EvidenceUnavailableError, in which case we skip the posterior
+        #    update for this result (no fabricated delta).
         heat = score_hot_signal(result, inv.root_hypothesis_id, context)
+
+        # Pull hypothesis text + source health for the scorer. Best-effort;
+        # missing pieces become empty strings / dicts (the scorer tolerates).
+        try:
+            from ..hypotheses.model import _find_open_head as _find_hyp_head  # type: ignore
+            hyp_row = _find_hyp_head(
+                get_desk_store().conn, inv.root_hypothesis_id
+            )
+            hyp_text_for_scorer = (
+                hyp_row["hypothesis_text"] if hyp_row is not None else inv.seed.hypothesis_text
+            )
+        except Exception:
+            hyp_text_for_scorer = inv.seed.hypothesis_text
+        try:
+            from tic.ingest._health import query_source_health  # type: ignore
+            sh_for_scorer = query_source_health(lookback_hours=72) or {}
+        except Exception:
+            sh_for_scorer = {}
+
+        evidence_score = None
+        try:
+            from .evidence_scorer import (
+                EvidenceUnavailableError,
+                score_evidence,
+            )
+            evidence_score = score_evidence(
+                hypothesis_text=hyp_text_for_scorer,
+                question_text=q.question_text,
+                tool_uri=q.tool_uri,
+                tool_result=result.result if isinstance(result.result, dict) else {"raw": result.result},
+                source_health=sh_for_scorer,
+                prior_posterior=float(current_posterior),
+            )
+            # Charge the cycle for the scorer call (cost accounting).
+            inv.cost_used_usd += float(evidence_score.cost_usd or 0.0)
+            # Override the synthetic heat.contradiction_score with the REAL
+            # signed delta. Keep posterior_delta/surprise/novelty from the
+            # heat call so hot-branch spawning thresholds still work.
+            heat = HotSignalScore(
+                posterior_delta=max(heat.posterior_delta, abs(evidence_score.posterior_delta)),
+                surprise_score=heat.surprise_score,
+                contradiction_score=evidence_score.posterior_delta,
+                novelty_score=heat.novelty_score,
+                overall_heat=heat.overall_heat,
+            )
+        except EvidenceUnavailableError as _ev_err:
+            # No real signal available — fall back to the heat-only delta
+            # (which is 0 for non-synthetic payloads, so posterior stays put).
+            evidence_score = None
+        except Exception:
+            # Defensive: never let the scorer break the BFS loop. The next
+            # cycle's REFLECT pass will surface any chronic failures.
+            evidence_score = None
 
         # 3) Record edge: tool_call -> hypothesis (supports/contradicts)
         edge_kind = "contradicts" if heat.contradiction_score < 0 else "supports"
         if result.tool_call_log_id:
+            # Cite the evidence-scorer's claim_ids alongside the tool_call_log_id.
+            cite_ids: list[str] = [result.tool_call_log_id]
+            if evidence_score is not None:
+                for cid in evidence_score.citation_claim_ids:
+                    if cid not in cite_ids:
+                        cite_ids.append(cid)
             link_evidence(
                 hypothesis_id=inv.root_hypothesis_id,
                 evidence_kind="tool_call",
                 evidence_id=result.tool_call_log_id,
                 edge_kind=edge_kind,  # type: ignore[arg-type]
                 strength=abs(heat.contradiction_score),
-                citation_ids=[result.tool_call_log_id],
+                citation_ids=cite_ids,
             )
 
         # 4) Posterior update (append-only)
@@ -883,6 +1012,8 @@ def explore_adversarial(
         steps=steps,
         sub_investigations=sub_invs,
         capped=capped_reason is not None,
+        n_failed_calls=n_failed_calls,
+        aborted_due_to_source_health=aborted_due_to_source_health,
     )
 
 

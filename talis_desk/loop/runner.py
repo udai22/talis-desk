@@ -101,15 +101,12 @@ from ..tool_atlas.atlas import (
     get_atlas_snapshot_for_cycle,
 )
 from ..trade_ideas import (
-    ContradictionItem,
-    EntryPlan,
-    SizingPlan,
-    StopPlan,
-    TIME_HORIZON_HOURS,
+    BlockedIdea,
     TradeIdea,
-    TradeIdeaDraft,
+    WatchlistSetup,
+    emit_blocked_idea,
     emit_trade_idea,
-    validate_trade_idea,
+    emit_watchlist_setup,
 )
 
 
@@ -185,6 +182,21 @@ REFLECT_MAX_TOKENS = 900
 
 
 # ============================================================================
+# Structured exceptions raised by the loop
+# ============================================================================
+
+
+class PlanToolResolutionError(RuntimeError):
+    """Raised by PLAN when none of the candidate tool URIs (LLM-picked OR
+    persona fallback) resolve against the frozen tool atlas, AND the atlas
+    itself has zero usable rows. No silent corruption — when this fires the
+    cycle aborts cleanly so the operator can debug atlas regeneration.
+
+    Distinct from a generic RuntimeError so callers (and tests) can match
+    on the precise failure mode."""
+
+
+# ============================================================================
 # Dataclasses — stage outputs + final result
 # ============================================================================
 
@@ -213,6 +225,13 @@ class LoopConfig:
     #: kill switch trips for any reason we flip to paper-only (drafts) for
     #: the rest of the cycle.
     paper_only: bool = False
+    #: Soft cap on the number of REAL debates opened by `synthesize()` per
+    #: cycle. `maybe_trigger_debate()` already enforces an independent
+    #: 10-debate-per-cycle KILL switch (DEBATE_PER_CYCLE_KILL_THRESHOLD);
+    #: this knob is the per-cycle "open it for real" budget which is
+    #: smaller because each opened debate adds judge + 2 argument LLM
+    #: calls on top of PLAN/EXPLORE/SYNTHESIZE/REFLECT spend.
+    max_debates_per_cycle: int = 3
 
 
 @dataclass
@@ -265,6 +284,18 @@ class CycleSynthesis:
     resolved_hypotheses: list[Hypothesis]
     peer_messages: list[AgentMessage]
     debate_triggers: list[DebateTriggerDecision]
+    # Codex finding #7: richer artifact types beyond binary 'supported'.
+    # Both lists hold the persisted row ids (wls_... / blk_...) so the
+    # brief composer can resolve them via fetch helpers in
+    # `trade_ideas.candidates`.
+    watchlist_setups: list[str] = field(default_factory=list)
+    blocked_ideas: list[str] = field(default_factory=list)
+    #: Debate IDs that were actually opened (and possibly judged) this
+    #: cycle. Distinct from `debate_triggers` — a trigger DECISION is
+    #: just a boolean + reason, whereas this list records the real
+    #: `debates.id` rows the orchestrator created via `open_debate()` /
+    #: `run_full_debate_cycle()`. Surfaces in the brief.
+    opened_debate_ids: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -553,7 +584,13 @@ def hydrate(specialist_id: str, cycle_id: str,
         persona_state = {}
 
     persona_prompt = persona_state.get("system_prompt", "")
-    persona_tool_uris = list(persona_state.get("persona_tool_uris", []) or [])
+    # SpecialistPersona.to_state_json writes the canonical key 'tool_uris';
+    # keep 'persona_tool_uris' as a compat alias in case older callers used it.
+    persona_tool_uris = list(
+        persona_state.get("tool_uris")
+        or persona_state.get("persona_tool_uris")
+        or []
+    )
 
     yesterday_row = _load_latest_dehydration(specialist_id)
     if yesterday_row is not None:
@@ -698,6 +735,17 @@ def _parse_plan_payload(payload: Any, persona_uris: list[str],
     Bad fields are repaired conservatively (clamp probs to [0,1], coerce
     types, drop unknown tool URIs). Returns [] if the payload is so
     malformed we can't recover.
+
+    Tool URI resolution rules (no silent corruption):
+      1. Start with the URIs the LLM picked, filtered by `atlas_uris`.
+      2. If empty, fall through to the persona's tool URIs, filtered by
+         `atlas_uris` (the persona's curated subset may itself be stale).
+      3. If still empty AND the atlas has rows, take `atlas.rows[0]` as
+         the absolute last resort so the hypothesis gets ONE valid tool.
+      4. If the atlas is genuinely empty (zero rows), raise
+         `PlanToolResolutionError` so the cycle aborts rather than
+         silently dispatching tools that will all fail with
+         `tool_uri_not_in_atlas`.
     """
     if not isinstance(payload, dict):
         return []
@@ -725,13 +773,30 @@ def _parse_plan_payload(payload: Any, persona_uris: list[str],
         raw_uris = item.get("tool_uris") or []
         if not isinstance(raw_uris, list):
             raw_uris = []
-        # Keep only URIs that exist in the frozen atlas. If LLM picked
-        # zero valid URIs, fall back to the persona's first tool.
+        # Keep only URIs that exist in the frozen atlas.
         valid_uris = [u for u in raw_uris if u in atlas_uris]
+        # If the LLM gave us nothing usable, walk the persona's curated
+        # subset — but filter THAT against the atlas too. The persona
+        # may carry URIs that vanished from the atlas (renamed, deprecated,
+        # or never re-registered after a TIC refactor); silently accepting
+        # them produced the "1200 known-bad dispatches" pathology.
         if not valid_uris and persona_uris:
-            valid_uris = persona_uris[:2]
+            valid_uris = [u for u in persona_uris if u in atlas_uris][:2]
+        # Last resort: pick the first atlas row. This is intentionally
+        # narrow — only fires when both the LLM and the persona produced
+        # zero atlas-resident URIs but the atlas itself has rows.
         if not valid_uris and atlas.rows:
             valid_uris = [atlas.rows[0]["tool_uri"]]
+        # If we STILL have nothing AND the atlas is empty, the cycle
+        # cannot legitimately make tool calls. Raise loudly.
+        if not valid_uris and not atlas.rows:
+            raise PlanToolResolutionError(
+                "PLAN: tool atlas is empty (0 rows) and no tool URIs "
+                "could be resolved for hypothesis "
+                f"{title!r}. Run `regenerate_tool_atlas()` before the "
+                "cycle starts, or supply a persona with at least one "
+                "atlas-resident `tool_uris` entry."
+            )
         try:
             exp_hours = int(item.get("expected_resolution_hours", 24))
         except Exception:
@@ -1001,151 +1066,306 @@ def _default_args_for_uri(uri: str, entities: list[str]) -> dict[str, Any]:
 # ============================================================================
 
 
+#: Posterior gate for "supported" → trade-idea synthesis candidacy.
+#: Lowered from 0.7 because real evidence (scored via the calibrated LLM
+#: scorer, |delta| capped at 0.30) typically moves a posterior by 0.05-0.10
+#: per piece, so a hypothesis with 3-5 confirming evidences lands around
+#: 0.62-0.70. We let the trade idea validator do the final gating instead
+#: of cutting off candidate flow at the BFS posterior — failed validations
+#: route into BlockedIdea + brief.
+SUPPORTED_POSTERIOR_THRESHOLD = 0.62
+CONTRADICTED_POSTERIOR_THRESHOLD = 0.38
+
+
 def _resolve_hypothesis_status(final_posterior: float) -> Optional[str]:
     """Decide whether a hypothesis should be resolved at SYNTHESIZE time.
 
-    > 0.7 -> supported
-    < 0.3 -> contradicted
-    else  -> None (leave active for next cycle)
+    >= 0.62 -> supported
+    <= 0.38 -> contradicted
+    else    -> None (leave active for next cycle)
     """
-    if final_posterior >= 0.7:
+    if final_posterior >= SUPPORTED_POSTERIOR_THRESHOLD:
         return "supported"
-    if final_posterior <= 0.3:
+    if final_posterior <= CONTRADICTED_POSTERIOR_THRESHOLD:
         return "contradicted"
     return None
 
 
-def _build_minimal_trade_idea_draft(
-    specialist_id: str,
-    cycle_id: str,
-    persona_version: str,
-    hypothesis: Hypothesis,
-    trace: ExplorationTrace,
-    paper_only: bool,
-) -> Optional[TradeIdeaDraft]:
-    """Best-effort trade-idea draft from a resolved-supported hypothesis.
+# NOTE: `_build_minimal_trade_idea_draft` was REMOVED per codex review
+# finding #6. It fabricated placeholder prices (100/99/101) and emitted
+# `direction="flat"` drafts that passed validation but had no real edge.
+# Replaced by `talis_desk.synthesis.idea_synthesizer.synthesize_trade_ideas`
+# which does ONE specialist-voiced LLM call using REAL HL market snapshots
+# for entry/stop/target anchors and routes failed validations into
+# `BlockedIdea` rows. See `synthesize()` below for the wiring.
 
-    Returns None when we can't extract an instrument from the entities. We
-    do NOT make up prices — for the smoke test we emit a low-confidence
-    'flat' direction draft that will validate and self-grade as paper.
-    The real version is auto-mutated by persona evolution (Phase 6).
 
-    Sizing intentionally hugs the bottom of the allowed band (10 bps) so
-    no live capital lands on a stub draft.
+#: Sequential preference for picking an opponent specialist when the
+#: triggering specialist is the only known participant. Chosen so each
+#: specialist has a natural devil's-advocate counterpart:
+#:   macro_regime <-> sentiment_event (top-down vs bottom-up event narratives)
+#:   microstructure <-> smart_money    (flow internals vs wallet positioning)
+#: When the listed counterpart isn't registered, we fall back to any other
+#: registered specialist.
+_OPPOSING_SPECIALIST_PREFERENCE: dict[str, list[str]] = {
+    "macro_regime":      ["sentiment_event", "microstructure", "smart_money"],
+    "sentiment_event":   ["macro_regime", "smart_money", "microstructure"],
+    "microstructure":    ["smart_money", "macro_regime", "sentiment_event"],
+    "smart_money":       ["microstructure", "sentiment_event", "macro_regime"],
+}
+
+
+def _list_registered_specialist_ids() -> list[str]:
+    """Return the distinct specialist_ids that have a live persona row in
+    `specialist_states`. Used to pick a debate opponent without hard-coding
+    the registry."""
+    try:
+        conn = get_desk_store().conn
+        rows = conn.execute(
+            "SELECT DISTINCT specialist_id FROM specialist_states "
+            "WHERE state_kind = 'persona' AND transaction_to IS NULL"
+        ).fetchall()
+        return [r["specialist_id"] for r in rows]
+    except Exception:
+        return []
+
+
+def _pick_opponent_specialist(
+    triggering_specialist: str,
+    hypothesis: Optional[Hypothesis],
+) -> Optional[str]:
+    """Choose the most relevant other specialist to debate against.
+
+    Resolution order:
+      1. If `hypothesis_edges` has a contradicting hypothesis whose owner
+         is a DIFFERENT registered specialist, prefer that owner.
+      2. Otherwise, use the static `_OPPOSING_SPECIALIST_PREFERENCE` map
+         filtered by which specialists are actually registered.
+      3. Otherwise, any registered specialist that isn't the trigger.
+
+    Returns None if no candidate exists (e.g. only one specialist is
+    registered), in which case the caller should skip opening the debate
+    rather than fabricating a participant.
     """
-    entity_ids = list(hypothesis.entity_ids or [])
-    if not entity_ids:
+    registered = [s for s in _list_registered_specialist_ids()
+                   if s and s != triggering_specialist]
+    if not registered:
         return None
-    instrument = entity_ids[0]
-    confidence = float(hypothesis.posterior_prob or 0.5)
-    # Require at least one contradiction at high confidence per Gate 3.
-    contradictions: list[ContradictionItem] = []
-    if confidence >= 0.7:
-        # Walk the exploration steps for any contradiction-tagged steps
-        # and surface them as ContradictionItem entries citing the
-        # tool_call_log_id.
-        for s in trace.steps:
-            if s.edge_kind_emitted == "contradicts" and s.tool_call_log_id:
-                contradictions.append(ContradictionItem(
-                    claim_id=s.tool_call_log_id,
-                    reason=(
-                        f"BFS step {s.question_text[:120]} produced "
-                        f"contradiction (delta={s.heat.posterior_delta:.2f})"
-                    ),
-                    weight=min(1.0, max(0.1, abs(s.heat.contradiction_score))),
-                ))
-                if len(contradictions) >= 2:
-                    break
-        # If we couldn't find any, ratchet confidence below the threshold
-        # so Gate 3 passes without fabricating contradictions.
-        if not contradictions:
-            confidence = 0.69
 
-    now_utc = datetime.now(timezone.utc)
-    horizon = "1d"
-    horizon_hours = TIME_HORIZON_HOURS[horizon]
-    expires_at = now_utc + timedelta(hours=horizon_hours)
+    # 1) Walk contradicting edges in the bitemporal store.
+    if hypothesis is not None:
+        try:
+            conn = get_desk_store().conn
+            edge_rows = conn.execute(
+                "SELECT from_node_id FROM hypothesis_edges "
+                "WHERE to_node_id = ? AND edge_kind = 'contradicts' "
+                "AND transaction_to IS NULL "
+                "ORDER BY transaction_from DESC LIMIT 8",
+                (hypothesis.id,),
+            ).fetchall()
+            for er in edge_rows:
+                src = er["from_node_id"]
+                if not isinstance(src, str) or not src.startswith("hyp_"):
+                    continue
+                hrow = conn.execute(
+                    "SELECT specialist_id FROM hypotheses "
+                    "WHERE id = ? AND transaction_to IS NULL "
+                    "ORDER BY transaction_from DESC LIMIT 1",
+                    (src,),
+                ).fetchone()
+                if hrow is None:
+                    continue
+                cand = hrow["specialist_id"]
+                if cand and cand != triggering_specialist and cand in registered:
+                    return cand
+        except Exception:
+            pass
 
-    # Direction: derive from final posterior trend over the exploration
-    # trace. If the last 5 steps net positive -> 'long', net negative ->
-    # 'short', else 'flat'. We bound to safe sizing on either side.
-    tail = trace.steps[-5:] if trace.steps else []
-    net = sum(s.heat.contradiction_score for s in tail)
-    if net > 0.2:
-        direction = "long"
-    elif net < -0.2:
-        direction = "short"
-    else:
-        direction = "flat"
+    # 2) Static preference map filtered by what's actually registered.
+    prefs = _OPPOSING_SPECIALIST_PREFERENCE.get(triggering_specialist, [])
+    for p in prefs:
+        if p in registered:
+            return p
 
-    # We can't fabricate live prices on a tool-less path. For flat we set
-    # entry=stop=target to mark-derived placeholders; the resolver will
-    # mark this as a paper / no-PnL idea on close. To keep validation
-    # passing we set non-zero numerics with stop on the loss side.
-    entry_px = 100.0
-    if direction == "long":
-        stop_px = 99.0
-        target_px = 102.0
-    elif direction == "short":
-        stop_px = 101.0
-        target_px = 98.0
-    else:
-        # 'flat' — placeholder values; the resolver treats this as no
-        # position. Stop must give max_loss_usd > 0 to satisfy Gate 7.
-        stop_px = 99.5
-        target_px = 100.5
+    # 3) Any other registered specialist.
+    return registered[0]
 
-    tool_call_ids = [s.tool_call_log_id for s in trace.steps if s.tool_call_log_id]
 
-    return TradeIdeaDraft(
-        cycle_id=cycle_id,
-        specialist_id=specialist_id,
-        persona_version=persona_version,
-        instrument=str(instrument),
-        venue="hyperliquid",
-        direction=direction,  # type: ignore[arg-type]
-        sizing=SizingPlan(
-            risk_pct=0.001,  # 10 bps — bottom of the allowed band
-            notional_cap_usd=1000.0,
-            kelly_fraction=0.10,
-            leverage_cap=1.0,
-        ),
-        entry=EntryPlan(
-            trigger="market" if direction in ("long", "short") else "no_entry",
-            limit_px=None,
-            market_assumption="liquid",
-            invalidation=(
-                f"cancel after {horizon_hours}h if no trigger or if "
-                f"posterior drops below 0.5"
-            ),
-        ),
-        stop=StopPlan(
-            px=stop_px,
-            max_loss_usd=max(0.01, abs(entry_px - stop_px) * 1.0),
-            stop_kind="hard",
-        ),
-        target=None if direction == "flat" else None,  # keep simple — invalidation suffices
-        time_horizon=horizon,
-        edge_thesis=(
-            (hypothesis.hypothesis_text or "")[:1200]
-            + f"\n\n[posterior={hypothesis.posterior_prob} "
-            f"heat={hypothesis.heat_score} status={hypothesis.status}]"
-        ),
-        claim_ids=list(hypothesis.claim_ids or []),
-        hypothesis_ids=[hypothesis.id],
-        forecast_ids=[],
-        debate_ids=[],
-        tool_call_ids=tool_call_ids[:20],
-        contradicting_evidence=contradictions,
-        confluence_score=float(hypothesis.heat_score or 0.0),
-        confidence=confidence,
-        expires_at=expires_at,
-        valid_from=now_utc,
-        payload={
-            "synthesizer_note": "auto_emitted_from_resolved_supported_hypothesis",
-            "paper_only_at_emit": paper_only,
-        },
+# ----- Debate opening helpers (real debates, not just decisions) -----------
+
+_DEBATE_ARGUMENT_SYSTEM = (
+    "You are running one side of a Talis specialist debate. Write a "
+    "single argument (<=200 words) that defends OR critiques the "
+    "hypothesis below from your stance. Include 1-2 falsifiable cruxes. "
+    "Return ONLY JSON, no prose: "
+    "{\"argument_md\": str, \"falsifiable_crux\": str}"
+)
+
+
+def _build_debate_argument_prompt(
+    side: str,
+    specialist_id: str,
+    hypothesis: Hypothesis,
+    trace: Optional[ExplorationTrace],
+) -> str:
+    posterior = hypothesis.posterior_prob if hypothesis.posterior_prob is not None else 0.5
+    heat = hypothesis.heat_score if hypothesis.heat_score is not None else 0.0
+    trace_summary = ""
+    if trace is not None and trace.steps:
+        cs = trace.contradiction_share
+        trace_summary = (
+            f"\nExploration trace: n_calls={trace.n_calls} "
+            f"contradiction_share={cs:.2f} "
+            f"final_posterior={trace.final_posterior:.2f}\n"
+        )
+    return (
+        f"## You\n"
+        f"  specialist_id: {specialist_id}\n"
+        f"  side: {side}  # 'defender' supports the hypothesis; "
+        f"'devils_advocate' attacks it\n\n"
+        f"## Hypothesis under debate\n"
+        f"  id: {hypothesis.id}\n"
+        f"  title: {hypothesis.title}\n"
+        f"  posterior: {posterior:.3f}\n"
+        f"  heat: {heat:.3f}\n"
+        f"  text: {(hypothesis.hypothesis_text or '')[:1500]}"
+        + trace_summary
+        + "\nWrite your argument JSON now."
     )
+
+
+def _solicit_debate_argument(
+    side: str,
+    specialist_id: str,
+    hypothesis: Hypothesis,
+    trace: Optional[ExplorationTrace],
+    plan_model: str,
+) -> Optional[dict[str, Any]]:
+    """Ask an LLM to produce a debate argument for `side`. Uses the same
+    fallback chain as PLAN so we never fabricate verdicts or arguments.
+    Returns None when every provider in the chain failed — caller treats
+    that as "skip this debate" rather than opening a malformed one."""
+    user = _build_debate_argument_prompt(side, specialist_id, hypothesis, trace)
+    res = _chat_sync(
+        plan_model,
+        _DEBATE_ARGUMENT_SYSTEM,
+        user,
+        max_tokens=900,
+        fallback="anthropic:claude-sonnet-4-6",
+    )
+    if not res.text:
+        return None
+    parsed = _extract_json(res.text)
+    if not isinstance(parsed, dict):
+        return None
+    arg_md = str(parsed.get("argument_md") or "").strip()
+    crux = str(parsed.get("falsifiable_crux") or "").strip()
+    if not arg_md or not crux:
+        return None
+    return {
+        "argument_md": arg_md[:1500],
+        "falsifiable_crux": crux[:600],
+        "_cost_usd": res.cost_usd,
+    }
+
+
+def _open_real_debate(
+    triggering_specialist: str,
+    hypothesis: Hypothesis,
+    trace: Optional[ExplorationTrace],
+    cycle_id: str,
+    base_context: AgentContext,
+    plan_model: str,
+) -> Optional[str]:
+    """Open + drive a full debate cycle. Returns the debate id when both
+    sides + judge completed, or None when we had to abort (no opponent,
+    LLM unavailable for an argument, judge chain exhausted).
+
+    NO STUBS. Every LLM call uses the existing multi-provider fallback
+    chain. `JudgeUnavailableError` from `run_full_debate_cycle` is caught
+    so the cycle can move on — but the debate row is left as 'expired'
+    by the judge runner, which is the honest outcome."""
+    opponent = _pick_opponent_specialist(triggering_specialist, hypothesis)
+    if opponent is None or opponent == triggering_specialist:
+        warnings.warn(
+            f"open_real_debate skipped: no distinct opponent found for "
+            f"{triggering_specialist} (hypothesis={hypothesis.id})"
+        )
+        return None
+
+    # Defender = triggering specialist (whose hypothesis it is).
+    # Devil's advocate = the opponent.
+    defender_arg = _solicit_debate_argument(
+        side="defender",
+        specialist_id=triggering_specialist,
+        hypothesis=hypothesis,
+        trace=trace,
+        plan_model=plan_model,
+    )
+    if defender_arg is None:
+        warnings.warn(
+            f"open_real_debate skipped: defender LLM unavailable for "
+            f"{triggering_specialist}/{hypothesis.id}"
+        )
+        return None
+    opponent_arg = _solicit_debate_argument(
+        side="devils_advocate",
+        specialist_id=opponent,
+        hypothesis=hypothesis,
+        trace=trace,
+        plan_model=plan_model,
+    )
+    if opponent_arg is None:
+        warnings.warn(
+            f"open_real_debate skipped: opponent LLM unavailable for "
+            f"{opponent}/{hypothesis.id}"
+        )
+        return None
+
+    try:
+        from ..debate.judge import JudgeUnavailableError
+        from ..debate.runner import run_full_debate_cycle
+    except Exception as e:
+        warnings.warn(f"open_real_debate: debate module import failed: {e}")
+        return None
+
+    arguments = {
+        triggering_specialist: {
+            "argument_md": defender_arg["argument_md"],
+            # We don't have hard claim ids to cite at this point in the
+            # cycle (claims live in talis-tic). Cite the hypothesis itself
+            # so the citation validator passes.
+            "citation_ids": [hypothesis.id],
+            "falsifiable_crux": defender_arg["falsifiable_crux"],
+            "persona_version": "v_runtime",
+        },
+        opponent: {
+            "argument_md": opponent_arg["argument_md"],
+            "citation_ids": [hypothesis.id],
+            "falsifiable_crux": opponent_arg["falsifiable_crux"],
+            "persona_version": "v_runtime",
+        },
+    }
+
+    try:
+        deb = run_full_debate_cycle(
+            trigger_kind="high_confidence",
+            trigger_id=hypothesis.id,
+            participants=[triggering_specialist, opponent],
+            arguments=arguments,
+            context=base_context,
+            due_in_minutes=30,
+        )
+        return deb.id
+    except JudgeUnavailableError as e:
+        warnings.warn(
+            f"open_real_debate: judge unavailable for {hypothesis.id} — "
+            f"debate marked expired by judge runner. {e}"
+        )
+        return None
+    except Exception as e:
+        warnings.warn(f"open_real_debate: run_full_debate_cycle failed: {e}")
+        return None
 
 
 def synthesize(hydration: CycleHydration, cycle_plan: CyclePlan,
@@ -1158,13 +1378,29 @@ def synthesize(hydration: CycleHydration, cycle_plan: CyclePlan,
     - Update / resolve hypotheses based on final posteriors.
     - For resolved-supported hypotheses, emit a trade idea (validated).
     - Post peer messages for hot signals (|posterior_delta|>0.2 cumulative).
-    - Trigger debates for high-confidence claims & high-confidence ideas.
+    - Trigger debates for high-confidence claims & high-confidence ideas;
+      when `maybe_trigger_debate()` says yes, ACTUALLY open the debate via
+      `run_full_debate_cycle()` (capped at `loop_config.max_debates_per_cycle`).
     """
     new_ideas: list[TradeIdea] = []
     updated: list[Hypothesis] = []
     resolved: list[Hypothesis] = []
     peer_msgs: list[AgentMessage] = []
     debate_decisions: list[DebateTriggerDecision] = []
+    opened_debate_ids: list[str] = []
+    # Codex finding #7: track richer candidate artifacts so the brief gets
+    # more than the binary "supported" output.
+    watchlist_setup_ids: list[str] = []
+    blocked_idea_ids: list[str] = []
+    # Codex finding #6: stage supported hypotheses + their resolved BFS
+    # evidence for the post-loop LLM-driven idea synthesizer. The
+    # synthesizer makes ONE call per cycle (proposing 0..3 drafts) instead
+    # of the old per-hypothesis placeholder draft.
+    _supported_synth_inputs: list[dict[str, Any]] = []
+    # Track all hypotheses + their traces for the candidate-promotion path
+    # (used when nothing crossed the supported threshold but we still want
+    # the synthesizer to take a swing at the top-3 by posterior).
+    _all_hyps_with_traces: list[tuple[Any, ExplorationTrace]] = []
 
     # Walk each trace + matching investigation
     for trace, inv in zip(traces, investigations):
@@ -1179,6 +1415,7 @@ def synthesize(hydration: CycleHydration, cycle_plan: CyclePlan,
             hyp = None
         if hyp is None:
             continue
+        _all_hyps_with_traces.append((hyp, trace))
 
         # Did this investigation move the posterior >= 0.2 cumulatively?
         # If yes, post a peer message for visibility.
@@ -1242,34 +1479,211 @@ def synthesize(hydration: CycleHydration, cycle_plan: CyclePlan,
             debate_decisions.append(decision)
         except Exception as e:
             warnings.warn(f"maybe_trigger_debate (hyp) failed: {e}")
+            decision = None  # type: ignore[assignment]
 
-        # Emit a trade idea ONLY when supported.
+        # If the trigger fired AND we still have room in the per-cycle
+        # cap, ACTUALLY open the debate (vs. just collecting a decision).
+        # Pre-bugfix, "24 triggers, 0 debates" was the pathology — this is
+        # where we close that gap.
+        if (
+            decision is not None
+            and decision.should_trigger
+            and len(opened_debate_ids) < loop_config.max_debates_per_cycle
+        ):
+            try:
+                deb_id = _open_real_debate(
+                    triggering_specialist=hydration.specialist_id,
+                    hypothesis=hyp,
+                    trace=trace,
+                    cycle_id=cycle_id,
+                    base_context=base_context,
+                    plan_model=loop_config.plan_model,
+                )
+                if deb_id:
+                    opened_debate_ids.append(deb_id)
+            except Exception as e:
+                # _open_real_debate already swallows JudgeUnavailableError
+                # and per-step LLM failures; anything reaching here is a
+                # structural bug worth surfacing but not aborting the cycle.
+                warnings.warn(
+                    f"open_real_debate (hyp={hyp.id}) raised unexpected: {e}"
+                )
+
+        # Codex finding #7 — emit a WatchlistSetup for hypotheses in the
+        # confidence band [0.55, 0.70) OR high-heat-but-not-yet-supported
+        # (heat >= 0.7 with posterior >= 0.5). These ride past the binary
+        # "supported" gate so the brief shows real candidate flow.
+        posterior_val = float(hyp.posterior_prob or 0.5)
+        heat_val = float(hyp.heat_score or 0.0)
+        in_watch_band = (0.55 <= posterior_val < SUPPORTED_POSTERIOR_THRESHOLD)
+        hot_unresolved = (heat_val >= 0.7 and posterior_val >= 0.5 and status != "supported")
+        if status != "supported" and (in_watch_band or hot_unresolved):
+            try:
+                instrument = hyp.entity_ids[0] if hyp.entity_ids else None
+                if instrument:
+                    # Direction: derive from BFS tail sign just like the
+                    # trade-idea draft does. "flat" is allowed.
+                    tail = trace.steps[-5:] if trace.steps else []
+                    net = sum(s.heat.contradiction_score for s in tail)
+                    if net > 0.15:
+                        wls_direction = "long"
+                    elif net < -0.15:
+                        wls_direction = "short"
+                    else:
+                        wls_direction = "flat"
+                    watch_cond = (
+                        f"promote to trade idea when posterior crosses 0.70 "
+                        f"(currently {posterior_val:.2f}, heat={heat_val:.2f})"
+                    )
+                    wls = WatchlistSetup(
+                        specialist_id=hydration.specialist_id,
+                        hypothesis_id=hyp.id,
+                        instrument=str(instrument),
+                        direction=wls_direction,  # type: ignore[arg-type]
+                        watch_condition=watch_cond,
+                        expected_horizon="1d",
+                        current_posterior=posterior_val,
+                        citation_claim_ids=list(hyp.claim_ids or []),
+                        cycle_id=cycle_id,
+                        payload={
+                            "heat_score": heat_val,
+                            "title": hyp.title,
+                            "synthesizer_note": (
+                                "auto_emitted_from_watch_band"
+                                if in_watch_band else
+                                "auto_emitted_from_hot_unresolved"
+                            ),
+                        },
+                    )
+                    emit_watchlist_setup(wls, base_context)
+                    watchlist_setup_ids.append(wls.id)
+            except Exception as e:  # pragma: no cover - best-effort emit
+                warnings.warn(f"emit_watchlist_setup failed for {hyp.id}: {e}")
+
+        # Collect supported hypotheses + their resolved evidence so the
+        # synthesizer can do ONE LLM call across all of them at the end of
+        # the loop. (Codex finding #6: the per-hypothesis placeholder draft
+        # is gone — _build_minimal_trade_idea_draft has been deleted.)
         if status == "supported":
-            draft = _build_minimal_trade_idea_draft(
+            evidence_for_hyp: list[dict[str, Any]] = []
+            for s in trace.steps:
+                if s.tool_call_log_id and s.heat is not None:
+                    evidence_for_hyp.append({
+                        "hypothesis_id": hyp.id,
+                        "tool_call_log_id": s.tool_call_log_id,
+                        "tool_uri": s.tool_uri,
+                        "posterior_delta": s.heat.contradiction_score,
+                        "contradicts": (s.edge_kind_emitted == "contradicts"),
+                        "rationale": (s.question_text or "")[:200],
+                    })
+            _supported_synth_inputs.append({
+                "hyp": hyp,
+                "trace": trace,
+                "evidence": evidence_for_hyp,
+                "posterior_val": posterior_val,
+                "heat_val": heat_val,
+            })
+
+    # ------------------------------------------------------------------
+    # Codex finding #6 — ONE specialist-voiced LLM call to synthesize 0..N
+    # trade-idea drafts across all supported hypotheses. Real market
+    # snapshot (HL L2 + funding) supplies the entry/stop/target anchors;
+    # no fabricated 100/99/101 placeholder prices.
+    #
+    # Candidate promotion: if NO hypothesis crossed the supported threshold,
+    # feed the top-3 by posterior_prob into the synthesizer anyway. The
+    # validator (`validate_trade_idea`'s 9 gates) decides — strong drafts
+    # publish; weak ones route into BlockedIdea so the brief still surfaces
+    # "the desk wanted X but couldn't because Y". This gives users daily
+    # signal even on indecisive cycles without compromising the gate.
+    # ------------------------------------------------------------------
+    if not _supported_synth_inputs and _all_hyps_with_traces:
+        # Build candidate inputs from the top-3 highest-posterior hypotheses
+        # with posterior >= 0.50 (don't promote contradicted/noisy).
+        ranked = sorted(
+            [(float(h.posterior_prob or 0.5), h, t)
+             for h, t in _all_hyps_with_traces
+             if float(h.posterior_prob or 0.5) >= 0.50],
+            key=lambda x: x[0], reverse=True,
+        )
+        for posterior_val, hyp, trace_for_hyp in ranked[:3]:
+            evidence_for_hyp = []
+            for s in trace_for_hyp.steps:
+                if s.tool_call_log_id and s.heat is not None:
+                    evidence_for_hyp.append({
+                        "hypothesis_id": hyp.id,
+                        "tool_call_log_id": s.tool_call_log_id,
+                        "tool_uri": s.tool_uri,
+                        "posterior_delta": s.heat.contradiction_score,
+                        "contradicts": (s.edge_kind_emitted == "contradicts"),
+                        "rationale": (s.question_text or "")[:200],
+                    })
+            _supported_synth_inputs.append({
+                "hyp": hyp,
+                "trace": trace_for_hyp,
+                "evidence": evidence_for_hyp,
+                "posterior_val": posterior_val,
+                "heat_val": float(hyp.heat_score or 0.0),
+                "candidate_only": True,  # flag: synthesizer + validator decide
+            })
+
+    if _supported_synth_inputs:
+        try:
+            from ..synthesis.idea_synthesizer import (
+                IdeaSynthesisUnavailableError,
+                synthesize_trade_ideas,
+            )
+            synth_result = synthesize_trade_ideas(
                 specialist_id=hydration.specialist_id,
+                persona_prompt=hydration.persona_prompt or "",
+                supported_hypotheses=[x["hyp"] for x in _supported_synth_inputs],
+                tool_evidence=[
+                    ev for x in _supported_synth_inputs for ev in x["evidence"]
+                ],
+                market_snapshot=None,  # synthesizer fetches live
                 cycle_id=cycle_id,
                 persona_version=hydration.persona_version,
-                hypothesis=hyp,
-                trace=trace,
-                paper_only=loop_config.paper_only,
+                model=loop_config.plan_model,
             )
-            if draft is None:
-                continue
-            try:
-                # validate first so caller gets a clean idea
-                validation = validate_trade_idea(draft.to_trade_idea())
-                if not validation.ok:
-                    warnings.warn(
-                        f"trade_idea_draft_validation_failed: {validation.errors[:3]}"
-                    )
+        except IdeaSynthesisUnavailableError as e:
+            warnings.warn(
+                f"idea_synthesizer unavailable; no trade ideas this cycle. "
+                f"reason: {e!s}"
+            )
+            synth_result = None
+        except Exception as e:
+            warnings.warn(f"idea_synthesizer crashed: {e!s}")
+            synth_result = None
+
+        if synth_result is not None:
+            # Each validated draft -> emit + maybe-debate.
+            for draft in synth_result.drafts:
+                try:
+                    idea = emit_trade_idea(draft, base_context)
+                except Exception as e:
+                    warnings.warn(f"emit_trade_idea failed: {e}")
                     continue
-                idea = emit_trade_idea(draft, base_context)
+                if idea.status != "published":
+                    # Validator caught something post-coercion (rare); fall
+                    # through to BlockedIdea handling.
+                    continue
                 new_ideas.append(idea)
-                # Debate trigger on the published idea (cycle counter shared
-                # with the hypothesis triggers above).
+                # Anchor debate triggers to the first supported hypothesis
+                # that cited this instrument (best-effort match).
+                anchor_hyp = next(
+                    (x["hyp"] for x in _supported_synth_inputs
+                     if (x["hyp"].entity_ids or [None])[0] == idea.instrument),
+                    _supported_synth_inputs[0]["hyp"],
+                )
+                anchor_trace = next(
+                    (x["trace"] for x in _supported_synth_inputs
+                     if x["hyp"].id == anchor_hyp.id),
+                    _supported_synth_inputs[0]["trace"],
+                )
                 if idea.confidence >= 0.7:
+                    idea_decision: Optional[DebateTriggerDecision] = None
                     try:
-                        d = maybe_trigger_debate(
+                        idea_decision = maybe_trigger_debate(
                             claim_or_idea={
                                 "confidence": idea.confidence,
                                 "instrument": idea.instrument,
@@ -1279,11 +1693,66 @@ def synthesize(hydration: CycleHydration, cycle_plan: CyclePlan,
                             },
                             context=base_context,
                         )
-                        debate_decisions.append(d)
+                        debate_decisions.append(idea_decision)
                     except Exception as e:
                         warnings.warn(f"maybe_trigger_debate (idea) failed: {e}")
-            except Exception as e:
-                warnings.warn(f"emit_trade_idea failed: {e}")
+                    if (
+                        idea_decision is not None
+                        and idea_decision.should_trigger
+                        and len(opened_debate_ids) < loop_config.max_debates_per_cycle
+                    ):
+                        try:
+                            deb_id = _open_real_debate(
+                                triggering_specialist=hydration.specialist_id,
+                                hypothesis=anchor_hyp,
+                                trace=anchor_trace,
+                                cycle_id=cycle_id,
+                                base_context=base_context,
+                                plan_model=loop_config.plan_model,
+                            )
+                            if deb_id:
+                                opened_debate_ids.append(deb_id)
+                        except Exception as e:
+                            warnings.warn(
+                                f"open_real_debate (idea={idea.id}) raised "
+                                f"unexpected: {e}"
+                            )
+
+            # block_reasons -> BlockedIdea rows so the brief shows
+            # "we wanted to publish X but couldn't because Y".
+            for blk in synth_result.block_reasons:
+                inst = blk.get("instrument") or "unknown"
+                err_list = blk.get("errors") or []
+                reason_summary = "; ".join(err_list[:3]) or "synthesizer_block"
+                # Pick a hypothesis that cited this instrument when possible.
+                anchor_for_block = next(
+                    (x["hyp"] for x in _supported_synth_inputs
+                     if (x["hyp"].entity_ids or [None])[0] == inst),
+                    _supported_synth_inputs[0]["hyp"],
+                )
+                try:
+                    blocked = BlockedIdea(
+                        specialist_id=hydration.specialist_id,
+                        hypothesis_id=anchor_for_block.id,
+                        instrument=str(inst),
+                        direction="flat",
+                        block_reason=reason_summary[:480],
+                        what_would_unblock=_unblock_hint_from_gate_errors(err_list),
+                        current_posterior=float(anchor_for_block.posterior_prob or 0.5),
+                        citation_claim_ids=list(anchor_for_block.claim_ids or []),
+                        cycle_id=cycle_id,
+                        payload={
+                            "title": anchor_for_block.title,
+                            "all_errors": list(err_list),
+                            "synthesizer_raw": blk.get("raw", "")[:500],
+                        },
+                    )
+                    emit_blocked_idea(blocked, base_context)
+                    blocked_idea_ids.append(blocked.id)
+                except Exception as e:  # pragma: no cover - best-effort emit
+                    warnings.warn(
+                        f"emit_blocked_idea (synth) failed for {inst}: {e}"
+                    )
 
     return CycleSynthesis(
         new_trade_ideas=new_ideas,
@@ -1291,7 +1760,63 @@ def synthesize(hydration: CycleHydration, cycle_plan: CyclePlan,
         resolved_hypotheses=resolved,
         peer_messages=peer_msgs,
         debate_triggers=debate_decisions,
+        opened_debate_ids=opened_debate_ids,
+        watchlist_setups=watchlist_setup_ids,
+        blocked_ideas=blocked_idea_ids,
     )
+
+
+def _unblock_hint_from_gate_errors(errors: list[str]) -> str:
+    """Map validate_trade_idea gate error codes to short human hints. The
+    brief renders this in the 'what would unblock' column so users see what
+    the specialist would need to do to publish."""
+    if not errors:
+        return "fix the validation errors above"
+    hints: list[str] = []
+    for err in errors:
+        if "gate1_missing_instrument" in err:
+            hints.append("declare instrument")
+        elif "gate1_bad_direction" in err:
+            hints.append("set direction to long/short/flat/spread")
+        elif "gate1_missing_entry" in err:
+            hints.append("declare entry trigger")
+        elif "gate1_missing_stop" in err:
+            hints.append("declare stop price")
+        elif "gate1_missing_sizing" in err:
+            hints.append("declare sizing plan")
+        elif "gate1_missing_time_horizon" in err:
+            hints.append("declare time_horizon")
+        elif "gate1_missing_target_and_invalidation" in err:
+            hints.append("declare target OR an entry.invalidation")
+        elif "gate2_edge_thesis_empty" in err:
+            hints.append("write a non-empty edge_thesis")
+        elif "gate2_edge_thesis_missing_citation" in err:
+            hints.append("cite >=1 claim_id or hypothesis_id")
+        elif "gate3_contradiction_required" in err:
+            hints.append("surface >=1 contradicting_evidence (confidence>=0.7)")
+        elif "gate4_kelly_fraction_above_quarter" in err:
+            hints.append("lower kelly_fraction to <=0.25")
+        elif "gate5_leverage_cap_above_2x" in err:
+            hints.append("lower leverage_cap to <=2.0")
+        elif "gate6_risk_pct_out_of_band" in err:
+            hints.append("set risk_pct in [0.001, 0.005]")
+        elif "gate7_max_loss_usd_not_positive" in err:
+            hints.append("set stop on the loss side so max_loss_usd > 0")
+        elif "gate8_market_assumption_invalid" in err:
+            hints.append("set entry.market_assumption to a known bucket")
+        elif "gate9_expires_at_too_soon" in err:
+            hints.append("push expires_at past the time_horizon midpoint")
+    # Dedup while preserving order.
+    seen: set[str] = set()
+    out: list[str] = []
+    for h in hints:
+        if h in seen:
+            continue
+        seen.add(h)
+        out.append(h)
+    if not out:
+        return "fix the validation errors above"
+    return "; ".join(out[:5])
 
 
 # ============================================================================
@@ -1642,6 +2167,15 @@ def _check_kill_switches(cycle_id: str, cycle_total_cost_usd: float,
     line 538) is outside the cycle scope; the per-cycle ones we check:
       - Any cycle that triggers > 10 debates -> kill.
       - Cycle cost > the cap.
+      - Source-health: > SOURCE_HEALTH_FLAG_THRESHOLD of cited tool calls
+        failed -> flag AND kill switch (Codex finding #9: failed dispatches
+        still got `tool_call_log_id`s, so the old `is None` check never
+        tripped). We query tool_call_log directly via cycle_id and look at
+        `error IS NOT NULL`. Per-step fallback covers tests that bypass
+        the audit row write.
+      - `tool_uri_not_in_atlas` substring anywhere in those error messages
+        -> loud `tool_uri_not_in_atlas_detected` flag (the atlas wasn't
+        seeded for this cycle).
     """
     flags: list[str] = []
     triggered = False
@@ -1657,16 +2191,61 @@ def _check_kill_switches(cycle_id: str, cycle_total_cost_usd: float,
         flags.append(f"kill:cost_overrun_${cycle_total_cost_usd:.2f}")
         triggered = True
 
-    # Source-health flag (>30% of cited tool calls in this cycle failed)
+    # --- Codex finding #9: source-health from tool_call_log -----------------
     n_calls = 0
     n_failed = 0
-    for t in traces:
-        for s in t.steps:
-            n_calls += 1
-            if s.tool_call_log_id is None:
-                n_failed += 1
-    if n_calls > 0 and (n_failed / n_calls) > SOURCE_HEALTH_FLAG_THRESHOLD:
-        flags.append(f"flag:source_health_failure_share={n_failed}/{n_calls}")
+    saw_uri_not_in_atlas = False
+    try:
+        conn = get_desk_store().conn
+        row_total = conn.execute(
+            "SELECT count(*) FROM tool_call_log WHERE cycle_id = ?",
+            (cycle_id,),
+        ).fetchone()
+        n_calls = int(row_total[0]) if row_total else 0
+        row_fail = conn.execute(
+            "SELECT count(*) FROM tool_call_log "
+            "WHERE cycle_id = ? AND error IS NOT NULL",
+            (cycle_id,),
+        ).fetchone()
+        n_failed = int(row_fail[0]) if row_fail else 0
+        for r in conn.execute(
+            "SELECT error FROM tool_call_log "
+            "WHERE cycle_id = ? AND error IS NOT NULL LIMIT 16",
+            (cycle_id,),
+        ).fetchall():
+            err = r["error"] if hasattr(r, "keys") else r[0]
+            if err and "tool_uri_not_in_atlas" in err:
+                saw_uri_not_in_atlas = True
+                break
+    except Exception as exc:  # pragma: no cover - defensive
+        warnings.warn(f"_check_kill_switches: tool_call_log query failed: {exc}")
+
+    # Per-step fallback (tests can inject a mock dispatcher that bypasses
+    # the desk.db audit-row write).
+    if n_calls == 0:
+        for t in traces:
+            for s in t.steps:
+                n_calls += 1
+                if getattr(s, "status", "ok") == "dispatch_failed":
+                    n_failed += 1
+                elif s.tool_call_log_id is None:
+                    n_failed += 1
+                err = getattr(s, "error", None) or ""
+                if "tool_uri_not_in_atlas" in err:
+                    saw_uri_not_in_atlas = True
+
+    failed_share = (n_failed / n_calls) if n_calls > 0 else 0.0
+    if failed_share > SOURCE_HEALTH_FLAG_THRESHOLD:
+        flags.append(
+            f"flag:source_health_failure_share={n_failed}/{n_calls}"
+        )
+        flags.append(
+            f"kill:source_health_failure_share={failed_share:.2f}"
+        )
+        triggered = True
+
+    if saw_uri_not_in_atlas:
+        flags.append("tool_uri_not_in_atlas_detected")
 
     return triggered, flags
 
@@ -1713,7 +2292,7 @@ def run_research_cycle(
             synthesis=CycleSynthesis(
                 new_trade_ideas=[], updated_hypotheses=[],
                 resolved_hypotheses=[], peer_messages=[],
-                debate_triggers=[],
+                debate_triggers=[], opened_debate_ids=[],
             ),
             reflection=CycleReflection(
                 notes_to_self="(idempotent_short_circuit)",

@@ -10,6 +10,14 @@ Public API:
   - validate_trade_idea(idea)        — hard-gates per v2 lines 130-134
   - emit_trade_idea(draft, context)  — persist to desk.db + post to trade_book
 """
+from .candidates import (
+    BlockedIdea,
+    WatchlistSetup,
+    emit_blocked_idea,
+    emit_watchlist_setup,
+    fetch_blocked_ideas_for_cycle,
+    fetch_watchlist_setups_for_cycle,
+)
 from .model import (
     TradeIdea,
     TradeIdeaDraft,
@@ -48,4 +56,11 @@ __all__ = [
     "MAX_KELLY_FRACTION",
     "MAX_LEVERAGE_CAP",
     "CONFIDENCE_REQUIRING_CONTRADICTION",
+    # Codex finding #7 — richer artifact types beyond binary supported.
+    "WatchlistSetup",
+    "BlockedIdea",
+    "emit_watchlist_setup",
+    "emit_blocked_idea",
+    "fetch_watchlist_setups_for_cycle",
+    "fetch_blocked_ideas_for_cycle",
 ]

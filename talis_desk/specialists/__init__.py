@@ -32,6 +32,30 @@ from .macro_regime import (
     CURATED_TOOL_URIS as MACRO_REGIME_CURATED_TOOL_URIS,
 )
 
+# Re-export the microstructure persona constructor.
+from .microstructure_v1 import (
+    build_microstructure_v1,
+    register_microstructure_v1,
+    INITIAL_PRIORS as MICROSTRUCTURE_INITIAL_PRIORS,
+    CURATED_TOOL_URIS as MICROSTRUCTURE_CURATED_TOOL_URIS,
+)
+
+# Re-export the smart_money persona constructor.
+from .smart_money_v1 import (
+    build_smart_money_v1,
+    register_smart_money_v1,
+    INITIAL_PRIORS as SMART_MONEY_INITIAL_PRIORS,
+    CURATED_TOOL_URIS as SMART_MONEY_CURATED_TOOL_URIS,
+)
+
+# Re-export the sentiment_event persona constructor.
+from .sentiment_event_v1 import (
+    build_sentiment_event_v1,
+    register_sentiment_event_v1,
+    INITIAL_PRIORS as SENTIMENT_EVENT_INITIAL_PRIORS,
+    CURATED_TOOL_URIS as SENTIMENT_EVENT_CURATED_TOOL_URIS,
+)
+
 __all__ = [
     "SpecialistPersona",
     "SpecialistState",
@@ -42,4 +66,16 @@ __all__ = [
     "register_macro_regime_v1",
     "MACRO_REGIME_INITIAL_PRIORS",
     "MACRO_REGIME_CURATED_TOOL_URIS",
+    "build_microstructure_v1",
+    "register_microstructure_v1",
+    "MICROSTRUCTURE_INITIAL_PRIORS",
+    "MICROSTRUCTURE_CURATED_TOOL_URIS",
+    "build_smart_money_v1",
+    "register_smart_money_v1",
+    "SMART_MONEY_INITIAL_PRIORS",
+    "SMART_MONEY_CURATED_TOOL_URIS",
+    "build_sentiment_event_v1",
+    "register_sentiment_event_v1",
+    "SENTIMENT_EVENT_INITIAL_PRIORS",
+    "SENTIMENT_EVENT_CURATED_TOOL_URIS",
 ]

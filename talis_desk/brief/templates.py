@@ -409,6 +409,10 @@ def render_brief_markdown(sections: dict[str, str]) -> str:
         "hot_hypotheses",
         "debates",
         "playbooks",
+        # Codex finding #7 — richer candidate sections after playbooks
+        # so the reader sees flow from "live" → "queued" → "blocked".
+        "watchlist_setups",
+        "blocked_ideas",
         "source_health",
         "quiet_cycle",
         "cycle_stats",

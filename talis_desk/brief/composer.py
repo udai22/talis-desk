@@ -249,6 +249,7 @@ def compose_brief(
     scope: str = "market",
     output_format: Literal["markdown", "html", "json"] = "markdown",
     *,
+    cycle_ids: Optional[list[str]] = None,
     conn: Optional[sqlite3.Connection] = None,
     headline_model: str = DEFAULT_HEADLINE_MODEL,
     headline_fallback: str = DEFAULT_HEADLINE_FALLBACK,
@@ -259,6 +260,12 @@ def compose_brief(
     See module docstring for the full contract. Briefly:
       - `cycle_id`: if None, we don't filter cycle stats by cycle, we use
         the rolling last-24h slice instead.
+      - `cycle_ids`: optional list of cycle ids to AGGREGATE cycle stats
+        across (uses `WHERE cycle_id IN (...)`). Used by the desk
+        orchestrator when each specialist runs under
+        `{base}__{specialist_id}`. When provided, takes precedence over
+        `cycle_id` for cycle-stat aggregation; `cycle_id` is still used
+        for the brief's display id + TIC artifact source_ref.
       - `as_of`: world-time anchor. None -> now (UTC). Replay queries use
         `build_replay_context(as_of_valid=as_of)`.
       - `scope`: free-form label for the brief title.
@@ -298,8 +305,15 @@ def compose_brief(
     debates = _fetch_recent_debates(conn, anchor, DEBATES_LOOKBACK_HOURS)
     triggered_pbs = _fetch_triggered_playbooks(conn, ctx)
     reward_summary = _fetch_reward_summary(conn, anchor, REWARD_LOOKBACK_HOURS)
-    cycle_stats = _fetch_cycle_stats(conn, cycle_id, anchor)
+    cycle_stats = _fetch_cycle_stats(conn, cycle_id, anchor,
+                                      cycle_ids=cycle_ids)
     source_health = _fetch_source_health()  # talis-tic; degraded if missing
+
+    # Fetch candidate artifacts BEFORE headline synthesis so the LLM can see
+    # them. The brief sections themselves are gated on non-empty further down.
+    watchlist_setups, blocked_ideas = _fetch_candidate_artifacts(
+        conn, cycle_id, cycle_ids,
+    )
 
     # --- Quality flag propagation -----------------------------------------
     cited_claim_ids = _gather_cited_claim_ids(open_book, hot_hyps, debates)
@@ -307,12 +321,22 @@ def compose_brief(
                                            hot_hyps, ctx)
 
     # --- Headline synthesis (one LLM call) --------------------------------
+    # When there are no trade ideas + no hot hypotheses but we DO have
+    # watchlist setups or blocked candidates worth surfacing, hand the
+    # LLM a top-watchlist + top-blocked record so the headline reflects
+    # actual desk activity instead of routing to the quiet-cycle path.
+    top_watchlist = watchlist_setups[0] if watchlist_setups else None
+    top_blocked = blocked_ideas[0] if blocked_ideas else None
     headline_payload = {
         "top_idea": open_book[0] if open_book else None,
         "top_hypothesis": hot_hyps[0] if hot_hyps else None,
         "recent_debate": debates[0] if debates else None,
+        "top_watchlist": top_watchlist,
+        "top_blocked": top_blocked,
         "n_open": len(open_book),
         "n_hot": len(hot_hyps),
+        "n_watchlist": len(watchlist_setups),
+        "n_blocked": len(blocked_ideas),
         "as_of": _iso(anchor),
         "scope": scope,
     }
@@ -362,8 +386,21 @@ def compose_brief(
     # for back-compat with downstream consumers.
     fallback_summary: Optional[str] = None
 
+    # --- Codex finding #7: candidate artifacts (watchlist + blocked) ------
+    # These tables are populated by `synthesize()` in `loop/runner.py`. We
+    # fetch them for every cycle id this brief is aggregating across; the
+    # sections render only if any rows exist.
+    # (Fetch moved above headline synthesis — keep just the comment for
+    # local readability.)
+
     # --- Build sections ---------------------------------------------------
-    is_quiet = not open_book and not hot_hyps
+    # A cycle is "quiet" only if NOTHING surfaced: no open ideas, no hot
+    # hypotheses, no watchlist setups, no blocked candidates, no debates.
+    # Otherwise the LLM headline path runs because the desk has signal.
+    is_quiet = (
+        not open_book and not hot_hyps and not watchlist_setups
+        and not blocked_ideas and not debates
+    )
     sections: dict[str, str] = {
         "header": render_header(scope, anchor),
         "headline": render_headline(headline_text, fallback_summary),
@@ -378,6 +415,11 @@ def compose_brief(
         sections["hot_hypotheses"] = render_hot_hypotheses(hot_hyps)
         sections["debates"] = render_debates(debates)
         sections["playbooks"] = render_playbooks(triggered_pbs)
+    # Codex finding #7 — only render when non-empty (keeps quiet cycles tidy).
+    if watchlist_setups:
+        sections["watchlist_setups"] = _render_watchlist_setups(watchlist_setups)
+    if blocked_ideas:
+        sections["blocked_ideas"] = _render_blocked_ideas(blocked_ideas)
     sections["source_health"] = render_source_health(source_health)
     sections["cycle_stats"] = render_cycle_stats({
         **cycle_stats,
@@ -405,6 +447,9 @@ def compose_brief(
         "scope": scope,
         "as_of": _iso(anchor),
         "is_quiet_cycle": is_quiet,
+        # Codex finding #7 — richer candidate-set artifacts.
+        "watchlist_setups": watchlist_setups,
+        "blocked_ideas": blocked_ideas,
     }
 
     # --- Assemble Brief ---------------------------------------------------
@@ -719,15 +764,39 @@ def _fetch_cycle_stats(
     conn: sqlite3.Connection,
     cycle_id: Optional[str],
     anchor: datetime,
+    cycle_ids: Optional[list[str]] = None,
 ) -> dict[str, Any]:
-    """Tool-call count + cost + specialist details for the brief footer."""
+    """Tool-call count + cost + specialist details for the brief footer.
+
+    Aggregation modes (in priority order):
+      1. `cycle_ids` non-empty: WHERE cycle_id IN (?, ?, ...) across all
+         per-specialist cycle ids the desk orchestrator wrote under (each
+         specialist runs with `{base}__{specialist_id}`).
+      2. `cycle_id` set: WHERE cycle_id = ? (legacy single-cycle path).
+      3. Neither: rolling last-24h slice.
+    """
+    # Normalize the cycle id list: dedupe while preserving order, drop empties.
+    id_list: list[str] = []
+    if cycle_ids:
+        seen: set[str] = set()
+        for cid in cycle_ids:
+            if cid and cid not in seen:
+                id_list.append(cid)
+                seen.add(cid)
+
     base_sql = (
         "SELECT count(*) AS n_tool_calls, "
         "       COALESCE(sum(cost_usd), 0.0) AS cost_usd "
         "FROM tool_call_log "
         "WHERE transaction_to IS NULL "
     )
-    if cycle_id:
+    if id_list:
+        placeholders = ",".join("?" * len(id_list))
+        row = conn.execute(
+            base_sql + f"AND cycle_id IN ({placeholders})",
+            tuple(id_list),
+        ).fetchone()
+    elif cycle_id:
         row = conn.execute(base_sql + "AND cycle_id = ?", (cycle_id,)).fetchone()
     else:
         cutoff = _iso(anchor - timedelta(hours=24))
@@ -737,7 +806,36 @@ def _fetch_cycle_stats(
     cost = (row["cost_usd"] if row else 0.0) or 0.0
 
     # Count hypotheses, trade ideas, debates for this cycle
-    if cycle_id:
+    if id_list:
+        placeholders = ",".join("?" * len(id_list))
+        n_hyp = conn.execute(
+            f"SELECT count(*) FROM hypotheses WHERE cycle_id IN ({placeholders}) "
+            "AND transaction_to IS NULL", tuple(id_list),
+        ).fetchone()[0] or 0
+        n_ti = conn.execute(
+            f"SELECT count(*) FROM trade_ideas WHERE cycle_id IN ({placeholders}) "
+            "AND transaction_to IS NULL", tuple(id_list),
+        ).fetchone()[0] or 0
+        n_deb = conn.execute(
+            f"SELECT count(*) FROM debates WHERE cycle_id IN ({placeholders}) "
+            "AND transaction_to IS NULL", tuple(id_list),
+        ).fetchone()[0] or 0
+        # When aggregating across specialists, pick the most recent specialist
+        # state row for display. The footer specialist label means "last
+        # specialist to write" when this is a multi-specialist roll-up.
+        sp_row = conn.execute(
+            f"SELECT specialist_id, persona_version FROM specialist_states "
+            f"WHERE cycle_id IN ({placeholders}) "
+            f"ORDER BY transaction_from DESC LIMIT 1",
+            tuple(id_list),
+        ).fetchone()
+        if sp_row:
+            specialist = sp_row["specialist_id"]
+            persona_version = sp_row["persona_version"]
+        else:
+            specialist = "desk"
+            persona_version = "multi_cycle"
+    elif cycle_id:
         n_hyp = conn.execute(
             "SELECT count(*) FROM hypotheses WHERE cycle_id = ? "
             "AND transaction_to IS NULL", (cycle_id,)
@@ -778,6 +876,7 @@ def _fetch_cycle_stats(
         persona_version = "rolling_24h"
     return {
         "cycle_id": cycle_id,
+        "cycle_ids": list(id_list) if id_list else None,
         "specialist_id": specialist or "desk",
         "persona_version": persona_version or "rolling_24h",
         "n_tool_calls": int(n_tc),
@@ -791,6 +890,104 @@ def _fetch_cycle_stats(
 # ============================================================================
 # Data fetchers — talis-tic (read-only)
 # ============================================================================
+
+def _fetch_candidate_artifacts(
+    conn: sqlite3.Connection,
+    cycle_id: Optional[str],
+    cycle_ids: Optional[list[str]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Codex finding #7 — pull watchlist_setups + blocked_ideas for the
+    brief. Aggregates across `cycle_ids` if provided, else falls back to a
+    single `cycle_id`. Returns (watchlist_setups, blocked_ideas).
+
+    Defensive: missing tables -> empty lists (lets pre-migration desks
+    render briefs without erroring).
+    """
+    id_list: list[str] = []
+    if cycle_ids:
+        id_list = list(cycle_ids)
+    elif cycle_id:
+        id_list = [cycle_id]
+
+    wls: list[dict[str, Any]] = []
+    blk: list[dict[str, Any]] = []
+    if not id_list:
+        return wls, blk
+    placeholders = ",".join("?" * len(id_list))
+    try:
+        rows = conn.execute(
+            f"SELECT * FROM watchlist_setups WHERE cycle_id IN ({placeholders}) "
+            f"ORDER BY transaction_from DESC LIMIT 50",
+            tuple(id_list),
+        ).fetchall()
+        wls = [dict(r) for r in rows]
+    except sqlite3.Error as e:
+        logger.info("compose_brief: watchlist_setups fetch skipped (%s)", e)
+    try:
+        rows = conn.execute(
+            f"SELECT * FROM blocked_ideas WHERE cycle_id IN ({placeholders}) "
+            f"ORDER BY transaction_from DESC LIMIT 50",
+            tuple(id_list),
+        ).fetchall()
+        blk = [dict(r) for r in rows]
+    except sqlite3.Error as e:
+        logger.info("compose_brief: blocked_ideas fetch skipped (%s)", e)
+    return wls, blk
+
+
+def _render_watchlist_setups(rows: list[dict[str, Any]]) -> str:
+    """Codex finding #7 — '## Watchlist Setups' section."""
+    lines = [f"## Watchlist Setups ({len(rows)})"]
+    if not rows:
+        return ""
+    lines.append("")
+    lines.append("Hypotheses the desk is monitoring — not yet supported but "
+                 "in the watch band:")
+    lines.append("")
+    for r in rows[:25]:
+        instrument = r.get("instrument") or "?"
+        direction = r.get("direction") or "?"
+        posterior = r.get("current_posterior")
+        post_str = f"{float(posterior):.2f}" if posterior is not None else "n/a"
+        cond = (r.get("watch_condition") or "")[:200]
+        horizon = r.get("expected_horizon") or "?"
+        specialist = r.get("specialist_id") or "?"
+        lines.append(
+            f"- **{instrument}** ({direction}, {horizon}) posterior={post_str} "
+            f"by `{specialist}`"
+        )
+        if cond:
+            lines.append(f"  - Watching for: {cond}")
+    return "\n".join(lines)
+
+
+def _render_blocked_ideas(rows: list[dict[str, Any]]) -> str:
+    """Codex finding #7 — '## Blocked Ideas (this cycle)' section."""
+    lines = [f"## Blocked Ideas (this cycle) ({len(rows)})"]
+    if not rows:
+        return ""
+    lines.append("")
+    lines.append("Ideas that tried to publish but hit a validation gate. "
+                 "Each carries the gate reason + what would unblock it:")
+    lines.append("")
+    for r in rows[:25]:
+        instrument = r.get("instrument") or "?"
+        direction = r.get("direction") or "?"
+        reason = (r.get("block_reason") or "")[:240]
+        unblock = (r.get("what_would_unblock") or "")[:200]
+        posterior = r.get("current_posterior")
+        post_str = f"{float(posterior):.2f}" if posterior is not None else "n/a"
+        specialist = r.get("specialist_id") or "?"
+        lines.append(
+            f"- **{instrument}** ({direction}) posterior={post_str} "
+            f"by `{specialist}`"
+        )
+        if reason:
+            lines.append(f"  - Blocked: {reason}")
+        if unblock:
+            lines.append(f"  - To unblock: {unblock}")
+    return "\n".join(lines)
+
 
 def _fetch_source_health() -> list[dict[str, Any]]:
     """Pull source_health from talis-tic. Returns a *list* of degraded
@@ -934,24 +1131,34 @@ def _synthesize_headline(
     """
     system = (
         "You are the desk briefer for the Talis autonomous Hyperliquid "
-        "research desk. Your sole task: write a TWO-sentence headline that "
-        "links the most actionable open trade idea to the macro/microstructure "
-        "frame and any debate verdict in play. Be concrete — cite the "
-        "instrument, direction, confidence, and the single highest-conviction "
-        "supporting or contradicting hypothesis. No hype, no caveats, no "
-        "emojis. If there is no open trade idea AND no hot hypothesis, "
-        "produce one sentence noting the quiet cycle and the watch item "
-        "for the next cycle."
+        "research desk. Your sole task: write a TWO- or THREE-sentence "
+        "headline that summarizes the desk's most important findings this "
+        "cycle. Priority order for what to lead with:\n"
+        "  1. The top open trade idea (cite instrument, direction, "
+        "confidence, the supporting/contradicting hypothesis).\n"
+        "  2. If no open idea: the top watchlist setup (cite the "
+        "instrument, the posterior, the trigger condition).\n"
+        "  3. If no open idea AND no watchlist: the top blocked idea "
+        "(cite the instrument and the block reason).\n"
+        "Be concrete. No hype, no caveats, no emojis. Avoid the phrase "
+        "'quiet cycle' unless n_open + n_hot + n_watchlist + n_blocked "
+        "are ALL zero."
     )
     user = _format_headline_prompt(payload)
 
-    if not payload.get("top_idea") and not payload.get("top_hypothesis"):
-        # Quiet cycle: skip the LLM call entirely. This is NOT a stub for
-        # an LLM failure; it's a deterministic shortcut when there is
-        # nothing for the LLM to summarize.
+    # Truly quiet: NOTHING surfaced this cycle. Skip the LLM call.
+    truly_quiet = (
+        not payload.get("top_idea")
+        and not payload.get("top_hypothesis")
+        and not payload.get("top_watchlist")
+        and not payload.get("top_blocked")
+        and not payload.get("recent_debate")
+    )
+    if truly_quiet:
         return (
-            "Quiet cycle: no open trade ideas and no hot hypotheses. "
-            "Watch source-health and incoming claims for the next trigger.",
+            "Quiet cycle: no open trade ideas, no hot hypotheses, no "
+            "watchlist setups, no blocked candidates. Watch source-health "
+            "and incoming claims for the next trigger.",
             {"stub": False, "quiet_cycle": True, "model_used": None,
              "provider": None, "fallback_used": False, "chain_position": None},
             0.0,
@@ -1003,6 +1210,8 @@ def _format_headline_prompt(payload: dict[str, Any]) -> str:
         f"scope: {payload['scope']}",
         f"n_open_ideas: {payload['n_open']}",
         f"n_hot_hypotheses: {payload['n_hot']}",
+        f"n_watchlist_setups: {payload.get('n_watchlist', 0)}",
+        f"n_blocked_ideas: {payload.get('n_blocked', 0)}",
         "",
     ]
     ti = payload.get("top_idea")
@@ -1026,6 +1235,24 @@ def _format_headline_prompt(payload: dict[str, Any]) -> str:
         lines.append(f"  posterior: {h.get('posterior_prob')}, heat: {h.get('heat_score')}")
         lines.append(f"  text: {(h.get('hypothesis_text') or '')[:400]}")
         lines.append("")
+    w = payload.get("top_watchlist")
+    if w:
+        lines.append("Top watchlist setup (sub-supported, in monitor band):")
+        lines.append(f"  id: {w.get('id')}")
+        lines.append(f"  by: {w.get('specialist_id')}")
+        lines.append(f"  instrument: {w.get('instrument')} {w.get('direction')}")
+        lines.append(f"  posterior: {w.get('current_posterior')}")
+        lines.append(f"  watch_condition: {(w.get('watch_condition') or '')[:300]}")
+        lines.append("")
+    b = payload.get("top_blocked")
+    if b:
+        lines.append("Top blocked idea (failed validation):")
+        lines.append(f"  id: {b.get('id')}")
+        lines.append(f"  by: {b.get('specialist_id')}")
+        lines.append(f"  instrument: {b.get('instrument')} {b.get('direction')}")
+        lines.append(f"  block_reason: {(b.get('block_reason') or '')[:200]}")
+        lines.append(f"  unblock: {(b.get('what_would_unblock') or '')[:200]}")
+        lines.append("")
     d = payload.get("recent_debate")
     if d:
         lines.append("Recent debate verdict:")
@@ -1033,7 +1260,12 @@ def _format_headline_prompt(payload: dict[str, Any]) -> str:
         lines.append(f"  winner: {d.get('winner')}")
         lines.append(f"  rationale: {(d.get('rationale') or '')[:300]}")
         lines.append("")
-    lines.append("Write the headline now. Exactly 2 sentences. No preamble.")
+    lines.append(
+        "Write the headline now. 2-3 sentences. No preamble. Lead with the "
+        "highest-priority surface that has content (idea > watchlist > "
+        "blocked > debate). If multiple are populated, weave the strongest "
+        "single thread."
+    )
     return "\n".join(lines)
 
 

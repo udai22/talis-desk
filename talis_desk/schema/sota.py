@@ -599,6 +599,52 @@ _SOTA_TABLES_SQLITE = [
         transaction_to TEXT
     )
     """,
+    # watchlist_setups — Codex finding #7. Hypotheses in the [0.55, 0.70)
+    # confidence band OR with high heat but not yet supported. Append-only,
+    # bitemporal. See `talis_desk/trade_ideas/candidates.py`.
+    """
+    CREATE TABLE IF NOT EXISTS watchlist_setups (
+        id TEXT PRIMARY KEY DEFAULT ('wls_' || lower(hex(randomblob(12)))),
+        specialist_id TEXT NOT NULL,
+        hypothesis_id TEXT NOT NULL,
+        cycle_id TEXT,
+        instrument TEXT NOT NULL,
+        direction TEXT NOT NULL CHECK (direction IN ('long','short','flat','spread')),
+        watch_condition TEXT NOT NULL,
+        expected_horizon TEXT NOT NULL,
+        current_posterior REAL NOT NULL,
+        citation_claim_ids TEXT NOT NULL DEFAULT '[]',
+        payload TEXT NOT NULL DEFAULT '{}',
+        supersedes TEXT,
+        valid_from TEXT NOT NULL,
+        valid_to TEXT,
+        transaction_from TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        transaction_to TEXT
+    )
+    """,
+    # blocked_ideas — Codex finding #7. Hypotheses that tried to become
+    # trade ideas but hit a validate_trade_idea gate. Carries the gate's
+    # rejection reason + a short "what would unblock" hint for the brief.
+    """
+    CREATE TABLE IF NOT EXISTS blocked_ideas (
+        id TEXT PRIMARY KEY DEFAULT ('blk_' || lower(hex(randomblob(12)))),
+        specialist_id TEXT NOT NULL,
+        hypothesis_id TEXT NOT NULL,
+        cycle_id TEXT,
+        instrument TEXT NOT NULL,
+        direction TEXT NOT NULL CHECK (direction IN ('long','short','flat','spread')),
+        block_reason TEXT NOT NULL,
+        what_would_unblock TEXT NOT NULL,
+        current_posterior REAL NOT NULL,
+        citation_claim_ids TEXT NOT NULL DEFAULT '[]',
+        payload TEXT NOT NULL DEFAULT '{}',
+        supersedes TEXT,
+        valid_from TEXT NOT NULL,
+        valid_to TEXT,
+        transaction_from TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        transaction_to TEXT
+    )
+    """,
 ]
 
 
@@ -623,6 +669,11 @@ _SOTA_INDEXES_SQLITE = [
     "CREATE INDEX IF NOT EXISTS idx_tool_call_investigation ON tool_call_log (investigation_id, started_at)",
     "CREATE INDEX IF NOT EXISTS idx_reward_subject ON reward_log (subject_kind, subject_id, reward_kind, valid_from)",
     "CREATE INDEX IF NOT EXISTS idx_specialist_states_specialist ON specialist_states (specialist_id, valid_from)",
+    # Codex finding #7 — watchlist + blocked candidate lookups by cycle.
+    "CREATE INDEX IF NOT EXISTS idx_watchlist_setups_cycle ON watchlist_setups (cycle_id, transaction_from)",
+    "CREATE INDEX IF NOT EXISTS idx_watchlist_setups_specialist ON watchlist_setups (specialist_id, valid_from)",
+    "CREATE INDEX IF NOT EXISTS idx_blocked_ideas_cycle ON blocked_ideas (cycle_id, transaction_from)",
+    "CREATE INDEX IF NOT EXISTS idx_blocked_ideas_specialist ON blocked_ideas (specialist_id, valid_from)",
 ]
 
 
@@ -710,6 +761,9 @@ SOTA_TABLE_NAMES = [
     "tool_atlas",
     "tool_call_log",
     "reward_log",
+    # Codex finding #7 candidate artifacts.
+    "watchlist_setups",
+    "blocked_ideas",
 ]
 
 SOTA_VIEW_NAMES = [
