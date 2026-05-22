@@ -51,6 +51,30 @@ def test_agent_graph_static_export_copies_raw_artifacts_and_state(tmp_path: Path
     assert state["reports"][1]["href"] == "raw/live_scout_canary_report.json"
 
 
+def test_agent_graph_handles_blocked_sentinel_preflight(tmp_path: Path) -> None:
+    run = tmp_path / "sentinel"
+    prompt = run / "live_canary" / "prompt_outputs"
+    prompt.mkdir(parents=True)
+    (prompt / "live_scout_canary_outputs.json").write_text("[]", encoding="utf-8")
+    (prompt / "live_scout_slice_preview.json").write_text(json.dumps({
+        "n_scouts": 8,
+        "seed_rows": [{"seed_id": "s1", "entity": "VVV", "horizon": "intraday", "lens": "sentiment"}],
+    }), encoding="utf-8")
+    (prompt / "live_scout_canary_report.json").write_text(json.dumps({
+        "cycle_id": "cadence_blocked",
+        "mode": "preflight_no_live_spend",
+        "n_scouts_requested": 8,
+        "status": "blocked",
+    }), encoding="utf-8")
+
+    state = build_agent_graph_state(run, artifact_href_prefix="raw/")
+
+    assert state["status"] == "ok"
+    assert state["summary"]["agents_requested"] == 8
+    assert any(step["id"] == "scouts" and step["status"] == "watch" for step in state["timeline"])
+    assert state["cadence_policy"]["always_on_flash"]["mode"] == "continuous_sentinel"
+
+
 def _write_run(tmp_path: Path) -> Path:
     run = tmp_path / "talis-scout-system-launch-test"
     raw = run / "launch-gate" / "raw"

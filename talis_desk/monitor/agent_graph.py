@@ -500,10 +500,11 @@ def _summary(
 
 def _timeline(summary: dict[str, Any], canary: dict[str, Any], tournament: dict[str, Any], learning: dict[str, Any], repair: dict[str, Any]) -> list[dict[str, Any]]:
     promotion = tournament.get("promotion_decision") if isinstance(tournament.get("promotion_decision"), dict) else {}
+    success_rate = _safe_float(summary.get("success_rate"), 0.0)
     return [
         {"id": "cadence", "label": "Cadence", "status": "pass", "detail": "2 full runs/day + always-on Flash sentinel"},
         {"id": "slice", "label": "Slice", "status": "pass", "detail": f"{summary.get('agents_requested', 0)} cells routed"},
-        {"id": "scouts", "label": "Scouts", "status": "pass" if summary.get("success_rate", 0) >= 0.9 else "watch", "detail": f"{summary.get('agents_complete', 0)} returned"},
+        {"id": "scouts", "label": "Scouts", "status": "pass" if success_rate >= 0.9 else "watch", "detail": f"{summary.get('agents_complete', 0)} returned"},
         {"id": "strings", "label": "Strings", "status": "pass" if summary.get("strings", 0) else "watch", "detail": f"{summary.get('strings', 0)} strings"},
         {"id": "pressure", "label": "Pressure", "status": "pass" if summary.get("upward_pressure_count", 0) else "watch", "detail": f"{summary.get('upward_pressure_count', 0)} upward candidates"},
         {"id": "graph", "label": "Graph", "status": "pass" if summary.get("nodes", 0) else "watch", "detail": f"{summary.get('nodes', 0)} nodes"},
@@ -512,6 +513,15 @@ def _timeline(summary: dict[str, Any], canary: dict[str, Any], tournament: dict[
         {"id": "tournament", "label": "Tournament", "status": "pass" if promotion.get("ready_for_live_1000") else "watch", "detail": promotion.get("decision") or "pending"},
         {"id": "next", "label": "Next", "status": "locked", "detail": summary.get("allowed_next_step") or "human gate"},
     ]
+
+
+def _safe_float(raw: Any, default: float = 0.0) -> float:
+    try:
+        if raw is None or raw == "":
+            return default
+        return float(raw)
+    except Exception:
+        return default
 
 
 def _report_links(*, root: Path, raw_dir: Path, artifact_href_prefix: str) -> list[dict[str, Any]]:

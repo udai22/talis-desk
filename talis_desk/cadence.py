@@ -8,7 +8,15 @@ The desk has two jobs:
 """
 from __future__ import annotations
 
+import json
+import os
+import shlex
+import subprocess
+import sys
+import time
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 
@@ -86,4 +94,389 @@ def default_intelligence_cadence_policy(*, generated_at: str | None = None) -> d
     }
 
 
-__all__ = ["default_intelligence_cadence_policy"]
+@dataclass
+class CadenceCommand:
+    name: str
+    command: list[str]
+    purpose: str
+    required_for: str = "run"
+    spend_risk: str = "none"
+    expected_artifacts: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def shell(self) -> str:
+        return " ".join(shlex.quote(part) for part in self.command)
+
+    def to_dict(self) -> dict[str, Any]:
+        out = asdict(self)
+        out["shell"] = self.shell
+        return out
+
+
+@dataclass
+class CadenceRunPlan:
+    plan_id: str
+    mode: str
+    cycle_id: str
+    artifact_dir: str
+    generated_at: str
+    allow_live_spend: bool
+    cadence_policy: dict[str, Any]
+    commands: list[CadenceCommand]
+    gates: list[dict[str, Any]]
+    notes: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": "talis_intelligence_cadence_run_plan_v1",
+            "plan_id": self.plan_id,
+            "mode": self.mode,
+            "cycle_id": self.cycle_id,
+            "artifact_dir": self.artifact_dir,
+            "generated_at": self.generated_at,
+            "allow_live_spend": self.allow_live_spend,
+            "cadence_policy": self.cadence_policy,
+            "commands": [cmd.to_dict() for cmd in self.commands],
+            "gates": self.gates,
+            "notes": self.notes,
+        }
+
+
+def build_intelligence_cadence_plan(
+    *,
+    mode: str,
+    artifact_dir: str | Path,
+    allow_live_spend: bool = False,
+    cycle_id: str = "",
+    scout_count: int | None = None,
+    ramp_policy: str = "",
+    repo_root: str | Path | None = None,
+    live_cost_cap_usd: float | None = None,
+    concurrency: int | None = None,
+    max_tool_iterations: int = 1,
+    brief_budget_usd: float = 5.0,
+) -> CadenceRunPlan:
+    """Build an executable, audit-friendly cadence plan.
+
+    The plan is intentionally explicit: no command includes live-provider spend
+    unless ``allow_live_spend`` is true. The caller may execute the plan or just
+    publish it as the next operator checklist.
+    """
+    policy = default_intelligence_cadence_policy()
+    repo = Path(repo_root) if repo_root else Path.cwd()
+    root = Path(artifact_dir).expanduser().resolve()
+    now = datetime.now(timezone.utc)
+    normalized_mode = _normalize_mode(mode)
+    cycle = cycle_id or f"cadence_{normalized_mode}_{now.strftime('%Y%m%dT%H%M%SZ')}"
+    commands: list[CadenceCommand]
+    if normalized_mode == "sentinel_tick":
+        commands = _sentinel_commands(
+            root=root,
+            cycle_id=cycle,
+            allow_live_spend=allow_live_spend,
+            policy=policy,
+            scout_count=scout_count,
+            ramp_policy=ramp_policy,
+            live_cost_cap_usd=live_cost_cap_usd,
+            concurrency=concurrency,
+            max_tool_iterations=max_tool_iterations,
+        )
+    elif normalized_mode == "full_pipeline":
+        commands = _full_pipeline_commands(
+            root=root,
+            cycle_id=cycle,
+            allow_live_spend=allow_live_spend,
+            scout_count=scout_count,
+            ramp_policy=ramp_policy,
+            live_cost_cap_usd=live_cost_cap_usd,
+            concurrency=concurrency,
+            max_tool_iterations=max_tool_iterations,
+            brief_budget_usd=brief_budget_usd,
+        )
+    else:
+        raise ValueError(f"unsupported_cadence_mode:{mode}")
+    return CadenceRunPlan(
+        plan_id=f"icp_{cycle}",
+        mode=normalized_mode,
+        cycle_id=cycle,
+        artifact_dir=str(root),
+        generated_at=now.isoformat(),
+        allow_live_spend=allow_live_spend,
+        cadence_policy=policy,
+        commands=commands,
+        gates=_cadence_gates(normalized_mode, allow_live_spend=allow_live_spend),
+        notes=[
+            "Always-on sentinel output feeds the next twice-daily brief; it does not publish trades directly.",
+            "Full-pipeline scheduled production remains blocked until repeat 1,000-scout shadow evidence is present.",
+            f"repo_root={repo}",
+        ],
+    )
+
+
+def write_cadence_plan(plan: CadenceRunPlan, *, output_dir: str | Path | None = None) -> Path:
+    out_dir = Path(output_dir or plan.artifact_dir).expanduser().resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / "talis_intelligence_cadence_plan.json"
+    path.write_text(json.dumps(plan.to_dict(), indent=2, sort_keys=True), encoding="utf-8")
+    return path
+
+
+def execute_cadence_plan(
+    plan: CadenceRunPlan,
+    *,
+    repo_root: str | Path,
+    env: dict[str, str] | None = None,
+    stop_on_failure: bool = True,
+) -> dict[str, Any]:
+    """Execute a cadence plan and persist a report beside the plan artifact."""
+    repo = Path(repo_root).resolve()
+    Path(plan.artifact_dir).mkdir(parents=True, exist_ok=True)
+    results: list[dict[str, Any]] = []
+    started = time.perf_counter()
+    run_env = dict(os.environ)
+    if env:
+        run_env.update(env)
+    run_env["PYTHONPATH"] = "." + (os.pathsep + run_env["PYTHONPATH"] if run_env.get("PYTHONPATH") else "")
+    for command in plan.commands:
+        t0 = time.perf_counter()
+        proc = subprocess.run(
+            command.command,
+            cwd=repo,
+            env=run_env,
+            text=True,
+            capture_output=True,
+        )
+        result = {
+            "name": command.name,
+            "purpose": command.purpose,
+            "returncode": proc.returncode,
+            "ok": proc.returncode == 0,
+            "elapsed_s": round(time.perf_counter() - t0, 3),
+            "stdout_tail": proc.stdout[-6000:],
+            "stderr_tail": proc.stderr[-6000:],
+            "expected_artifacts": command.expected_artifacts,
+        }
+        results.append(result)
+        if stop_on_failure and proc.returncode != 0:
+            break
+    report = {
+        "schema_version": "talis_intelligence_cadence_run_report_v1",
+        "plan": plan.to_dict(),
+        "status": "pass" if results and all(r["ok"] for r in results) else "failed" if results else "not_run",
+        "elapsed_s": round(time.perf_counter() - started, 3),
+        "results": results,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    report_path = Path(plan.artifact_dir) / "talis_intelligence_cadence_report.json"
+    report_path.write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
+    report["report_path"] = str(report_path)
+    return report
+
+
+def _normalize_mode(mode: str) -> str:
+    raw = str(mode or "").strip().lower().replace("-", "_")
+    aliases = {
+        "sentinel": "sentinel_tick",
+        "always_on": "sentinel_tick",
+        "always_on_flash": "sentinel_tick",
+        "tick": "sentinel_tick",
+        "full": "full_pipeline",
+        "full_pass": "full_pipeline",
+        "brief": "full_pipeline",
+        "twice_daily": "full_pipeline",
+    }
+    return aliases.get(raw, raw)
+
+
+def _sentinel_commands(
+    *,
+    root: Path,
+    cycle_id: str,
+    allow_live_spend: bool,
+    policy: dict[str, Any],
+    scout_count: int | None,
+    ramp_policy: str,
+    live_cost_cap_usd: float | None,
+    concurrency: int | None,
+    max_tool_iterations: int,
+) -> list[CadenceCommand]:
+    shape = (policy.get("always_on_flash") or {}).get("scouts_per_tick") or {}
+    scouts = int(scout_count or shape.get("target") or 24)
+    scouts = max(int(shape.get("min") or 8), min(int(shape.get("max") or 64), scouts))
+    cost_cap = live_cost_cap_usd if live_cost_cap_usd is not None else max(0.10, round(scouts * 0.011, 2))
+    live_root = root / "live_canary"
+    prompt_dir = live_root / "prompt_outputs"
+    command = [
+        sys.executable,
+        "scripts/run_live_scout_canary.py",
+        "--n-scouts",
+        str(scouts),
+        "--cycle-id",
+        cycle_id,
+        "--artifact-dir",
+        str(live_root),
+        "--prompt-output-dir",
+        str(prompt_dir),
+        "--concurrency",
+        str(concurrency or min(8, max(2, scouts // 6))),
+        "--cost-cap-usd",
+        f"{float(cost_cap):.2f}",
+        "--max-tool-iterations",
+        str(max(1, int(max_tool_iterations))),
+        "--repair-tool-proposal-contracts",
+        "--tool-proposal-repair-limit",
+        "200",
+        "--market-evolve-pairs",
+        str(max(2, min(12, scouts // 4))),
+    ]
+    if ramp_policy:
+        command.extend(["--ramp-policy", ramp_policy])
+    if allow_live_spend:
+        command.append("--allow-live-spend")
+    return [
+        CadenceCommand(
+            name="sentinel_live_canary",
+            command=command,
+            purpose="Run one always-on Flash sentinel tick against fresh market slices.",
+            spend_risk="live_model_calls" if allow_live_spend else "preflight_no_spend",
+            expected_artifacts={
+                "canary_report": str(prompt_dir / "live_scout_canary_report.json"),
+                "slice_preview": str(prompt_dir / "live_scout_slice_preview.json"),
+                "outputs": str(prompt_dir / "live_scout_canary_outputs.json"),
+            },
+        ),
+        CadenceCommand(
+            name="sentinel_agent_graph_export",
+            command=[
+                sys.executable,
+                "scripts/export_agent_graph_viewer.py",
+                "--run-dir",
+                str(root),
+                "--output-dir",
+                str(root / "agent-graph"),
+            ],
+            purpose="Render the sentinel tick as the same clickable agent graph used by full runs.",
+            expected_artifacts={
+                "agent_graph": str(root / "agent-graph" / "agent_graph_state.json"),
+                "index": str(root / "agent-graph" / "index.html"),
+            },
+        ),
+    ]
+
+
+def _full_pipeline_commands(
+    *,
+    root: Path,
+    cycle_id: str,
+    allow_live_spend: bool,
+    scout_count: int | None,
+    ramp_policy: str,
+    live_cost_cap_usd: float | None,
+    concurrency: int | None,
+    max_tool_iterations: int,
+    brief_budget_usd: float,
+) -> list[CadenceCommand]:
+    scouts = int(scout_count or 1000)
+    cost_cap = live_cost_cap_usd if live_cost_cap_usd is not None else 5.0
+    launch_cmd = [
+        sys.executable,
+        "scripts/run_scout_system_launch_gate.py",
+        "--artifact-dir",
+        str(root),
+        "--cycle-prefix",
+        cycle_id,
+        "--deterministic-scouts",
+        "100",
+        "--live-scouts",
+        str(scouts),
+        "--next-live-scouts",
+        str(scouts),
+        "--live-concurrency",
+        str(concurrency or 8),
+        "--live-cost-cap-usd",
+        f"{float(cost_cap):.2f}",
+        "--max-tool-iterations",
+        str(max(1, int(max_tool_iterations))),
+        "--repair-tool-proposal-contracts",
+        "--tool-proposal-repair-limit",
+        "500",
+    ]
+    if ramp_policy:
+        launch_cmd.extend(["--ramp-policy", ramp_policy])
+    if allow_live_spend:
+        launch_cmd.append("--allow-live-spend")
+    brief_cmd = [
+        sys.executable,
+        "run_full_desk.py",
+        "--cycle-id",
+        f"{cycle_id}_brief",
+        "--scope",
+        "market",
+        "--budget",
+        f"{float(brief_budget_usd):.2f}",
+        "--parallel",
+        "--paper-only",
+    ]
+    return [
+        CadenceCommand(
+            name="full_launch_gate",
+            command=launch_cmd,
+            purpose="Run the brief-grade scout/evolution launch gate for the twice-daily pass.",
+            spend_risk="live_model_calls" if allow_live_spend else "preflight_no_spend",
+            expected_artifacts={
+                "launch_report": str(root / "launch-gate" / "launch_gate_report.json"),
+                "learning_report": str(root / "live_canary" / "prompt_outputs" / "live_scout_learning_report.json"),
+            },
+        ),
+        CadenceCommand(
+            name="daily_brief_composition",
+            command=brief_cmd,
+            purpose="Compose the market brief from the full pass plus persistent desk memory.",
+            required_for="brief",
+            spend_risk="specialist_model_calls",
+            expected_artifacts={"manifest_or_stdout": "run_full_desk.py prints the brief path and manifest"},
+        ),
+    ]
+
+
+def _cadence_gates(mode: str, *, allow_live_spend: bool) -> list[dict[str, Any]]:
+    gates = [
+        {
+            "id": "explicit_spend_gate",
+            "status": "open" if allow_live_spend else "closed",
+            "requirement": "--allow-live-spend must be present before provider calls are made.",
+        },
+        {
+            "id": "artifact_first",
+            "status": "required",
+            "requirement": "Write talis_intelligence_cadence_plan.json before executing cadence commands.",
+        },
+        {
+            "id": "map_memory",
+            "status": "required",
+            "requirement": "Persist scout strings, geometry, tool proposals, and learning policy into the desk state.",
+        },
+    ]
+    if mode == "full_pipeline":
+        gates.append({
+            "id": "repeatability_before_schedule",
+            "status": "blocked",
+            "requirement": "Scheduled production needs two independent 1,000-scout shadow passes before automatic live scheduling.",
+        })
+    else:
+        gates.append({
+            "id": "no_direct_trade_publication",
+            "status": "required",
+            "requirement": "Sentinel ticks only update the map or queue verification; they do not publish trades directly.",
+        })
+    return gates
+
+
+__all__ = [
+    "CadenceCommand",
+    "CadenceRunPlan",
+    "build_intelligence_cadence_plan",
+    "default_intelligence_cadence_policy",
+    "execute_cadence_plan",
+    "write_cadence_plan",
+]
