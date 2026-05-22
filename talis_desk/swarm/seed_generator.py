@@ -836,7 +836,7 @@ def _information_perfusion_seed_budget(
     genome = getattr(program, "genome", None) or {}
     routing = dict((genome.get("routing_thresholds") if isinstance(genome, dict) else {}) or {})
     share = _bounded_share(
-        routing.get("price_feedback_exploitation_budget_share"),
+        routing.get("perfusion_followup_budget_share", routing.get("price_feedback_exploitation_budget_share")),
         default=0.02,
     )
     share = max(0.01, min(0.20, share))

@@ -25,6 +25,7 @@ from .alpha_geometry import (
     score_alpha_geometry_components,
 )
 from .objective import ACCEPTANCE_THRESHOLD, evaluate_prompt_scale_gate
+from .perfusion import compute_information_perfusion, load_information_perfusion
 
 
 EVALUATOR_VERSION = "market_evolve_v1"
@@ -62,6 +63,7 @@ DEFAULT_MARKET_EVOLVE_GENOME: dict[str, Any] = {
         "frontier_exploitation_budget_share": 0.04,
         "coverage_exploration_budget_share": 0.04,
         "price_feedback_exploitation_budget_share": 0.02,
+        "perfusion_followup_budget_share": 0.02,
         "use_frontier_llm_governor": True,
         "frontier_llm_governor_model": "anthropic:claude-opus-4-7",
         "frontier_llm_governor_seed_share": 0.25,
@@ -77,6 +79,7 @@ DEFAULT_MARKET_EVOLVE_GENOME: dict[str, Any] = {
         "learned_tool_priority_boost": 0.0,
         "prefer_price_anchor_tools": False,
         "require_disconfirming_price_check": False,
+        "prefer_information_perfusion_tools": False,
         "source_family_targets": [
             "hydromancer",
             "our_hl_node",
@@ -136,6 +139,10 @@ DEFAULT_MARKET_EVOLVE_GENOME: dict[str, Any] = {
         "outcome_direction_hit_rate": 0.10,
         "outcome_threshold_hit_rate": 0.08,
         "avg_realized_edge_score": 0.08,
+        "perfusion_routed_cell_rate": 0.04,
+        "perfusion_avg_pressure_gradient": 0.05,
+        "perfusion_avg_source_oxygenation": 0.04,
+        "perfusion_max_dilation_score": 0.04,
         "fragility_penalty": 0.12,
         "fragile_verify_penalty": 0.09,
         "high_signal_observe_penalty": 0.06,
@@ -150,6 +157,8 @@ DEFAULT_MARKET_EVOLVE_GENOME: dict[str, Any] = {
         "cortex_task_pending_penalty": 0.03,
         "cortex_shape_blocked_followup_penalty": 0.03,
         "outcome_unobserved_penalty": 0.05,
+        "perfusion_high_resistance_penalty": 0.04,
+        "perfusion_price_sensor_gap_penalty": 0.03,
     },
 }
 
@@ -498,11 +507,17 @@ def apply_market_evolve_policy_to_seeds(
             "auto_promote_high_priority_tools": bool(tool_policy.get("auto_promote_high_priority_tools")),
             "prefer_price_anchor_tools": bool(tool_policy.get("prefer_price_anchor_tools")),
             "require_disconfirming_price_check": bool(tool_policy.get("require_disconfirming_price_check")),
+            "prefer_information_perfusion_tools": bool(tool_policy.get("prefer_information_perfusion_tools")),
             "price_feedback_exploitation_budget_share": _float(
                 routing_policy.get("price_feedback_exploitation_budget_share"),
                 0.0,
             ),
+            "perfusion_followup_budget_share": _float(
+                routing_policy.get("perfusion_followup_budget_share"),
+                0.0,
+            ),
             "prompt_emphasize_price_feedback_refs": bool(prompt_policy.get("emphasize_price_feedback_refs")),
+            "prompt_emphasize_perfusion_state": bool(prompt_policy.get("emphasize_perfusion_state")),
             "prompt_contract_pressure": prompt_policy.get("contract_pressure", "normal"),
             "prompt_min_information_strings": _int_between(
                 prompt_policy.get("min_information_strings"),
@@ -1290,6 +1305,12 @@ def collect_market_evolve_metrics(
         cycle_id=cycle_id,
         seed_ids=scoped_seed_ids or None,
     )
+    perfusion_stats = _information_perfusion_stats(
+        db,
+        cycle_id=cycle_id,
+        seed_ids=scoped_seed_ids or None,
+        string_rows=string_rows,
+    )
 
     denominator_scouts = max(1.0, float(scout_count or string_count or 1))
     metrics = {
@@ -1337,6 +1358,7 @@ def collect_market_evolve_metrics(
         **governor_stats,
         **cortex_task_stats,
         **outcome_stats,
+        **perfusion_stats,
         "verifier_pass_rate": float(votes.get("pass", 0)) / max(1.0, float(total_votes)),
         "verifier_fail_rate": float(votes.get("fail", 0)) / max(1.0, float(total_votes)),
         "verifier_abstain_rate": float(votes.get("abstain", 0) + votes.get("needs_review", 0)) / max(1.0, float(total_votes)),
@@ -1398,6 +1420,10 @@ def score_market_evolve_metrics(
         + _w(weights, "outcome_direction_hit_rate") * _clamp01(metrics.get("outcome_direction_hit_rate", 0.0))
         + _w(weights, "outcome_threshold_hit_rate") * _clamp01(metrics.get("outcome_threshold_hit_rate", 0.0))
         + _w(weights, "avg_realized_edge_score") * _clamp01(metrics.get("avg_realized_edge_score", 0.0))
+        + _w(weights, "perfusion_routed_cell_rate") * _clamp01(metrics.get("perfusion_routed_cell_rate", 0.0))
+        + _w(weights, "perfusion_avg_pressure_gradient") * _clamp01(metrics.get("perfusion_avg_pressure_gradient", 0.0))
+        + _w(weights, "perfusion_avg_source_oxygenation") * _clamp01(metrics.get("perfusion_avg_source_oxygenation", 0.0))
+        + _w(weights, "perfusion_max_dilation_score") * _clamp01(metrics.get("perfusion_max_dilation_score", 0.0))
     )
     penalty = (
         _w(weights, "fragility_penalty") * _clamp01(metrics.get("avg_fragility", 0.0))
@@ -1414,6 +1440,8 @@ def score_market_evolve_metrics(
         + _w(weights, "cortex_task_pending_penalty") * _clamp01(metrics.get("cortex_task_pending_rate", 0.0))
         + _w(weights, "cortex_shape_blocked_followup_penalty") * _clamp01(metrics.get("cortex_shape_blocked_followup_rate", 0.0))
         + _w(weights, "outcome_unobserved_penalty") * (1.0 - _clamp01(metrics.get("outcome_observed_rate", 0.0)))
+        + _w(weights, "perfusion_high_resistance_penalty") * _clamp01(metrics.get("perfusion_high_resistance_rate", 0.0))
+        + _w(weights, "perfusion_price_sensor_gap_penalty") * _clamp01(metrics.get("perfusion_price_sensor_gap_rate", 0.0))
     )
     return round(_clamp01(positive - penalty), 4)
 
@@ -2148,6 +2176,100 @@ def _secondary_metric_mutation_candidates(
         ))
 
     if (
+        metrics.get("perfusion_cell_count", 0.0) >= 1
+        and metrics.get("perfusion_high_pressure_unabsorbed_rate", 0.0) >= 0.25
+        and metrics.get("perfusion_avg_source_oxygenation", 0.0) >= 0.52
+        and metrics.get("perfusion_max_dilation_score", 0.0) >= 0.55
+    ):
+        out.append(MarketEvolveMutationCandidate(
+            mutation_kind="exploit_information_perfusion_pressure",
+            rationale=(
+                "The perfusion matrix shows oxygenated information pressure that price has not absorbed; "
+                "give the next scout wave a larger pressure-followup budget and explicit perfusion context."
+            ),
+            mutation_patch={
+                "prompt_policy": {
+                    "emphasize_perfusion_state": True,
+                    "emphasize_price_feedback_refs": True,
+                    "prior_context_topk": min(
+                        10,
+                        int(prompt_policy.get("prior_context_topk") or 6) + 1,
+                    ),
+                },
+                "routing_thresholds": {
+                    "perfusion_followup_budget_share": min(
+                        0.24,
+                        float(thresholds.get("perfusion_followup_budget_share") or 0.02) + 0.05,
+                    ),
+                    "price_feedback_exploitation_budget_share": min(
+                        0.24,
+                        float(thresholds.get("price_feedback_exploitation_budget_share") or 0.02) + 0.03,
+                    ),
+                },
+                "tool_request_policy": {
+                    "prefer_information_perfusion_tools": True,
+                    "prefer_price_anchor_tools": True,
+                    "require_expected_edge": True,
+                    "require_eval_plan": True,
+                    "max_tool_candidates_per_seed": min(
+                        16,
+                        int(tool_policy.get("max_tool_candidates_per_seed", 10)) + 1,
+                    ),
+                },
+            },
+            mutation_source=source("information_perfusion_positive_pressure"),
+        ))
+
+    if (
+        metrics.get("perfusion_cell_count", 0.0) >= 1
+        and metrics.get("perfusion_avg_pressure_gradient", 0.0) >= 0.35
+        and (
+            metrics.get("perfusion_oxygenation_gap_rate", 0.0) >= 0.25
+            or metrics.get("perfusion_avg_source_oxygenation", 1.0) < 0.52
+            or metrics.get("perfusion_high_resistance_rate", 0.0) >= 0.25
+        )
+    ):
+        source_targets = _merged_source_family_targets(
+            tool_policy.get("source_family_targets"),
+            ["our_hl_node", "hydromancer", "market_microstructure", "grok_x_alpha", "web_attention"],
+        )
+        out.append(MarketEvolveMutationCandidate(
+            mutation_kind="oxygenate_information_perfusion_sources",
+            rationale=(
+                "The perfusion matrix sees pressure, but source oxygenation/resistance is not good enough; "
+                "route the next wave toward missing source families before broad verifier spend."
+            ),
+            mutation_patch={
+                "routing_thresholds": {
+                    "perfusion_followup_budget_share": min(
+                        0.20,
+                        float(thresholds.get("perfusion_followup_budget_share") or 0.02) + 0.04,
+                    ),
+                    "coverage_gap_budget_share": min(
+                        0.22,
+                        float(thresholds.get("coverage_gap_budget_share") or 0.10) + 0.03,
+                    ),
+                },
+                "tool_request_policy": {
+                    "prefer_information_perfusion_tools": True,
+                    "prefer_missing_source_family": True,
+                    "source_repair_budget_share": min(
+                        0.14,
+                        float(tool_policy.get("source_repair_budget_share") or 0.04) + 0.04,
+                    ),
+                    "source_family_targets": source_targets,
+                    "require_expected_edge": True,
+                    "require_eval_plan": True,
+                    "max_tool_candidates_per_seed": min(
+                        16,
+                        int(tool_policy.get("max_tool_candidates_per_seed", 10)) + 2,
+                    ),
+                },
+            },
+            mutation_source=source("information_perfusion_oxygenation_gap"),
+        ))
+
+    if (
         metrics.get("avg_source_independence", 0.0) < float(thresholds.get("min_source_independence", 0.45))
         and not (
             metrics.get("governor_seed_count", 0.0) >= 3
@@ -2779,6 +2901,8 @@ def _evaluation_rationale(score: float, metrics: dict[str, float], flags: list[s
         f"fragility={metrics.get('avg_fragility', 0):.2f}; "
         f"governor_seeds={metrics.get('governor_seed_count', 0):.0f}; "
         f"governor_yield={metrics.get('governor_string_yield_per_seed', 0):.2f}; "
+        f"perfusion_gradient={metrics.get('perfusion_avg_pressure_gradient', 0):.2f}; "
+        f"perfusion_dilation={metrics.get('perfusion_max_dilation_score', 0):.2f}; "
         f"cortex_tasks={metrics.get('cortex_task_count', 0):.0f}; "
         f"cortex_done={metrics.get('cortex_task_completion_rate', 0):.2f}; "
         f"flags={','.join(flags)}"
@@ -4368,6 +4492,110 @@ def _information_price_outcome_stats(
     return out
 
 
+def _information_perfusion_stats(
+    conn: sqlite3.Connection,
+    *,
+    cycle_id: str,
+    seed_ids: Optional[list[str]] = None,
+    string_rows: Optional[list[dict[str, Any]]] = None,
+) -> dict[str, float]:
+    zero = {
+        "perfusion_cell_count": 0.0,
+        "perfusion_routed_cell_count": 0.0,
+        "perfusion_routed_cell_rate": 0.0,
+        "perfusion_dilate_route_rate": 0.0,
+        "perfusion_price_sensor_gap_rate": 0.0,
+        "perfusion_oxygenation_gap_rate": 0.0,
+        "perfusion_high_pressure_unabsorbed_rate": 0.0,
+        "perfusion_high_resistance_rate": 0.0,
+        "perfusion_avg_information_pressure": 0.0,
+        "perfusion_avg_price_absorption": 0.0,
+        "perfusion_avg_pressure_gradient": 0.0,
+        "perfusion_avg_source_oxygenation": 0.0,
+        "perfusion_avg_resistance": 0.0,
+        "perfusion_max_dilation_score": 0.0,
+        "perfusion_recommended_scouts_per_cell": 0.0,
+    }
+    rows_for_scope = list(string_rows or [])
+    if not rows_for_scope:
+        rows_for_scope = _information_string_rows(conn, cycle_id, seed_ids=seed_ids)
+    if not rows_for_scope:
+        return zero
+    try:
+        rows = load_information_perfusion(cycle_id=cycle_id, limit=512, conn=conn)
+        if not rows:
+            compute_information_perfusion(cycle_id=cycle_id, scout_budget=24, persist=True, conn=conn)
+            rows = load_information_perfusion(cycle_id=cycle_id, limit=512, conn=conn)
+    except Exception:
+        return zero
+    if seed_ids:
+        scoped_cell_keys = {_information_cell_key(row) for row in rows_for_scope}
+        rows = [row for row in rows if str(row.get("cell_key") or "") in scoped_cell_keys]
+    if not rows:
+        return zero
+    metrics = [dict(row.get("metrics") or {}) for row in rows]
+    route_directives = [str(row.get("route_directive") or "maintain") for row in rows]
+    flags = [
+        flag
+        for row in rows
+        for flag in _string_list(row.get("quality_flags"))
+    ]
+    n = max(1.0, float(len(rows)))
+    routed_count = sum(1 for directive in route_directives if directive != "maintain")
+    high_pressure_unabsorbed = sum(
+        1
+        for row, metric in zip(rows, metrics)
+        if "information_not_absorbed_by_price" in _string_list(row.get("quality_flags"))
+        or (
+            _float(metric.get("pressure_gradient"), 0.0) >= 0.50
+            and _float(metric.get("price_absorption"), 0.0) <= 0.35
+        )
+    )
+    return {
+        "perfusion_cell_count": float(len(rows)),
+        "perfusion_routed_cell_count": float(routed_count),
+        "perfusion_routed_cell_rate": float(routed_count) / n,
+        "perfusion_dilate_route_rate": route_directives.count("dilate_scouts") / n,
+        "perfusion_price_sensor_gap_rate": route_directives.count("attach_price_sensors") / n,
+        "perfusion_oxygenation_gap_rate": route_directives.count("oxygenate_sources") / n,
+        "perfusion_high_pressure_unabsorbed_rate": float(high_pressure_unabsorbed) / n,
+        "perfusion_high_resistance_rate": sum(1 for flag in flags if flag == "high_resistance") / n,
+        "perfusion_avg_information_pressure": _avg([
+            _float(metric.get("information_pressure"), 0.0) for metric in metrics
+        ]),
+        "perfusion_avg_price_absorption": _avg([
+            _float(metric.get("price_absorption"), 0.0) for metric in metrics
+        ]),
+        "perfusion_avg_pressure_gradient": _avg([
+            _float(metric.get("pressure_gradient"), 0.0) for metric in metrics
+        ]),
+        "perfusion_avg_source_oxygenation": _avg([
+            _float(metric.get("source_oxygenation"), 0.0) for metric in metrics
+        ]),
+        "perfusion_avg_resistance": _avg([
+            _float(metric.get("resistance"), 0.0) for metric in metrics
+        ]),
+        "perfusion_max_dilation_score": max(
+            [_float(metric.get("dilation_score"), 0.0) for metric in metrics] or [0.0]
+        ),
+        "perfusion_recommended_scouts_per_cell": _clamp01(
+            sum(int(row.get("recommended_scouts") or 0) for row in rows) / n / 24.0
+        ),
+    }
+
+
+def _information_cell_key(row: dict[str, Any]) -> str:
+    explicit = str(row.get("coverage_cell_key") or "").strip()
+    if explicit:
+        return explicit
+    return "|".join([
+        str(row.get("entity") or "UNKNOWN"),
+        str(row.get("horizon") or row.get("time_horizon") or "intraday"),
+        str(row.get("lens") or "anomaly"),
+        str(row.get("theme") or ""),
+    ])
+
+
 def _count_table(
     conn: sqlite3.Connection,
     table: str,
@@ -5145,6 +5373,10 @@ def _mutation_hypothesis(mutation_kind: str, rationale: str) -> str:
         return "If strings that beat price are routed back into prompt context and price-anchor tools, scouts should repeat early repricing discovery rather than merely explain moves after the fact."
     if mutation_kind == "tighten_price_feedback_contract":
         return "If failed price-matured strings force disconfirming price checks and stricter causal contracts, the next scout wave should reduce attractive but non-predictive narratives."
+    if mutation_kind == "exploit_information_perfusion_pressure":
+        return "If oxygenated information pressure is not yet absorbed by price, routing more scouts through perfusion context should discover repeatable early repricing setups."
+    if mutation_kind == "oxygenate_information_perfusion_sources":
+        return "If pressure exists but the cell is source-thin or resistant, routing scouts toward missing source families should convert fragile pressure into verifiable map edges."
     if mutation_kind == "widen_source_families":
         return "If the source surface broadens, map fragility falls and cross-source confirmation improves."
     if mutation_kind == "exploit_market_map_governor":
@@ -5225,6 +5457,18 @@ def _mutation_target_metrics(mutation_kind: str, metrics: dict[str, float]) -> d
             "outcome_direction_hit_rate",
             "avg_realized_edge_score",
             "prompt_contract_failure_rate",
+        ],
+        "exploit_information_perfusion_pressure": [
+            "perfusion_high_pressure_unabsorbed_rate",
+            "perfusion_avg_pressure_gradient",
+            "perfusion_max_dilation_score",
+            "outcome_threshold_hit_rate",
+        ],
+        "oxygenate_information_perfusion_sources": [
+            "perfusion_avg_source_oxygenation",
+            "perfusion_oxygenation_gap_rate",
+            "perfusion_high_resistance_rate",
+            "avg_source_independence",
         ],
         "raise_tool_promotion_discipline": [
             "tool_activation_rate",
@@ -5425,6 +5669,42 @@ def _mutation_falsification_gates(
                 "decision": "reject_candidate",
             },
         ])
+    elif mutation_kind == "exploit_information_perfusion_pressure":
+        gates.extend([
+            {
+                "metric": "candidate_perfusion_avg_pressure_gradient",
+                "operator": "<",
+                "threshold": max(0.35, float(metrics.get("perfusion_avg_pressure_gradient", 0.0))),
+                "decision": "reject_candidate",
+            },
+            {
+                "metric": "candidate_perfusion_max_dilation_score",
+                "operator": "<",
+                "threshold": max(0.55, float(metrics.get("perfusion_max_dilation_score", 0.0))),
+                "decision": "reject_candidate",
+            },
+            {
+                "metric": "candidate_outcome_threshold_hit_rate",
+                "operator": "<",
+                "threshold": float(metrics.get("outcome_threshold_hit_rate", 0.0)),
+                "decision": "reject_candidate",
+            },
+        ])
+    elif mutation_kind == "oxygenate_information_perfusion_sources":
+        gates.extend([
+            {
+                "metric": "candidate_perfusion_avg_source_oxygenation",
+                "operator": "<=",
+                "threshold": float(metrics.get("perfusion_avg_source_oxygenation", 0.0)),
+                "decision": "reject_candidate",
+            },
+            {
+                "metric": "candidate_perfusion_high_resistance_rate",
+                "operator": ">=",
+                "threshold": float(metrics.get("perfusion_high_resistance_rate", 1.0)),
+                "decision": "reject_candidate",
+            },
+        ])
     elif "governor" in mutation_kind:
         gates.append({
             "metric": "candidate_governor_gap_repair_rate",
@@ -5457,6 +5737,10 @@ def _mutation_kill_signal(mutation_kind: str) -> str:
         return "Candidate does not preserve or improve price-outcome hit rate and realized edge on matched slices."
     if mutation_kind == "tighten_price_feedback_contract":
         return "Candidate still emits price-matured strings with weak directional hit rate or fails to reduce prompt/route contract failures."
+    if mutation_kind == "exploit_information_perfusion_pressure":
+        return "Candidate increases pressure-followup spend without preserving dilation score, early outcome hit rate, or useful price-feedback observations."
+    if mutation_kind == "oxygenate_information_perfusion_sources":
+        return "Candidate fails to improve source oxygenation or reduce resistance in pressured perfusion cells."
     if "tool" in mutation_kind:
         return "Candidate does not improve active/evaluated tool usage or creates more low-EV/tool-failure backlog."
     if "governor" in mutation_kind:
