@@ -2,7 +2,18 @@ from talis_desk.information_map.live_ramp_policy import apply_live_scout_ramp_po
 from talis_desk.swarm.seed_generator import SeedCell
 
 
-def test_live_scout_ramp_policy_monotonically_patches_seed_payload():
+def test_live_scout_ramp_policy_monotonically_patches_seed_payload(monkeypatch):
+    def fake_narrow_tools_for_seed(seed, k=None):
+        assert seed.payload["source_family_targets"] == ["market_timeseries", "hydromancer", "our_node"]
+        return [
+            "tic://tool/hydromancer/get_hl_pnl_leaderboard@v1",
+            "tic://tool/builtin/query_source_health@v1",
+        ]
+
+    monkeypatch.setattr(
+        "talis_desk.swarm.seed_generator.narrow_tools_for_seed",
+        fake_narrow_tools_for_seed,
+    )
     seed = SeedCell(
         seed_id="seed_policy",
         entity="HYPE",
@@ -47,13 +58,19 @@ def test_live_scout_ramp_policy_monotonically_patches_seed_payload():
 
     assert result["status"] == "applied"
     assert result["geometry_annotated_seed_count"] == 1
+    assert result["tool_candidate_refreshed_seed_count"] == 1
+    assert result["tool_candidate_added_count"] == 2
     assert seed.payload["learning_policy_id"] == "lrp_test"
     assert seed.payload["prompt_contract_pressure"] == "strict"
     assert seed.payload["prompt_min_information_strings"] == 2
     assert seed.payload["max_tool_iterations"] == 2
     assert seed.payload["max_evidence_tools"] == 6
     assert seed.payload["tool_candidate_limit"] == 12
-    assert seed.payload["tool_candidates"] == ["tic://tool/existing@v1"]
+    assert seed.payload["tool_candidates"] == [
+        "tic://tool/existing@v1",
+        "tic://tool/hydromancer/get_hl_pnl_leaderboard@v1",
+        "tic://tool/builtin/query_source_health@v1",
+    ]
+    assert seed.payload["learning_tool_candidate_refresh"]["after_count"] == 3
     assert seed.payload["source_family_targets"] == ["market_timeseries", "hydromancer", "our_node"]
     assert seed.payload["learning_geometry_replication_targets"][0]["cell_key"] == "HYPE|intraday|on_chain|frontier|node_flow"
-

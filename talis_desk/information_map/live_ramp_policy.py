@@ -53,6 +53,9 @@ def apply_live_scout_ramp_policy_to_seeds(
     ]
     applied = 0
     geometry_annotated = 0
+    refreshed_tool_seed_count = 0
+    added_tool_count = 0
+    refresh_errors: list[str] = []
     for seed in seeds:
         payload = dict(getattr(seed, "payload", None) or {})
         payload["learning_policy_id"] = str(policy.get("policy_id") or "")
@@ -91,6 +94,12 @@ def apply_live_scout_ramp_policy_to_seeds(
                 "Independent scout confirms, contradicts, or kills the prior geometry edge."
             )
         setattr(seed, "payload", payload)
+        refresh = _refresh_seed_tool_candidates(seed)
+        if refresh.get("status") == "refreshed":
+            refreshed_tool_seed_count += 1
+            added_tool_count += int(refresh.get("added_count") or 0)
+        elif refresh.get("status") == "error":
+            refresh_errors.append(str(refresh.get("error") or "tool_candidate_refresh_failed"))
         applied += 1
     return {
         "schema_version": "live_scout_ramp_policy_application_v1",
@@ -98,11 +107,13 @@ def apply_live_scout_ramp_policy_to_seeds(
         "seed_count": len(seeds),
         "applied_seed_count": applied,
         "geometry_annotated_seed_count": geometry_annotated,
+        "tool_candidate_refreshed_seed_count": refreshed_tool_seed_count,
+        "tool_candidate_added_count": added_tool_count,
         "policy_id": str(policy.get("policy_id") or ""),
         "watch_metrics": watch_metrics,
         "repair_work_order_ids": repair_ids,
         "source_family_targets_added": source_targets,
-        "quality_flags": [],
+        "quality_flags": [f"tool_candidate_refresh_error:{err}" for err in refresh_errors[:3]],
     }
 
 
@@ -130,6 +141,40 @@ def _matching_geometry_targets(seed: Any, targets: list[dict[str, Any]]) -> list
             "source_work_order_id": target.get("source_work_order_id"),
         })
     return out
+
+
+def _refresh_seed_tool_candidates(seed: Any) -> dict[str, Any]:
+    """Refresh the actual candidate menu after policy changes.
+
+    This is deliberately best-effort: a missing atlas should not prevent a
+    no-spend preflight or deterministic test from proving the policy metadata,
+    but a healthy atlas should let the policy widen the real affordance surface.
+    """
+    payload = dict(getattr(seed, "payload", None) or {})
+    try:
+        limit = int(payload.get("tool_candidate_limit") or 0)
+    except Exception:
+        limit = 0
+    if limit <= 0:
+        return {"status": "skipped", "reason": "no_tool_candidate_limit"}
+    existing = _string_list(payload.get("tool_candidates"))
+    try:
+        from ..swarm.seed_generator import narrow_tools_for_seed
+
+        refreshed = narrow_tools_for_seed(seed, k=limit)
+    except Exception as exc:
+        return {"status": "error", "error": f"{type(exc).__name__}:{exc}"}
+    merged = _merge_lists(existing, _string_list(refreshed))[:limit]
+    payload["tool_candidates"] = merged
+    payload["learning_tool_candidate_refresh"] = {
+        "status": "refreshed",
+        "before_count": len(existing),
+        "after_count": len(merged),
+        "added_count": max(0, len(set(merged) - set(existing))),
+        "limit": limit,
+    }
+    setattr(seed, "payload", payload)
+    return payload["learning_tool_candidate_refresh"]
 
 
 def _raise_string(payload: dict[str, Any], key: str, raw: Any) -> None:
@@ -163,4 +208,3 @@ def _string_list(raw: Any) -> list[str]:
     if not isinstance(raw, list):
         return []
     return [str(x) for x in raw if str(x).strip()]
-
