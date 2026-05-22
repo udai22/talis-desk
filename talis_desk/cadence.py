@@ -261,11 +261,13 @@ def execute_cadence_plan(
             break
     scoreboard = _read_json_file(Path(plan.artifact_dir) / "market-evolve" / "market_evolve_scoreboard.json", {})
     information_price_loop = _price_loop_report_summary(Path(plan.artifact_dir))
+    information_perfusion = _perfusion_report_summary(Path(plan.artifact_dir))
     control_decision = build_cadence_control_decision(
         scoreboard=scoreboard,
         mode=plan.mode,
         allow_live_spend=plan.allow_live_spend,
         information_price_loop=information_price_loop,
+        information_perfusion=information_perfusion,
     )
     report = {
         "schema_version": "talis_intelligence_cadence_run_report_v1",
@@ -275,6 +277,7 @@ def execute_cadence_plan(
         "results": results,
         "market_evolve_scoreboard": _scoreboard_report_summary(scoreboard),
         "information_price_loop": information_price_loop,
+        "information_perfusion": information_perfusion,
         "control_decision": control_decision,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -412,10 +415,12 @@ def build_cadence_control_decision(
     mode: str,
     allow_live_spend: bool,
     information_price_loop: dict[str, Any] | None = None,
+    information_perfusion: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Convert the MarketEvolve scoreboard into an executable cadence decision."""
     normalized_mode = _normalize_mode(mode)
     price_loop = information_price_loop if isinstance(information_price_loop, dict) else {}
+    perfusion = information_perfusion if isinstance(information_perfusion, dict) else {}
     if not isinstance(scoreboard, dict) or not scoreboard:
         return {
             "schema_version": "talis_cadence_control_decision_v1",
@@ -427,6 +432,7 @@ def build_cadence_control_decision(
             "why": "No MarketEvolve scoreboard artifact was available to read.",
             "source_scoreboard_id": "",
             "information_price_loop": _control_price_loop_payload(price_loop),
+            "information_perfusion": _control_perfusion_payload(perfusion),
             "quality_flags": ["missing_market_evolve_scoreboard"],
         }
 
@@ -543,6 +549,56 @@ def build_cadence_control_decision(
     if price_threshold_hit_rate >= 0.50 and price_eval_count >= 1:
         flags.append("information_price_loop_threshold_hits_present")
 
+    perfusion_status = str(perfusion.get("status") or "missing")
+    perfusion_cell_count = _floatish(perfusion.get("cell_count"), default=0.0)
+    perfusion_routed_cell_count = _floatish(perfusion.get("routed_cell_count"), default=0.0)
+    perfusion_avg_pressure_gradient = _floatish(perfusion.get("avg_pressure_gradient"), default=0.0)
+    perfusion_max_dilation = _floatish(perfusion.get("max_dilation_score"), default=0.0)
+    perfusion_high_unabsorbed = _floatish(perfusion.get("high_pressure_unabsorbed_rate"), default=0.0)
+    perfusion_oxygenation_gap = _floatish(perfusion.get("oxygenation_gap_rate"), default=0.0)
+    perfusion_avg_source_oxygenation = _floatish(perfusion.get("avg_source_oxygenation"), default=0.0)
+    if perfusion_status in {"missing", "not_found"}:
+        flags.append("information_perfusion_missing")
+    elif perfusion_cell_count <= 0:
+        flags.append("information_perfusion_no_cells")
+    elif perfusion_routed_cell_count <= 0:
+        flags.append("information_perfusion_no_routed_cells")
+
+    can_perfusion_steer = decision in {
+        "continue_sentinel_memory",
+        "mutate_active_policy",
+        "assign_candidate_experiment",
+    }
+    if can_perfusion_steer and perfusion_cell_count >= 1:
+        if (
+            perfusion_high_unabsorbed >= 0.25
+            and perfusion_avg_pressure_gradient >= 0.45
+            and perfusion_max_dilation >= 0.55
+        ):
+            decision = "perfusion_pressure_requests_sentinel"
+            allowed_next_step = "perfusion_pressure_sentinel"
+            recommended_mode = "sentinel_tick"
+            recommended_scouts = max(recommended_scouts, 32)
+            blocks_wider_spend = False
+            why = (
+                "The perfusion matrix sees oxygenated information pressure that price has not absorbed. "
+                "Run a matched sentinel slice before the next full brief so MarketEvolve can test whether the pressure repeats."
+            )
+            flags.append("information_perfusion_positive_pressure")
+        elif perfusion_oxygenation_gap >= 0.25 and perfusion_avg_pressure_gradient >= 0.35:
+            decision = "perfusion_source_oxygenation_repair"
+            allowed_next_step = "source_oxygenation_sentinel"
+            recommended_mode = "sentinel_tick"
+            recommended_scouts = max(recommended_scouts, 16)
+            blocks_wider_spend = False
+            why = (
+                "The perfusion matrix sees pressure, but source oxygenation is weak. "
+                "Run a small source-repair sentinel before widening verification spend."
+            )
+            flags.append("information_perfusion_oxygenation_gap")
+    if perfusion_avg_source_oxygenation >= 0.70 and perfusion_cell_count >= 1:
+        flags.append("information_perfusion_well_oxygenated")
+
     requires_live_spend = _control_decision_requires_live_spend(
         decision=decision,
         recommended_mode=recommended_mode,
@@ -573,6 +629,7 @@ def build_cadence_control_decision(
         "result_window_count": result_window,
         "best_score_delta_recent": memory.get("best_score_delta_recent"),
         "information_price_loop": _control_price_loop_payload(price_loop),
+        "information_perfusion": _control_perfusion_payload(perfusion),
         "quality_flags": sorted(set(flags)),
     }
 
@@ -626,6 +683,8 @@ def _control_decision_requires_live_spend(
     return decision in {
         "collect_experiment_evidence",
         "continue_candidate_experiment",
+        "perfusion_pressure_requests_sentinel",
+        "perfusion_source_oxygenation_repair",
         "price_loop_confirms_signal",
         "widen_shadow_evaluation",
         "request_shadow_schedule_review",
@@ -713,6 +772,78 @@ def _price_loop_report_summary(root: Path) -> dict[str, Any]:
     }
 
 
+def _perfusion_report_summary(root: Path) -> dict[str, Any]:
+    payload = _read_first_json(root, "information_perfusion.json")
+    if not payload:
+        return {
+            "schema_version": "talis_information_perfusion_summary_v1",
+            "status": "missing",
+            "cell_count": 0.0,
+            "routed_cell_count": 0.0,
+            "quality_flags": ["information_perfusion_artifact_missing"],
+        }
+    global_metrics = payload.get("global_metrics") if isinstance(payload.get("global_metrics"), dict) else {}
+    cells = payload.get("cells") if isinstance(payload.get("cells"), list) else []
+    cell_rows = [cell for cell in cells if isinstance(cell, dict)]
+    routed = [
+        cell
+        for cell in cell_rows
+        if str(cell.get("route_directive") or "maintain") != "maintain"
+    ]
+    quality_flags = _string_list(payload.get("quality_flags"))
+    high_pressure_unabsorbed = 0
+    oxygenation_gaps = 0
+    recommended_scouts = 0.0
+    for cell in cell_rows:
+        cell_flags = _string_list(cell.get("quality_flags"))
+        quality_flags.extend(cell_flags)
+        metrics = cell.get("metrics") if isinstance(cell.get("metrics"), dict) else {}
+        pressure_gradient = _floatish(metrics.get("pressure_gradient"), default=0.0)
+        price_absorption = _floatish(metrics.get("price_absorption"), default=1.0)
+        if "information_not_absorbed_by_price" in cell_flags or (
+            pressure_gradient >= 0.50 and price_absorption <= 0.35
+        ):
+            high_pressure_unabsorbed += 1
+        if str(cell.get("route_directive") or "") == "oxygenate_sources":
+            oxygenation_gaps += 1
+        recommended_scouts += _floatish(cell.get("recommended_scouts"), default=0.0)
+    return {
+        "schema_version": "talis_information_perfusion_summary_v1",
+        "status": "ready" if cell_rows else "empty",
+        "cycle_id": payload.get("cycle_id") or "",
+        "cell_count": _floatish(global_metrics.get("cell_count"), default=float(len(cell_rows))),
+        "routed_cell_count": _floatish(global_metrics.get("routed_cell_count"), default=float(len(routed))),
+        "avg_information_pressure": _floatish(
+            global_metrics.get("avg_information_pressure"),
+            default=_avgish([_cell_metric(cell, "information_pressure") for cell in cell_rows]),
+        ),
+        "avg_pressure_gradient": _floatish(
+            global_metrics.get("avg_pressure_gradient"),
+            default=_avgish([_cell_metric(cell, "pressure_gradient") for cell in cell_rows]),
+        ),
+        "avg_source_oxygenation": _floatish(
+            global_metrics.get("avg_source_oxygenation"),
+            default=_avgish([_cell_metric(cell, "source_oxygenation") for cell in cell_rows]),
+        ),
+        "avg_resistance": _floatish(
+            global_metrics.get("avg_resistance"),
+            default=_avgish([_cell_metric(cell, "resistance") for cell in cell_rows]),
+        ),
+        "max_dilation_score": _floatish(
+            global_metrics.get("max_dilation_score"),
+            default=max([_cell_metric(cell, "dilation_score") for cell in cell_rows] or [0.0]),
+        ),
+        "recommended_scouts": _floatish(
+            global_metrics.get("recommended_scouts"),
+            default=recommended_scouts,
+        ),
+        "high_pressure_unabsorbed_rate": round(high_pressure_unabsorbed / max(1, len(cell_rows)), 4),
+        "oxygenation_gap_rate": round(oxygenation_gaps / max(1, len(cell_rows)), 4),
+        "top_cells": _top_information_perfusion_cells(cell_rows),
+        "quality_flags": sorted(set(quality_flags)),
+    }
+
+
 def _read_first_json(root: Path, filename: str) -> dict[str, Any]:
     for path in _artifact_candidates(root, filename):
         payload = _read_json_file(path, {})
@@ -776,6 +907,66 @@ def _control_price_loop_payload(price_loop: dict[str, Any]) -> dict[str, Any]:
         "avg_realized_edge_score": _floatish(price_loop.get("avg_realized_edge_score"), default=0.0),
         "early_repricing_hit_rate": _floatish(price_loop.get("early_repricing_hit_rate"), default=0.0),
     }
+
+
+def _top_information_perfusion_cells(cells: list[dict[str, Any]], *, limit: int = 5) -> list[dict[str, Any]]:
+    rows = list(cells)
+    rows.sort(
+        key=lambda cell: (
+            _cell_metric(cell, "dilation_score"),
+            _cell_metric(cell, "pressure_gradient"),
+        ),
+        reverse=True,
+    )
+    out: list[dict[str, Any]] = []
+    for cell in rows[:limit]:
+        out.append({
+            "cell_key": cell.get("cell_key"),
+            "entity": cell.get("entity"),
+            "horizon": cell.get("horizon"),
+            "lens": cell.get("lens"),
+            "theme": cell.get("theme"),
+            "route_directive": cell.get("route_directive") or "maintain",
+            "recommended_scouts": int(_floatish(cell.get("recommended_scouts"), default=0.0)),
+            "information_pressure": _cell_metric(cell, "information_pressure"),
+            "pressure_gradient": _cell_metric(cell, "pressure_gradient"),
+            "price_absorption": _cell_metric(cell, "price_absorption"),
+            "source_oxygenation": _cell_metric(cell, "source_oxygenation"),
+            "resistance": _cell_metric(cell, "resistance"),
+            "dilation_score": _cell_metric(cell, "dilation_score"),
+            "quality_flags": _string_list(cell.get("quality_flags")),
+        })
+    return out
+
+
+def _control_perfusion_payload(perfusion: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(perfusion, dict) or not perfusion:
+        return {"status": "missing", "cell_count": 0.0, "routed_cell_count": 0.0}
+    return {
+        "status": perfusion.get("status") or "missing",
+        "cell_count": _floatish(perfusion.get("cell_count"), default=0.0),
+        "routed_cell_count": _floatish(perfusion.get("routed_cell_count"), default=0.0),
+        "avg_information_pressure": _floatish(perfusion.get("avg_information_pressure"), default=0.0),
+        "avg_pressure_gradient": _floatish(perfusion.get("avg_pressure_gradient"), default=0.0),
+        "avg_source_oxygenation": _floatish(perfusion.get("avg_source_oxygenation"), default=0.0),
+        "avg_resistance": _floatish(perfusion.get("avg_resistance"), default=0.0),
+        "max_dilation_score": _floatish(perfusion.get("max_dilation_score"), default=0.0),
+        "high_pressure_unabsorbed_rate": _floatish(perfusion.get("high_pressure_unabsorbed_rate"), default=0.0),
+        "oxygenation_gap_rate": _floatish(perfusion.get("oxygenation_gap_rate"), default=0.0),
+        "top_cells": (perfusion.get("top_cells") if isinstance(perfusion.get("top_cells"), list) else [])[:5],
+    }
+
+
+def _cell_metric(cell: dict[str, Any], key: str) -> float:
+    metrics = cell.get("metrics") if isinstance(cell.get("metrics"), dict) else {}
+    return _floatish(metrics.get(key), default=0.0)
+
+
+def _avgish(values: list[float]) -> float:
+    nums = [float(value) for value in values]
+    if not nums:
+        return 0.0
+    return round(sum(nums) / len(nums), 4)
 
 
 def _floatish(raw: Any, *, default: float) -> float:

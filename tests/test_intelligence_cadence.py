@@ -203,6 +203,39 @@ def test_cadence_control_decision_uses_price_loop_hits_as_evolution_signal() -> 
     assert "information_price_loop_positive_edge" in decision["quality_flags"]
 
 
+def test_cadence_control_decision_uses_perfusion_pressure_as_routing_signal() -> None:
+    decision = build_cadence_control_decision(
+        mode="sentinel_tick",
+        allow_live_spend=False,
+        scoreboard={
+            "id": "score_perfusion",
+            "status": "baseline_active",
+            "counts": {"open_experiments": 0, "candidate_programs": 0, "result_window": 0},
+            "hard_experiment_gate_summary": {"triggered": 0},
+            "evolution_memory": {"evolves": True, "best_score_delta_recent": 0.0},
+        },
+        information_perfusion={
+            "status": "ready",
+            "cell_count": 2.0,
+            "routed_cell_count": 1.0,
+            "avg_information_pressure": 0.72,
+            "avg_pressure_gradient": 0.62,
+            "avg_source_oxygenation": 0.80,
+            "max_dilation_score": 0.74,
+            "high_pressure_unabsorbed_rate": 0.50,
+            "top_cells": [{"entity": "VVV", "route_directive": "dilate_scouts"}],
+        },
+    )
+
+    assert decision["decision"] == "perfusion_pressure_requests_sentinel"
+    assert decision["allowed_next_step"] == "perfusion_pressure_sentinel"
+    assert decision["recommended_next_run"]["scouts"] == 32
+    assert decision["recommended_next_run"]["requires_allow_live_spend"] is True
+    assert decision["information_perfusion"]["max_dilation_score"] == 0.74
+    assert decision["information_perfusion"]["top_cells"][0]["entity"] == "VVV"
+    assert "information_perfusion_positive_pressure" in decision["quality_flags"]
+
+
 def test_execute_cadence_report_summarizes_information_price_loop(tmp_path: Path) -> None:
     prompt = tmp_path / "live_canary" / "prompt_outputs"
     prompt.mkdir(parents=True)
@@ -246,6 +279,41 @@ def test_execute_cadence_report_summarizes_information_price_loop(tmp_path: Path
             }
         ],
     }))
+    (prompt / "information_perfusion.json").write_text(json.dumps({
+        "schema_version": "information_perfusion_export_v1",
+        "cycle_id": "cycle_price",
+        "global_metrics": {
+            "cell_count": 1.0,
+            "routed_cell_count": 1.0,
+            "avg_information_pressure": 0.72,
+            "avg_pressure_gradient": 0.62,
+            "avg_source_oxygenation": 0.80,
+            "avg_resistance": 0.22,
+            "max_dilation_score": 0.74,
+            "recommended_scouts": 6.0,
+        },
+        "quality_flags": ["has_dilation_candidates"],
+        "cells": [
+            {
+                "cell_key": "VVV|intraday|node|fresh_social_alpha",
+                "entity": "VVV",
+                "theme": "fresh_social_alpha",
+                "horizon": "intraday",
+                "lens": "node",
+                "metrics": {
+                    "information_pressure": 0.72,
+                    "price_absorption": 0.20,
+                    "pressure_gradient": 0.62,
+                    "source_oxygenation": 0.80,
+                    "resistance": 0.22,
+                    "dilation_score": 0.74,
+                },
+                "route_directive": "dilate_scouts",
+                "recommended_scouts": 6,
+                "quality_flags": ["information_not_absorbed_by_price"],
+            }
+        ],
+    }))
     plan = CadenceRunPlan(
         plan_id="icp_price",
         mode="sentinel_tick",
@@ -272,6 +340,10 @@ def test_execute_cadence_report_summarizes_information_price_loop(tmp_path: Path
     assert report["information_price_loop"]["start_observations"]["observed_count"] == 1
     assert report["information_price_loop"]["top_outcomes"][0]["entity"] == "VVV"
     assert report["control_decision"]["information_price_loop"]["avg_realized_edge_score"] == 0.95
+    assert report["information_perfusion"]["status"] == "ready"
+    assert report["information_perfusion"]["high_pressure_unabsorbed_rate"] == 1.0
+    assert report["information_perfusion"]["top_cells"][0]["route_directive"] == "dilate_scouts"
+    assert report["control_decision"]["information_perfusion"]["max_dilation_score"] == 0.74
 
 
 def test_followup_plan_compiles_prior_report_control_decision_without_opening_spend_gate(tmp_path: Path) -> None:
