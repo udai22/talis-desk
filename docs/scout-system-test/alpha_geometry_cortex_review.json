@@ -1,0 +1,1230 @@
+{
+  "active_program": {
+    "generation": 0,
+    "name": "rosewood_research_policy_v1",
+    "program_id": "mprog_305b736b8ad24821",
+    "quality_flags": [
+      "last_eval:low_valid_string_rate",
+      "last_eval:no_strings_to_evaluate",
+      "requires_cycle_evidence",
+      "seed_program"
+    ],
+    "score": 0.0
+  },
+  "context_packet": {
+    "active_program_generation": 0,
+    "active_program_id": "mprog_305b736b8ad24821",
+    "current_geometry_weights": {
+      "fragility_penalty": 0.24,
+      "frontier_pressure": 0.28,
+      "source_independence": 0.22,
+      "support_mass": 0.14,
+      "tension": 0.14,
+      "verifier_readiness": 0.22
+    },
+    "current_routing_thresholds": {
+      "repair_fragility_min": 0.55,
+      "tension_min": 0.45,
+      "tension_readiness_min": 0.45,
+      "verify_allow_fragility_max": 1.0,
+      "verify_readiness_min": 0.55,
+      "verify_source_independence_min": 0.0,
+      "verify_trade_scream_min": 0.62,
+      "widen_scouts_novelty_min": 0.35,
+      "widen_sources_frontier_min": 0.5,
+      "widen_sources_source_max": 0.45
+    },
+    "cycle_id": "cycle_readiness_market_evolve2_20260522",
+    "deterministic_diagnostics": [
+      {
+        "code": "frontier_without_source_breadth",
+        "diagnosis": "The map is finding frontier pressure before enough independent source families exist.",
+        "policy_patch": {
+          "routing_thresholds": {
+            "widen_sources_source_max": 0.58
+          },
+          "tool_request_policy": {
+            "prefer_missing_source_family": true
+          }
+        },
+        "severity": "medium",
+        "severity_score": 0.55,
+        "target_metrics": [
+          "avg_frontier_pressure",
+          "avg_source_independence"
+        ]
+      }
+    ],
+    "deterministic_policy_patch": {
+      "routing_thresholds": {
+        "repair_fragility_min": 0.55,
+        "tension_min": 0.45,
+        "tension_readiness_min": 0.45,
+        "verify_allow_fragility_max": 1.0,
+        "verify_readiness_min": 0.55,
+        "verify_source_independence_min": 0.0,
+        "verify_trade_scream_min": 0.62,
+        "widen_scouts_novelty_min": 0.35,
+        "widen_sources_frontier_min": 0.5,
+        "widen_sources_source_max": 0.58
+      },
+      "tool_request_policy": {
+        "prefer_missing_source_family": true
+      }
+    },
+    "evolution_frontier": [
+      {
+        "diversity_signature": "92713d470937",
+        "falsification_gate_count": 0,
+        "frontier_priority_score": 0.32,
+        "generation": 0,
+        "kill_signal": null,
+        "latest_decision": "",
+        "latest_score_delta": null,
+        "mutation_kind": null,
+        "mutation_source": null,
+        "name": "rosewood_research_policy_v1",
+        "next_action": "mutate_active_policy",
+        "population_gate": {},
+        "program_id": "mprog_305b736b8ad24821",
+        "proof_gate_summary": {
+          "evaluated": 0,
+          "not_observed": 0,
+          "passed": 0,
+          "triggered": 0,
+          "triggered_metrics": []
+        },
+        "score": 0.0,
+        "source_candidate_rank": null,
+        "status": "active"
+      },
+      {
+        "diversity_signature": "0ec794652037",
+        "falsification_gate_count": 3,
+        "frontier_priority_score": 0.304,
+        "generation": 1,
+        "kill_signal": "Candidate does not improve prompt quality/pass rate or reduces valid string yield enough to lose the experiment.",
+        "latest_decision": "",
+        "latest_score_delta": null,
+        "mutation_kind": "tighten_prompt_contract",
+        "mutation_source": "market_evolve_metric_heuristic",
+        "name": "rosewood_research_policy_v1__tighten_prompt_contract",
+        "next_action": "collect_candidate_experiment_evidence",
+        "population_gate": {
+          "allowed": true,
+          "candidate_diversity_signature": "0ec794652037",
+          "max_open_experiments_per_parent": 4,
+          "max_open_same_signature_per_parent": 1,
+          "open_experiment_count": 0,
+          "open_same_signature_count": 0,
+          "reason": "allowed",
+          "schema_version": "market_evolve_population_gate_v1"
+        },
+        "program_id": "mprog_f3702ed4079fa381",
+        "proof_gate_summary": {
+          "evaluated": 0,
+          "not_observed": 0,
+          "passed": 0,
+          "triggered": 0,
+          "triggered_metrics": []
+        },
+        "score": 0.0,
+        "source_candidate_rank": 0,
+        "status": "candidate"
+      },
+      {
+        "diversity_signature": "a780915307b2",
+        "falsification_gate_count": 3,
+        "frontier_priority_score": 0.304,
+        "generation": 1,
+        "kill_signal": "Candidate fails hard gates, loses to control out of sample, or creates cost/quality regressions.",
+        "latest_decision": "",
+        "latest_score_delta": null,
+        "mutation_kind": "widen_source_families",
+        "mutation_source": "market_evolve_metric_heuristic",
+        "name": "rosewood_research_policy_v1__widen_source_families",
+        "next_action": "collect_candidate_experiment_evidence",
+        "population_gate": {
+          "allowed": true,
+          "candidate_diversity_signature": "a780915307b2",
+          "max_open_experiments_per_parent": 4,
+          "max_open_same_signature_per_parent": 1,
+          "open_experiment_count": 1,
+          "open_same_signature_count": 0,
+          "reason": "allowed",
+          "schema_version": "market_evolve_population_gate_v1"
+        },
+        "program_id": "mprog_96570525068fa415",
+        "proof_gate_summary": {
+          "evaluated": 0,
+          "not_observed": 0,
+          "passed": 0,
+          "triggered": 0,
+          "triggered_metrics": []
+        },
+        "score": 0.0,
+        "source_candidate_rank": 1,
+        "status": "candidate"
+      }
+    ],
+    "global_shape": {
+      "avg_fragility": 0.1325,
+      "avg_frontier_pressure": 0.4571,
+      "avg_source_independence": 0.3375,
+      "avg_trade_scream_score": 0.4462,
+      "avg_verifier_readiness": 0.6643,
+      "cell_count": 80,
+      "route_directive_counts": {
+        "observe": 18,
+        "verify_now": 2,
+        "widen_scouts": 60
+      }
+    },
+    "market_evolve_metrics": {
+      "avg_fragility": 0.1325,
+      "avg_source_independence": 0.3375,
+      "fragile_verify_rate": 0.0,
+      "geometry_cell_count": 80.0,
+      "geometry_observe_rate": 0.225,
+      "geometry_route_action_rate": 0.775,
+      "geometry_route_entropy": 0.5858,
+      "geometry_verify_now_rate": 0.025,
+      "high_signal_observe_rate": 0.0875,
+      "route_contract_failure_rate": 0.0,
+      "route_contract_success_rate": 0.0
+    },
+    "routing_queue": [
+      {
+        "action": "send_to_verifier_council",
+        "cell_key": "XPL|1q|polymarket|",
+        "entity": "XPL",
+        "global_shape_summary": {
+          "avg_trade_scream_score": 0.4462,
+          "avg_verifier_readiness": 0.6643,
+          "cell_count": 80,
+          "route_directive_counts": {
+            "observe": 18,
+            "verify_now": 2,
+            "widen_scouts": 60
+          }
+        },
+        "horizon": "1q",
+        "lens": "polymarket",
+        "map_update_rule": "Attach verifier votes and independent source receipts to the source cell, then recompute readiness and fragility.",
+        "missing_edges": [
+          "claim -> verifier_decision",
+          "frontier_cell -> next_receptive_field"
+        ],
+        "must_call_first": "tic://tool/talis_native/plan_alpha_geometry_actions@v1",
+        "owner": "verifier",
+        "priority_score": 0.5527,
+        "rank": 1,
+        "reason": "The geometry is both high-signal and verifier-ready.",
+        "route_directive": "verify_now",
+        "route_task_id": "shape_task_a5f778dcd766",
+        "seed_slice": {
+          "bias_mode": "verify",
+          "entity": "XPL",
+          "horizon": "1q",
+          "lens": "polymarket",
+          "payload": {
+            "alpha_geometry_cell_key": "XPL|1q|polymarket|",
+            "alpha_geometry_missing_edges": [
+              "claim -> verifier_decision",
+              "frontier_cell -> next_receptive_field"
+            ],
+            "alpha_geometry_route_directive": "verify_now",
+            "alpha_geometry_route_task_id": "shape_task_a5f778dcd766",
+            "alpha_geometry_success_gate": "2_of_3 verifier majority with independent source receipts"
+          },
+          "route_task_id": "shape_task_a5f778dcd766",
+          "source": "alpha_geometry_route",
+          "theme": "alpha_geometry_verify_now"
+        },
+        "stop_condition": "Stop when verifier majority passes/fails or source receipts remain insufficient.",
+        "success_gate": "2_of_3 verifier majority with independent source receipts",
+        "theme": "",
+        "tool_sequence": [
+          "tic://tool/builtin/query_source_health@v1",
+          "tic://tool/builtin/query_timeseries@v1"
+        ]
+      },
+      {
+        "action": "send_to_verifier_council",
+        "cell_key": "DYDX|1w|sentiment|calendar_catalyst",
+        "entity": "DYDX",
+        "global_shape_summary": {
+          "avg_trade_scream_score": 0.4462,
+          "avg_verifier_readiness": 0.6643,
+          "cell_count": 80,
+          "route_directive_counts": {
+            "observe": 18,
+            "verify_now": 2,
+            "widen_scouts": 60
+          }
+        },
+        "horizon": "1w",
+        "lens": "sentiment",
+        "map_update_rule": "Attach verifier votes and independent source receipts to the source cell, then recompute readiness and fragility.",
+        "missing_edges": [
+          "claim -> verifier_decision",
+          "frontier_cell -> next_receptive_field"
+        ],
+        "must_call_first": "tic://tool/talis_native/plan_alpha_geometry_actions@v1",
+        "owner": "verifier",
+        "priority_score": 0.5487,
+        "rank": 2,
+        "reason": "The geometry is both high-signal and verifier-ready.",
+        "route_directive": "verify_now",
+        "route_task_id": "shape_task_9ebaad0ceee4",
+        "seed_slice": {
+          "bias_mode": "verify",
+          "entity": "DYDX",
+          "horizon": "1w",
+          "lens": "sentiment",
+          "payload": {
+            "alpha_geometry_cell_key": "DYDX|1w|sentiment|calendar_catalyst",
+            "alpha_geometry_missing_edges": [
+              "claim -> verifier_decision",
+              "frontier_cell -> next_receptive_field"
+            ],
+            "alpha_geometry_route_directive": "verify_now",
+            "alpha_geometry_route_task_id": "shape_task_9ebaad0ceee4",
+            "alpha_geometry_success_gate": "2_of_3 verifier majority with independent source receipts"
+          },
+          "route_task_id": "shape_task_9ebaad0ceee4",
+          "source": "alpha_geometry_route",
+          "theme": "calendar_catalyst"
+        },
+        "stop_condition": "Stop when verifier majority passes/fails or source receipts remain insufficient.",
+        "success_gate": "2_of_3 verifier majority with independent source receipts",
+        "theme": "calendar_catalyst",
+        "tool_sequence": [
+          "tic://tool/builtin/query_source_health@v1",
+          "tic://tool/builtin/query_timeseries@v1"
+        ]
+      },
+      {
+        "action": "replicate_with_independent_scouts",
+        "cell_key": "GRIFFAIN|1m|sentiment|",
+        "entity": "GRIFFAIN",
+        "global_shape_summary": {
+          "avg_trade_scream_score": 0.4462,
+          "avg_verifier_readiness": 0.6643,
+          "cell_count": 80,
+          "route_directive_counts": {
+            "observe": 18,
+            "verify_now": 2,
+            "widen_scouts": 60
+          }
+        },
+        "horizon": "1m",
+        "lens": "sentiment",
+        "map_update_rule": "Persist the independent scout string as a replication edge, then recompute support mass and novelty.",
+        "missing_edges": [
+          "frontier_cell -> next_receptive_field",
+          "single_scout_cell -> independent_replication"
+        ],
+        "must_call_first": "tic://tool/talis_native/plan_alpha_geometry_actions@v1",
+        "owner": "seed_router",
+        "priority_score": 0.5318,
+        "rank": 3,
+        "reason": "The cell is novel but still needs independent scout replication.",
+        "route_directive": "widen_scouts",
+        "route_task_id": "shape_task_1cd6ecd483be",
+        "seed_slice": {
+          "bias_mode": "frontier",
+          "entity": "GRIFFAIN",
+          "horizon": "1m",
+          "lens": "sentiment",
+          "payload": {
+            "alpha_geometry_cell_key": "GRIFFAIN|1m|sentiment|",
+            "alpha_geometry_missing_edges": [
+              "frontier_cell -> next_receptive_field",
+              "single_scout_cell -> independent_replication"
+            ],
+            "alpha_geometry_route_directive": "widen_scouts",
+            "alpha_geometry_route_task_id": "shape_task_1cd6ecd483be",
+            "alpha_geometry_success_gate": "second scout confirms, contradicts, or kills the string"
+          },
+          "route_task_id": "shape_task_1cd6ecd483be",
+          "source": "alpha_geometry_route",
+          "theme": "alpha_geometry_widen_scouts"
+        },
+        "stop_condition": "Stop when an independent scout confirms, contradicts, or kills the original cell.",
+        "success_gate": "second scout confirms, contradicts, or kills the string",
+        "theme": "",
+        "tool_sequence": [
+          "tic://tool/builtin/query_events_recent@v1",
+          "tic://tool/builtin/query_timeseries@v1"
+        ]
+      },
+      {
+        "action": "replicate_with_independent_scouts",
+        "cell_key": "ARB|1d|polymarket|",
+        "entity": "ARB",
+        "global_shape_summary": {
+          "avg_trade_scream_score": 0.4462,
+          "avg_verifier_readiness": 0.6643,
+          "cell_count": 80,
+          "route_directive_counts": {
+            "observe": 18,
+            "verify_now": 2,
+            "widen_scouts": 60
+          }
+        },
+        "horizon": "1d",
+        "lens": "polymarket",
+        "map_update_rule": "Persist the independent scout string as a replication edge, then recompute support mass and novelty.",
+        "missing_edges": [
+          "frontier_cell -> next_receptive_field",
+          "single_scout_cell -> independent_replication"
+        ],
+        "must_call_first": "tic://tool/talis_native/plan_alpha_geometry_actions@v1",
+        "owner": "seed_router",
+        "priority_score": 0.5292,
+        "rank": 4,
+        "reason": "The cell is novel but still needs independent scout replication.",
+        "route_directive": "widen_scouts",
+        "route_task_id": "shape_task_99ac0b62888e",
+        "seed_slice": {
+          "bias_mode": "frontier",
+          "entity": "ARB",
+          "horizon": "1d",
+          "lens": "polymarket",
+          "payload": {
+            "alpha_geometry_cell_key": "ARB|1d|polymarket|",
+            "alpha_geometry_missing_edges": [
+              "frontier_cell -> next_receptive_field",
+              "single_scout_cell -> independent_replication"
+            ],
+            "alpha_geometry_route_directive": "widen_scouts",
+            "alpha_geometry_route_task_id": "shape_task_99ac0b62888e",
+            "alpha_geometry_success_gate": "second scout confirms, contradicts, or kills the string"
+          },
+          "route_task_id": "shape_task_99ac0b62888e",
+          "source": "alpha_geometry_route",
+          "theme": "alpha_geometry_widen_scouts"
+        },
+        "stop_condition": "Stop when an independent scout confirms, contradicts, or kills the original cell.",
+        "success_gate": "second scout confirms, contradicts, or kills the string",
+        "theme": "",
+        "tool_sequence": [
+          "tic://tool/builtin/query_events_recent@v1",
+          "tic://tool/builtin/query_timeseries@v1"
+        ]
+      },
+      {
+        "action": "replicate_with_independent_scouts",
+        "cell_key": "NEAR|1m|sentiment|",
+        "entity": "NEAR",
+        "global_shape_summary": {
+          "avg_trade_scream_score": 0.4462,
+          "avg_verifier_readiness": 0.6643,
+          "cell_count": 80,
+          "route_directive_counts": {
+            "observe": 18,
+            "verify_now": 2,
+            "widen_scouts": 60
+          }
+        },
+        "horizon": "1m",
+        "lens": "sentiment",
+        "map_update_rule": "Persist the independent scout string as a replication edge, then recompute support mass and novelty.",
+        "missing_edges": [
+          "frontier_cell -> next_receptive_field",
+          "single_scout_cell -> independent_replication"
+        ],
+        "must_call_first": "tic://tool/talis_native/plan_alpha_geometry_actions@v1",
+        "owner": "seed_router",
+        "priority_score": 0.5164,
+        "rank": 5,
+        "reason": "The cell is novel but still needs independent scout replication.",
+        "route_directive": "widen_scouts",
+        "route_task_id": "shape_task_063200409e84",
+        "seed_slice": {
+          "bias_mode": "frontier",
+          "entity": "NEAR",
+          "horizon": "1m",
+          "lens": "sentiment",
+          "payload": {
+            "alpha_geometry_cell_key": "NEAR|1m|sentiment|",
+            "alpha_geometry_missing_edges": [
+              "frontier_cell -> next_receptive_field",
+              "single_scout_cell -> independent_replication"
+            ],
+            "alpha_geometry_route_directive": "widen_scouts",
+            "alpha_geometry_route_task_id": "shape_task_063200409e84",
+            "alpha_geometry_success_gate": "second scout confirms, contradicts, or kills the string"
+          },
+          "route_task_id": "shape_task_063200409e84",
+          "source": "alpha_geometry_route",
+          "theme": "alpha_geometry_widen_scouts"
+        },
+        "stop_condition": "Stop when an independent scout confirms, contradicts, or kills the original cell.",
+        "success_gate": "second scout confirms, contradicts, or kills the string",
+        "theme": "",
+        "tool_sequence": [
+          "tic://tool/builtin/query_events_recent@v1",
+          "tic://tool/builtin/query_timeseries@v1"
+        ]
+      },
+      {
+        "action": "replicate_with_independent_scouts",
+        "cell_key": "CRM|1d|polymarket|",
+        "entity": "CRM",
+        "global_shape_summary": {
+          "avg_trade_scream_score": 0.4462,
+          "avg_verifier_readiness": 0.6643,
+          "cell_count": 80,
+          "route_directive_counts": {
+            "observe": 18,
+            "verify_now": 2,
+            "widen_scouts": 60
+          }
+        },
+        "horizon": "1d",
+        "lens": "polymarket",
+        "map_update_rule": "Persist the independent scout string as a replication edge, then recompute support mass and novelty.",
+        "missing_edges": [
+          "frontier_cell -> next_receptive_field",
+          "single_scout_cell -> independent_replication"
+        ],
+        "must_call_first": "tic://tool/talis_native/plan_alpha_geometry_actions@v1",
+        "owner": "seed_router",
+        "priority_score": 0.5115,
+        "rank": 6,
+        "reason": "The cell is novel but still needs independent scout replication.",
+        "route_directive": "widen_scouts",
+        "route_task_id": "shape_task_9c2143c3e8e4",
+        "seed_slice": {
+          "bias_mode": "frontier",
+          "entity": "CRM",
+          "horizon": "1d",
+          "lens": "polymarket",
+          "payload": {
+            "alpha_geometry_cell_key": "CRM|1d|polymarket|",
+            "alpha_geometry_missing_edges": [
+              "frontier_cell -> next_receptive_field",
+              "single_scout_cell -> independent_replication"
+            ],
+            "alpha_geometry_route_directive": "widen_scouts",
+            "alpha_geometry_route_task_id": "shape_task_9c2143c3e8e4",
+            "alpha_geometry_success_gate": "second scout confirms, contradicts, or kills the string"
+          },
+          "route_task_id": "shape_task_9c2143c3e8e4",
+          "source": "alpha_geometry_route",
+          "theme": "alpha_geometry_widen_scouts"
+        },
+        "stop_condition": "Stop when an independent scout confirms, contradicts, or kills the original cell.",
+        "success_gate": "second scout confirms, contradicts, or kills the string",
+        "theme": "",
+        "tool_sequence": [
+          "tic://tool/builtin/query_events_recent@v1",
+          "tic://tool/builtin/query_timeseries@v1"
+        ]
+      }
+    ],
+    "top_actions": [
+      {
+        "action": "send_to_verifier_council",
+        "cell_key": "XPL|1q|polymarket|",
+        "coordinates": {
+          "color_fragility": 0.0,
+          "size_support_mass": 0.7002,
+          "x_source_independence": 1.0,
+          "y_frontier_pressure": 0.7139,
+          "z_tension": 0.28
+        },
+        "entity": "XPL",
+        "horizon": "1q",
+        "lens": "polymarket",
+        "metrics": {
+          "avg_attention": 0.6776,
+          "avg_conviction": 0.5835,
+          "avg_crowdedness": 0.2975,
+          "avg_novelty": 0.7155,
+          "contradiction_density": 0.0,
+          "evidence_coverage": 1.0,
+          "fragility": 0.0,
+          "frontier_pressure": 0.7139,
+          "geometry_weight_fragility_penalty": 0.18,
+          "geometry_weight_frontier_pressure": 0.38,
+          "geometry_weight_source_independence": 0.0,
+          "geometry_weight_support_mass": 0.14,
+          "geometry_weight_tension": 0.24,
+          "geometry_weight_verifier_readiness": 0.24,
+          "novelty_pressure": 0.6283,
+          "routing_threshold_repair_fragility_min": 0.55,
+          "routing_threshold_tension_min": 0.45,
+          "routing_threshold_tension_readiness_min": 0.45,
+          "routing_threshold_verify_allow_fragility_max": 1.0,
+          "routing_threshold_verify_readiness_min": 0.55,
+          "routing_threshold_verify_source_independence_min": 0.0,
+          "routing_threshold_verify_trade_scream_min": 0.62,
+          "routing_threshold_widen_scouts_novelty_min": 0.35,
+          "routing_threshold_widen_sources_frontier_min": 0.5,
+          "routing_threshold_widen_sources_source_max": 0.45,
+          "scout_independence": 0.5,
+          "source_entropy": 1.0,
+          "source_independence": 1.0,
+          "support_mass": 0.7002,
+          "tension": 0.28,
+          "trade_scream_score": 0.6381,
+          "verifier_readiness": 0.8401
+        },
+        "missing_edges": [
+          "claim -> verifier_decision",
+          "frontier_cell -> next_receptive_field"
+        ],
+        "owner": "verifier",
+        "priority_score": 0.5527,
+        "quality_flags": [
+          "frontier_trade_candidate"
+        ],
+        "reason": "The geometry is both high-signal and verifier-ready.",
+        "route_directive": "verify_now",
+        "route_task_id": "shape_task_a5f778dcd766",
+        "success_gate": "2_of_3 verifier majority with independent source receipts",
+        "suggested_next_tools": [
+          "tic://tool/builtin/query_source_health@v1",
+          "tic://tool/builtin/query_timeseries@v1"
+        ],
+        "theme": ""
+      },
+      {
+        "action": "send_to_verifier_council",
+        "cell_key": "DYDX|1w|sentiment|calendar_catalyst",
+        "coordinates": {
+          "color_fragility": 0.0,
+          "size_support_mass": 0.6888,
+          "x_source_independence": 1.0,
+          "y_frontier_pressure": 0.7059,
+          "z_tension": 0.28
+        },
+        "entity": "DYDX",
+        "horizon": "1w",
+        "lens": "sentiment",
+        "metrics": {
+          "avg_attention": 0.666,
+          "avg_conviction": 0.5663,
+          "avg_crowdedness": 0.3025,
+          "avg_novelty": 0.705,
+          "contradiction_density": 0.0,
+          "evidence_coverage": 1.0,
+          "fragility": 0.0,
+          "frontier_pressure": 0.7059,
+          "geometry_weight_fragility_penalty": 0.18,
+          "geometry_weight_frontier_pressure": 0.38,
+          "geometry_weight_source_independence": 0.0,
+          "geometry_weight_support_mass": 0.14,
+          "geometry_weight_tension": 0.24,
+          "geometry_weight_verifier_readiness": 0.24,
+          "novelty_pressure": 0.6147,
+          "routing_threshold_repair_fragility_min": 0.55,
+          "routing_threshold_tension_min": 0.45,
+          "routing_threshold_tension_readiness_min": 0.45,
+          "routing_threshold_verify_allow_fragility_max": 1.0,
+          "routing_threshold_verify_readiness_min": 0.55,
+          "routing_threshold_verify_source_independence_min": 0.0,
+          "routing_threshold_verify_trade_scream_min": 0.62,
+          "routing_threshold_widen_scouts_novelty_min": 0.35,
+          "routing_threshold_widen_sources_frontier_min": 0.5,
+          "routing_threshold_widen_sources_source_max": 0.45,
+          "scout_independence": 0.5,
+          "source_entropy": 1.0,
+          "source_independence": 1.0,
+          "support_mass": 0.6888,
+          "tension": 0.28,
+          "trade_scream_score": 0.6327,
+          "verifier_readiness": 0.8366
+        },
+        "missing_edges": [
+          "claim -> verifier_decision",
+          "frontier_cell -> next_receptive_field"
+        ],
+        "owner": "verifier",
+        "priority_score": 0.5487,
+        "quality_flags": [
+          "frontier_trade_candidate"
+        ],
+        "reason": "The geometry is both high-signal and verifier-ready.",
+        "route_directive": "verify_now",
+        "route_task_id": "shape_task_9ebaad0ceee4",
+        "success_gate": "2_of_3 verifier majority with independent source receipts",
+        "suggested_next_tools": [
+          "tic://tool/builtin/query_source_health@v1",
+          "tic://tool/builtin/query_timeseries@v1"
+        ],
+        "theme": "calendar_catalyst"
+      },
+      {
+        "action": "replicate_with_independent_scouts",
+        "cell_key": "GRIFFAIN|1m|sentiment|",
+        "coordinates": {
+          "color_fragility": 0.0,
+          "size_support_mass": 0.6899,
+          "x_source_independence": 1.0,
+          "y_frontier_pressure": 0.6825,
+          "z_tension": 0.28
+        },
+        "entity": "GRIFFAIN",
+        "horizon": "1m",
+        "lens": "sentiment",
+        "metrics": {
+          "avg_attention": 0.6697,
+          "avg_conviction": 0.561,
+          "avg_crowdedness": 0.2825,
+          "avg_novelty": 0.7155,
+          "contradiction_density": 0.0,
+          "evidence_coverage": 1.0,
+          "fragility": 0.0,
+          "frontier_pressure": 0.6825,
+          "geometry_weight_fragility_penalty": 0.18,
+          "geometry_weight_frontier_pressure": 0.38,
+          "geometry_weight_source_independence": 0.0,
+          "geometry_weight_support_mass": 0.14,
+          "geometry_weight_tension": 0.24,
+          "geometry_weight_verifier_readiness": 0.24,
+          "novelty_pressure": 0.6417,
+          "routing_threshold_repair_fragility_min": 0.55,
+          "routing_threshold_tension_min": 0.45,
+          "routing_threshold_tension_readiness_min": 0.45,
+          "routing_threshold_verify_allow_fragility_max": 1.0,
+          "routing_threshold_verify_readiness_min": 0.55,
+          "routing_threshold_verify_source_independence_min": 0.0,
+          "routing_threshold_verify_trade_scream_min": 0.62,
+          "routing_threshold_widen_scouts_novelty_min": 0.35,
+          "routing_threshold_widen_sources_frontier_min": 0.5,
+          "routing_threshold_widen_sources_source_max": 0.45,
+          "scout_independence": 0.25,
+          "source_entropy": 1.0,
+          "source_independence": 1.0,
+          "support_mass": 0.6899,
+          "tension": 0.28,
+          "trade_scream_score": 0.6156,
+          "verifier_readiness": 0.802
+        },
+        "missing_edges": [
+          "frontier_cell -> next_receptive_field",
+          "single_scout_cell -> independent_replication"
+        ],
+        "owner": "seed_router",
+        "priority_score": 0.5318,
+        "quality_flags": [
+          "multi_string_single_scout_cell",
+          "single_scout_cell"
+        ],
+        "reason": "The cell is novel but still needs independent scout replication.",
+        "route_directive": "widen_scouts",
+        "route_task_id": "shape_task_1cd6ecd483be",
+        "success_gate": "second scout confirms, contradicts, or kills the string",
+        "suggested_next_tools": [
+          "tic://tool/builtin/query_events_recent@v1",
+          "tic://tool/builtin/query_timeseries@v1"
+        ],
+        "theme": ""
+      },
+      {
+        "action": "replicate_with_independent_scouts",
+        "cell_key": "ARB|1d|polymarket|",
+        "coordinates": {
+          "color_fragility": 0.0,
+          "size_support_mass": 0.6918,
+          "x_source_independence": 1.0,
+          "y_frontier_pressure": 0.6734,
+          "z_tension": 0.28
+        },
+        "entity": "ARB",
+        "horizon": "1d",
+        "lens": "polymarket",
+        "metrics": {
+          "avg_attention": 0.6689,
+          "avg_conviction": 0.5713,
+          "avg_crowdedness": 0.2975,
+          "avg_novelty": 0.705,
+          "contradiction_density": 0.0,
+          "evidence_coverage": 1.0,
+          "fragility": 0.0,
+          "frontier_pressure": 0.6734,
+          "geometry_weight_fragility_penalty": 0.18,
+          "geometry_weight_frontier_pressure": 0.38,
+          "geometry_weight_source_independence": 0.0,
+          "geometry_weight_support_mass": 0.14,
+          "geometry_weight_tension": 0.24,
+          "geometry_weight_verifier_readiness": 0.24,
+          "novelty_pressure": 0.6191,
+          "routing_threshold_repair_fragility_min": 0.55,
+          "routing_threshold_tension_min": 0.45,
+          "routing_threshold_tension_readiness_min": 0.45,
+          "routing_threshold_verify_allow_fragility_max": 1.0,
+          "routing_threshold_verify_readiness_min": 0.55,
+          "routing_threshold_verify_source_independence_min": 0.0,
+          "routing_threshold_verify_trade_scream_min": 0.62,
+          "routing_threshold_widen_scouts_novelty_min": 0.35,
+          "routing_threshold_widen_sources_frontier_min": 0.5,
+          "routing_threshold_widen_sources_source_max": 0.45,
+          "scout_independence": 0.25,
+          "source_entropy": 1.0,
+          "source_independence": 1.0,
+          "support_mass": 0.6918,
+          "tension": 0.28,
+          "trade_scream_score": 0.6126,
+          "verifier_readiness": 0.8026
+        },
+        "missing_edges": [
+          "frontier_cell -> next_receptive_field",
+          "single_scout_cell -> independent_replication"
+        ],
+        "owner": "seed_router",
+        "priority_score": 0.5292,
+        "quality_flags": [
+          "multi_string_single_scout_cell",
+          "single_scout_cell"
+        ],
+        "reason": "The cell is novel but still needs independent scout replication.",
+        "route_directive": "widen_scouts",
+        "route_task_id": "shape_task_99ac0b62888e",
+        "success_gate": "second scout confirms, contradicts, or kills the string",
+        "suggested_next_tools": [
+          "tic://tool/builtin/query_events_recent@v1",
+          "tic://tool/builtin/query_timeseries@v1"
+        ],
+        "theme": ""
+      },
+      {
+        "action": "replicate_with_independent_scouts",
+        "cell_key": "NEAR|1m|sentiment|",
+        "coordinates": {
+          "color_fragility": 0.0,
+          "size_support_mass": 0.661,
+          "x_source_independence": 1.0,
+          "y_frontier_pressure": 0.6489,
+          "z_tension": 0.2749
+        },
+        "entity": "NEAR",
+        "horizon": "1m",
+        "lens": "sentiment",
+        "metrics": {
+          "avg_attention": 0.6356,
+          "avg_conviction": 0.5287,
+          "avg_crowdedness": 0.3025,
+          "avg_novelty": 0.66,
+          "contradiction_density": 0.0,
+          "evidence_coverage": 1.0,
+          "fragility": 0.0,
+          "frontier_pressure": 0.6489,
+          "geometry_weight_fragility_penalty": 0.18,
+          "geometry_weight_frontier_pressure": 0.38,
+          "geometry_weight_source_independence": 0.0,
+          "geometry_weight_support_mass": 0.14,
+          "geometry_weight_tension": 0.24,
+          "geometry_weight_verifier_readiness": 0.24,
+          "novelty_pressure": 0.5754,
+          "routing_threshold_repair_fragility_min": 0.55,
+          "routing_threshold_tension_min": 0.45,
+          "routing_threshold_tension_readiness_min": 0.45,
+          "routing_threshold_verify_allow_fragility_max": 1.0,
+          "routing_threshold_verify_readiness_min": 0.55,
+          "routing_threshold_verify_source_independence_min": 0.0,
+          "routing_threshold_verify_trade_scream_min": 0.62,
+          "routing_threshold_widen_scouts_novelty_min": 0.35,
+          "routing_threshold_widen_sources_frontier_min": 0.5,
+          "routing_threshold_widen_sources_source_max": 0.45,
+          "scout_independence": 0.25,
+          "source_entropy": 1.0,
+          "source_independence": 1.0,
+          "support_mass": 0.661,
+          "tension": 0.2749,
+          "trade_scream_score": 0.5955,
+          "verifier_readiness": 0.7933
+        },
+        "missing_edges": [
+          "frontier_cell -> next_receptive_field",
+          "single_scout_cell -> independent_replication"
+        ],
+        "owner": "seed_router",
+        "priority_score": 0.5164,
+        "quality_flags": [
+          "multi_string_single_scout_cell",
+          "single_scout_cell"
+        ],
+        "reason": "The cell is novel but still needs independent scout replication.",
+        "route_directive": "widen_scouts",
+        "route_task_id": "shape_task_063200409e84",
+        "success_gate": "second scout confirms, contradicts, or kills the string",
+        "suggested_next_tools": [
+          "tic://tool/builtin/query_events_recent@v1",
+          "tic://tool/builtin/query_timeseries@v1"
+        ],
+        "theme": ""
+      },
+      {
+        "action": "replicate_with_independent_scouts",
+        "cell_key": "CRM|1d|polymarket|",
+        "coordinates": {
+          "color_fragility": 0.0,
+          "size_support_mass": 0.6782,
+          "x_source_independence": 1.0,
+          "y_frontier_pressure": 0.6219,
+          "z_tension": 0.28
+        },
+        "entity": "CRM",
+        "horizon": "1d",
+        "lens": "polymarket",
+        "metrics": {
+          "avg_attention": 0.6488,
+          "avg_conviction": 0.5663,
+          "avg_crowdedness": 0.4375,
+          "avg_novelty": 0.7155,
+          "contradiction_density": 0.0,
+          "evidence_coverage": 1.0,
+          "fragility": 0.0,
+          "frontier_pressure": 0.6219,
+          "geometry_weight_fragility_penalty": 0.18,
+          "geometry_weight_frontier_pressure": 0.38,
+          "geometry_weight_source_independence": 0.0,
+          "geometry_weight_support_mass": 0.14,
+          "geometry_weight_tension": 0.24,
+          "geometry_weight_verifier_readiness": 0.24,
+          "novelty_pressure": 0.5031,
+          "routing_threshold_repair_fragility_min": 0.55,
+          "routing_threshold_tension_min": 0.45,
+          "routing_threshold_tension_readiness_min": 0.45,
+          "routing_threshold_verify_allow_fragility_max": 1.0,
+          "routing_threshold_verify_readiness_min": 0.55,
+          "routing_threshold_verify_source_independence_min": 0.0,
+          "routing_threshold_verify_trade_scream_min": 0.62,
+          "routing_threshold_widen_scouts_novelty_min": 0.35,
+          "routing_threshold_widen_sources_frontier_min": 0.5,
+          "routing_threshold_widen_sources_source_max": 0.45,
+          "scout_independence": 0.25,
+          "source_entropy": 1.0,
+          "source_independence": 1.0,
+          "support_mass": 0.6782,
+          "tension": 0.28,
+          "trade_scream_score": 0.5901,
+          "verifier_readiness": 0.7985
+        },
+        "missing_edges": [
+          "frontier_cell -> next_receptive_field",
+          "single_scout_cell -> independent_replication"
+        ],
+        "owner": "seed_router",
+        "priority_score": 0.5115,
+        "quality_flags": [
+          "multi_string_single_scout_cell",
+          "single_scout_cell"
+        ],
+        "reason": "The cell is novel but still needs independent scout replication.",
+        "route_directive": "widen_scouts",
+        "route_task_id": "shape_task_9c2143c3e8e4",
+        "success_gate": "second scout confirms, contradicts, or kills the string",
+        "suggested_next_tools": [
+          "tic://tool/builtin/query_events_recent@v1",
+          "tic://tool/builtin/query_timeseries@v1"
+        ],
+        "theme": ""
+      }
+    ],
+    "work_orders": [
+      {
+        "action": "send_to_verifier_council",
+        "cell_key": "XPL|1q|polymarket|",
+        "cycle_id": "cycle_readiness_market_evolve2_20260522",
+        "map_update_rule": "Attach verifier votes and independent source receipts to the source cell, then recompute readiness and fragility.",
+        "must_call_first": "tic://tool/talis_native/plan_alpha_geometry_actions@v1",
+        "order_id": "gcx_execute_shape_task_a5f778dcd766",
+        "owner": "verifier",
+        "route_task_id": "shape_task_a5f778dcd766",
+        "success_gate": "2_of_3 verifier majority with independent source receipts",
+        "tool_sequence": [
+          "tic://tool/builtin/query_source_health@v1",
+          "tic://tool/builtin/query_timeseries@v1"
+        ]
+      },
+      {
+        "action": "spawn_matched_policy_experiment",
+        "candidate_policy_patch": {
+          "routing_thresholds": {
+            "repair_fragility_min": 0.55,
+            "tension_min": 0.45,
+            "tension_readiness_min": 0.45,
+            "verify_allow_fragility_max": 1.0,
+            "verify_readiness_min": 0.55,
+            "verify_source_independence_min": 0.0,
+            "verify_trade_scream_min": 0.62,
+            "widen_scouts_novelty_min": 0.35,
+            "widen_sources_frontier_min": 0.5,
+            "widen_sources_source_max": 0.58
+          },
+          "tool_request_policy": {
+            "prefer_missing_source_family": true
+          }
+        },
+        "cycle_id": "cycle_readiness_market_evolve2_20260522",
+        "diagnostic_codes": [
+          "frontier_without_source_breadth"
+        ],
+        "map_update_rule": "Promote only through MarketEvolve experiment results, then recompute geometry with the active genome.",
+        "order_id": "gcx_propose_geometry_policy_mutation",
+        "owner": "market_evolve",
+        "success_gate": "candidate beats active policy on target metrics and passes falsification gates"
+      },
+      {
+        "action": "mutate_active_policy",
+        "mutation_kind": null,
+        "order_id": "gcx_evolution_frontier_followup",
+        "owner": "market_evolve",
+        "program_id": "mprog_305b736b8ad24821",
+        "success_gate": "frontier action either produces matched evidence or an explicit rejected proof packet"
+      }
+    ]
+  },
+  "cortex_work_orders": [
+    {
+      "action": "send_to_verifier_council",
+      "cell_key": "XPL|1q|polymarket|",
+      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "map_update_rule": "Attach verifier votes and independent source receipts to the source cell, then recompute readiness and fragility.",
+      "must_call_first": "tic://tool/talis_native/plan_alpha_geometry_actions@v1",
+      "order_id": "gcx_execute_shape_task_a5f778dcd766",
+      "owner": "verifier",
+      "route_task_id": "shape_task_a5f778dcd766",
+      "success_gate": "2_of_3 verifier majority with independent source receipts",
+      "tool_sequence": [
+        "tic://tool/builtin/query_source_health@v1",
+        "tic://tool/builtin/query_timeseries@v1"
+      ]
+    },
+    {
+      "action": "spawn_matched_policy_experiment",
+      "candidate_policy_patch": {
+        "routing_thresholds": {
+          "repair_fragility_min": 0.55,
+          "tension_min": 0.45,
+          "tension_readiness_min": 0.45,
+          "verify_allow_fragility_max": 1.0,
+          "verify_readiness_min": 0.55,
+          "verify_source_independence_min": 0.0,
+          "verify_trade_scream_min": 0.62,
+          "widen_scouts_novelty_min": 0.35,
+          "widen_sources_frontier_min": 0.5,
+          "widen_sources_source_max": 0.58
+        },
+        "tool_request_policy": {
+          "prefer_missing_source_family": true
+        }
+      },
+      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "diagnostic_codes": [
+        "frontier_without_source_breadth"
+      ],
+      "map_update_rule": "Promote only through MarketEvolve experiment results, then recompute geometry with the active genome.",
+      "order_id": "gcx_propose_geometry_policy_mutation",
+      "owner": "market_evolve",
+      "success_gate": "candidate beats active policy on target metrics and passes falsification gates"
+    },
+    {
+      "action": "mutate_active_policy",
+      "mutation_kind": null,
+      "order_id": "gcx_evolution_frontier_followup",
+      "owner": "market_evolve",
+      "program_id": "mprog_305b736b8ad24821",
+      "success_gate": "frontier action either produces matched evidence or an explicit rejected proof packet"
+    }
+  ],
+  "current_geometry_policy": {
+    "geometry_weights": {
+      "fragility_penalty": 0.24,
+      "frontier_pressure": 0.28,
+      "source_independence": 0.22,
+      "support_mass": 0.14,
+      "tension": 0.14,
+      "verifier_readiness": 0.22
+    },
+    "routing_thresholds": {
+      "repair_fragility_min": 0.55,
+      "tension_min": 0.45,
+      "tension_readiness_min": 0.45,
+      "verify_allow_fragility_max": 1.0,
+      "verify_readiness_min": 0.55,
+      "verify_source_independence_min": 0.0,
+      "verify_trade_scream_min": 0.62,
+      "widen_scouts_novelty_min": 0.35,
+      "widen_sources_frontier_min": 0.5,
+      "widen_sources_source_max": 0.45
+    }
+  },
+  "cycle_id": "cycle_readiness_market_evolve2_20260522",
+  "diagnostics": [
+    {
+      "code": "frontier_without_source_breadth",
+      "diagnosis": "The map is finding frontier pressure before enough independent source families exist.",
+      "policy_patch": {
+        "routing_thresholds": {
+          "widen_sources_source_max": 0.58
+        },
+        "tool_request_policy": {
+          "prefer_missing_source_family": true
+        }
+      },
+      "severity": "medium",
+      "severity_score": 0.55,
+      "target_metrics": [
+        "avg_frontier_pressure",
+        "avg_source_independence"
+      ]
+    }
+  ],
+  "evolution_frontier_top": {
+    "diversity_signature": "92713d470937",
+    "falsification_gate_count": 0,
+    "frontier_priority_score": 0.32,
+    "generation": 0,
+    "kill_signal": null,
+    "latest_decision": "",
+    "latest_score_delta": null,
+    "mutation_kind": null,
+    "mutation_source": null,
+    "name": "rosewood_research_policy_v1",
+    "next_action": "mutate_active_policy",
+    "population_gate": {},
+    "program_id": "mprog_305b736b8ad24821",
+    "proof_gate_summary": {
+      "evaluated": 0,
+      "not_observed": 0,
+      "passed": 0,
+      "triggered": 0,
+      "triggered_metrics": []
+    },
+    "score": 0.0,
+    "source_candidate_rank": null,
+    "status": "active"
+  },
+  "generated_at": "2026-05-22T14:45:28.224194+00:00",
+  "llm_cortex": {
+    "accepted": {
+      "accepted": false,
+      "reason": "llm_disabled"
+    },
+    "enabled": false,
+    "model": "anthropic:claude-opus-4-7",
+    "prompt": "You are the geometry cortex for Talis. You are allowed to critique the alpha-geometry shape and propose a small policy patch, but deterministic gates will reject vague or unsafe changes.\n\nReturn strict JSON only:\n{\n  \"assessment\": \"<one paragraph>\",\n  \"policy_patch\": {\"geometry_weights\": {}, \"routing_thresholds\": {}, \"tool_request_policy\": {}, \"prompt_policy\": {}},\n  \"additional_work_orders\": [{\"owner\": \"seed_router|market_evolve|tool_builder|verifier|cortex\", \"action\": \"...\", \"success_gate\": \"...\"}],\n  \"confidence\": 0.0,\n  \"kill_signal\": \"<what would prove your patch harmful>\"\n}\n\nRules: keep patches small, prefer changing one failure mode at a time, do not increase verifier spend when fragility is the diagnosis, and do not ask for broad more-data work without a target edge.\n\ncontext_packet:\n{\n  \"active_program_generation\": 0,\n  \"active_program_id\": \"mprog_305b736b8ad24821\",\n  \"current_geometry_weights\": {\n    \"fragility_penalty\": 0.24,\n    \"frontier_pressure\": 0.28,\n    \"source_independence\": 0.22,\n    \"support_mass\": 0.14,\n    \"tension\": 0.14,\n    \"verifier_readiness\": 0.22\n  },\n  \"current_routing_thresholds\": {\n    \"repair_fragility_min\": 0.55,\n    \"tension_min\": 0.45,\n    \"tension_readiness_min\": 0.45,\n    \"verify_allow_fragility_max\": 1.0,\n    \"verify_readiness_min\": 0.55,\n    \"verify_source_independence_min\": 0.0,\n    \"verify_trade_scream_min\": 0.62,\n    \"widen_scouts_novelty_min\": 0.35,\n    \"widen_sources_frontier_min\": 0.5,\n    \"widen_sources_source_max\": 0.45\n  },\n  \"cycle_id\": \"cycle_readiness_market_evolve2_20260522\",\n  \"deterministic_diagnostics\": [\n    {\n      \"code\": \"frontier_without_source_breadth\",\n      \"diagnosis\": \"The map is finding frontier pressure before enough independent source families exist.\",\n      \"policy_patch\": {\n        \"routing_thresholds\": {\n          \"widen_sources_source_max\": 0.58\n        },\n        \"tool_request_policy\": {\n          \"prefer_missing_source_family\": true\n        }\n      },\n      \"severity\": \"medium\",\n      \"severity_score\": 0.55,\n      \"target_metrics\": [\n        \"avg_frontier_pressure\",\n        \"avg_source_independence\"\n      ]\n    }\n  ],\n  \"deterministic_policy_patch\": {\n    \"routing_thresholds\": {\n      \"repair_fragility_min\": 0.55,\n      \"tension_min\": 0.45,\n      \"tension_readiness_min\": 0.45,\n      \"verify_allow_fragility_max\": 1.0,\n      \"verify_readiness_min\": 0.55,\n      \"verify_source_independence_min\": 0.0,\n      \"verify_trade_scream_min\": 0.62,\n      \"widen_scouts_novelty_min\": 0.35,\n      \"widen_sources_frontier_min\": 0.5,\n      \"widen_sources_source_max\": 0.58\n    },\n    \"tool_request_policy\": {\n      \"prefer_missing_source_family\": true\n    }\n  },\n  \"evolution_frontier\": [\n    {\n      \"diversity_signature\": \"92713d470937\",\n      \"falsification_gate_count\": 0,\n      \"frontier_priority_score\": 0.32,\n      \"generation\": 0,\n      \"kill_signal\": null,\n      \"latest_decision\": \"\",\n      \"latest_score_delta\": null,\n      \"mutation_kind\": null,\n      \"mutation_source\": null,\n      \"name\": \"rosewood_research_policy_v1\",\n      \"next_action\": \"mutate_active_policy\",\n      \"population_gate\": {},\n      \"program_id\": \"mprog_305b736b8ad24821\",\n      \"proof_gate_summary\": {\n        \"evaluated\": 0,\n        \"not_observed\": 0,\n        \"passed\": 0,\n        \"triggered\": 0,\n        \"triggered_metrics\": []\n      },\n      \"score\": 0.0,\n      \"source_candidate_rank\": null,\n      \"status\": \"active\"\n    },\n    {\n      \"diversity_signature\": \"0ec794652037\",\n      \"falsification_gate_count\": 3,\n      \"frontier_priority_score\": 0.304,\n      \"generation\": 1,\n      \"kill_signal\": \"Candidate does not improve prompt quality/pass rate or reduces valid string yield enough to lose the experiment.\",\n      \"latest_decision\": \"\",\n      \"latest_score_delta\": null,\n      \"mutation_kind\": \"tighten_prompt_contract\",\n      \"mutation_source\": \"market_evolve_metric_heuristic\",\n      \"name\": \"rosewood_research_policy_v1__tighten_prompt_contract\",\n      \"next_action\": \"collect_candidate_experiment_evidence\",\n      \"population_gate\": {\n        \"allowed\": true,\n        \"candidate_diversity_signature\": \"0ec794652037\",\n        \"max_open_experiments_per_parent\": 4,\n        \"max_open_same_signature_per_parent\": 1,\n        \"open_experiment_count\": 0,\n        \"open_same_signature_count\": 0,\n        \"reason\": \"allowed\",\n        \"schema_version\": \"market_evolve_population_gate_v1\"\n      },\n      \"program_id\": \"mprog_f3702ed4079fa381\",\n      \"proof_gate_summary\": {\n        \"evaluated\": 0,\n        \"not_observed\": 0,\n        \"passed\": 0,\n        \"triggered\": 0,\n        \"triggered_metrics\": []\n      },\n      \"score\": 0.0,\n      \"source_candidate_rank\": 0,\n      \"status\": \"candidate\"\n    },\n    {\n      \"diversity_signature\": \"a780915307b2\",\n      \"falsification_gate_count\": 3,\n      \"frontier_priority_score\": 0.304,\n      \"generation\": 1,\n      \"kill_signal\": \"Candidate fails hard gates, loses to control out of sample, or creates cost/quality regressions.\",\n      \"latest_decision\": \"\",\n      \"latest_score_delta\": null,\n      \"mutation_kind\": \"widen_source_families\",\n      \"mutation_source\": \"market_evolve_metric_heuristic\",\n      \"name\": \"rosewood_research_policy_v1__widen_source_families\",\n      \"next_action\": \"collect_candidate_experiment_evidence\",\n      \"population_gate\": {\n        \"allowed\": true,\n        \"candidate_diversity_signature\": \"a780915307b2\",\n        \"max_open_experiments_per_parent\": 4,\n        \"max_open_same_signature_per_parent\": 1,\n        \"open_experiment_count\": 1,\n        \"open_same_signature_count\": 0,\n        \"reason\": \"allowed\",\n        \"schema_version\": \"market_evolve_population_gate_v1\"\n      },\n      \"program_id\": \"mprog_96570525068fa415\",\n      \"proof_gate_summary\": {\n        \"evaluated\": 0,\n        \"not_observed\": 0,\n        \"passed\": 0,\n        \"triggered\": 0,\n        \"triggered_metrics\": []\n      },\n      \"score\": 0.0,\n      \"source_candidate_rank\": 1,\n      \"status\": \"candidate\"\n    }\n  ],\n  \"global_shape\": {\n    \"avg_fragility\": 0.1325,\n    \"avg_frontier_pressure\": 0.4571,\n    \"avg_source_independence\": 0.3375,\n    \"avg_trade_scream_score\": 0.4462,\n    \"avg_verifier_readiness\": 0.6643,\n    \"cell_count\": 80,\n    \"route_directive_counts\": {\n      \"observe\": 18,\n      \"verify_now\": 2,\n      \"widen_scouts\": 60\n    }\n  },\n  \"market_evolve_metrics\": {\n    \"avg_fragility\": 0.1325,\n    \"avg_source_independence\": 0.3375,\n    \"fragile_verify_rate\": 0.0,\n    \"geometry_cell_count\": 80.0,\n    \"geometry_observe_rate\": 0.225,\n    \"geometry_route_action_rate\": 0.775,\n    \"geometry_route_entropy\": 0.5858,\n    \"geometry_verify_now_rate\": 0.025,\n    \"high_signal_observe_rate\": 0.0875,\n    \"route_contract_failure_rate\": 0.0,\n    \"route_contract_success_rate\": 0.0\n  },\n  \"routing_queue\": [\n    {\n      \"action\": \"send_to_verifier_council\",\n      \"cell_key\": \"XPL|1q|polymarket|\",\n      \"entity\": \"XPL\",\n      \"global_shape_summary\": {\n        \"avg_trade_scream_score\": 0.4462,\n        \"avg_verifier_readiness\": 0.6643,\n        \"cell_count\": 80,\n        \"route_directive_counts\": {\n          \"observe\": 18,\n          \"verify_now\": 2,\n          \"widen_scouts\": 60\n        }\n      },\n      \"horizon\": \"1q\",\n      \"lens\": \"polymarket\",\n      \"map_update_rule\": \"Attach verifier votes and independent source receipts to the source cell, then recompute readiness and fragility.\",\n      \"missing_edges\": [\n        \"claim -> verifier_decision\",\n        \"frontier_cell -> next_receptive_field\"\n      ],\n      \"must_call_first\": \"tic://tool/talis_native/plan_alpha_geometry_actions@v1\",\n      \"owner\": \"verifier\",\n      \"priority_score\": 0.5527,\n      \"rank\": 1,\n      \"reason\": \"The geometry is both high-signal and verifier-ready.\",\n      \"route_directive\": \"verify_now\",\n      \"route_task_id\": \"shape_task_a5f778dcd766\",\n      \"seed_slice\": {\n        \"bias_mode\": \"verify\",\n        \"entity\": \"XPL\",\n        \"horizon\": \"1q\",\n        \"lens\": \"polymarket\",\n        \"payload\": {\n          \"alpha_geometry_cell_key\": \"XPL|1q|polymarket|\",\n          \"alpha_geometry_missing_edges\": [\n            \"claim -> verifier_decision\",\n            \"frontier_cell -> next_receptive_field\"\n          ],\n          \"alpha_geometry_route_directive\": \"verify_now\",\n          \"alpha_geometry_route_task_id\": \"shape_task_a5f778dcd766\",\n          \"alpha_geometry_success_gate\": \"2_of_3 verifier majority with independent source receipts\"\n        },\n        \"route_task_id\": \"shape_task_a5f778dcd766\",\n        \"source\": \"alpha_geometry_route\",\n        \"theme\": \"alpha_geometry_verify_now\"\n      },\n      \"stop_condition\": \"Stop when verifier majority passes/fails or source receipts remain insufficient.\",\n      \"success_gate\": \"2_of_3 verifier majority with independent source receipts\",\n      \"theme\": \"\",\n      \"tool_sequence\": [\n        \"tic://tool/builtin/query_source_health@v1\",\n        \"tic://tool/builtin/query_timeseries@v1\"\n      ]\n    },\n    {\n      \"action\": \"send_to_verifier_council\",\n      \"cell_key\": \"DYDX|1w|sentiment|calendar_catalyst\",\n      \"entity\": \"DYDX\",\n      \"global_shape_summary\": {\n        \"avg_trade_scream_score\": 0.4462,\n        \"avg_verifier_readiness\": 0.6643,\n        \"cell_count\": 80,\n        \"route_directive_counts\": {\n          \"observe\": 18,\n          \"verify_now\": 2,\n          \"widen_scouts\": 60\n        }\n      },\n      \"horizon\": \"1w\",\n      \"lens\": \"sentiment\",\n      \"map_update_rule\": \"Attach verifier votes and independent source receipts to the source cell, then recompute readiness and fragility.\",\n      \"missing_edges\": [\n        \"claim -> verifier_decision\",\n        \"frontier_cell -> next_receptive_field\"\n      ],\n      \"must_call_first\": \"tic://tool/talis_native/plan_alpha_geometry_actions@v1\",\n      \"owner\": \"verifier\",\n      \"priority_score\": 0.5487,\n      \"rank\": 2,\n      \"reason\": \"The geometry is both high-signal and verifier-ready.\",\n      \"route_directive\": \"verify_now\",\n      \"route_task_id\": \"shape_task_9ebaad0ceee4\",\n      \"seed_slice\": {\n        \"bias_mode\": \"verify\",\n        \"entity\": \"DYDX\",\n        \"horizon\": \"1w\",\n        \"lens\": \"sentiment\",\n        \"payload\": {\n          \"alpha_geometry_cell_key\": \"DYDX|1w|sentiment|calendar_catalyst\",\n          \"alpha_geometry_missing_edges\": [\n            \"claim -> verifier_decision\",\n            \"frontier_cell -> next_receptive_field\"\n          ],\n          \"alpha_geometry_route_directive\": \"verify_now\",\n          \"alpha_geometry_route_task_id\": \"shape_task_9ebaad0ceee4\",\n          \"alpha_geometry_success_gate\": \"2_of_3 verifier majority with independent source receipts\"\n        },\n        \"route_task_id\": \"shape_task_9ebaad0ceee4\",\n        \"source\": \"alpha_geometry_route\",\n        \"theme\": \"calendar_catalyst\"\n      },\n      \"stop_condition\": \"Stop when verifier majority passes/fails or source receipts remain insufficient.\",\n      \"success_gate\": \"2_of_3 verifier majority with independent source receipts\",\n      \"theme\": \"calendar_catalyst\",\n      \"tool_sequence\": [\n        \"tic://tool/builtin/query_source_health@v1\",\n        \"tic://tool/builtin/query_timeseries@v1\"\n      ]\n    },\n    {\n      \"action\": \"replicate_with_independent_scouts\",\n      \"cell_key\": \"GRIFFAIN|1m|sentiment|\",\n      \"entity\": \"GRIFFAIN\",\n      \"global_shape_summary\": {\n        \"avg_trade_scream_score\": 0.4462,\n        \"avg_verifier_readiness\": 0.6643,\n        \"cell_count\": 80,\n        \"route_directive_counts\": {\n          \"observe\": 18,\n          \"verify_now\": 2,\n          \"widen_scouts\": 60\n        }\n      },\n      \"horizon\": \"1m\",\n      \"lens\": \"sentiment\",\n      \"map_update_rule\": \"Persist the independent scout string as a replication edge, then recompute support mass and novelty.\",\n      \"missing_edges\": [\n        \"frontier_cell -> next_receptive_field\",\n        \"single_scout_cell -> independent_replication\"\n      ],\n      \"must_call_first\": \"tic://tool/talis_native/plan_alpha_geometry_actions@v1\",\n      \"owner\": \"seed_router\",\n      \"priority_score\": 0.5318,\n      \"rank\": 3,\n      \"reason\": \"The cell is novel but still needs independent scout replication.\",\n      \"route_directive\": \"widen_scouts\",\n      \"route_task_id\": \"shape_task_1cd6ecd483be\",\n      \"seed_slice\": {\n        \"bias_mode\": \"frontier\",\n        \"entity\": \"GRIFFAIN\",\n        \"horizon\": \"1m\",\n        \"lens\": \"sentiment\",\n        \"payload\": {\n          \"alpha_geometry_cell_key\": \"GRIFFAIN|1m|sentiment|\",\n          \"alpha_geometry_missing_edges\": [\n            \"frontier_cell -> next_receptive_field\",\n            \"single_scout_cell -> independent_replication\"\n          ],\n          \"alpha_geometry_route_directive\": \"widen_scouts\",\n          \"alpha_geometry_route_task_id\": \"shape_task_1cd6ecd483be\",\n          \"alpha_geometry_success_gate\": \"second scout confirms, contradicts, or kills the string\"\n        },\n        \"route_task_id\": \"shape_task_1cd6ecd483be\",\n        \"source\": \"alpha_geometry_route\",\n        \"theme\": \"alpha_geometry_widen_scouts\"\n      },\n      \"stop_condition\": \"Stop when an independent scout confirms, contradicts, or kills the original cell.\",\n      \"success_gate\": \"second scout confirms, contradicts, or kills the string\",\n      \"theme\": \"\",\n      \"tool_sequence\": [\n        \"tic://tool/builtin/query_events_recent@v1\",\n        \"tic://tool/builtin/query_timeseries@v1\"\n      ]\n    },\n    {\n      \"action\": \"replicate_with_independent_scouts\",\n      \"cell_key\": \"ARB|1d|polymarket|\",\n      \"entity\": \"ARB\",\n      \"global_shape_summary\": {\n        \"avg_trade_scream_score\": 0.4462,\n        \"avg_verifier_readiness\": 0.6643,\n        \"cell_count\": 80,\n        \"route_directive_counts\": {\n          \"observe\": 18,\n          \"verify_now\": 2,\n          \"widen_scouts\": 60\n        }\n      },\n      \"horizon\": \"1d\",\n      \"lens\": \"polymarket\",\n      \"map_update_rule\": \"Persist the independent scout string as a replication edge, then recompute support mass and novelty.\",\n      \"missing_edges\": [\n        \"frontier_cell -> next_receptive_field\",\n        \"single_scout_cell -> independent_replication\"\n      ],\n      \"must_call_first\": \"tic://tool/talis_native/plan_alpha_geometry_actions@v1\",\n      \"owner\": \"seed_router\",\n      \"priority_score\": 0.5292,\n      \"rank\": 4,\n      \"reason\": \"The cell is novel but still needs independent scout replication.\",\n      \"route_directive\": \"widen_scouts\",\n      \"route_task_id\": \"shape_task_99ac0b62888e\",\n      \"seed_slice\": {\n        \"bias_mode\": \"frontier\",\n        \"entity\": \"ARB\",\n        \"horizon\": \"1d\",\n        \"lens\": \"polymarket\",\n        \"payload\": {\n          \"alpha_geometry_cell_key\": \"ARB|1d|polymarket|\",\n          \"alpha_geometry_missing_edges\": [\n            \"frontier_cell -> next_receptive_field\",\n            \"single_scout_cell -> independent_replication\"\n          ],\n          \"alpha_geometry_route_directive\": \"widen_scouts\",\n          \"alpha_geometry_route_task_id\": \"shape_task_99ac0b62888e\",\n          \"alpha_geometry_success_gate\": \"second scout confirms, contradicts, or kills the string\"\n        },\n        \"route_task_id\": \"shape_task_99ac0b62888e\",\n        \"source\": \"alpha_geometry_route\",\n        \"theme\": \"alpha_geometry_widen_scouts\"\n      },\n      \"stop_condition\": \"Stop when an independent scout confirms, contradicts, or kills the original cell.\",\n      \"success_gate\": \"second scout confirms, contradicts, or kills the string\",\n      \"theme\": \"\",\n      \"tool_sequence\": [\n        \"tic://tool/builtin/query_events_recent@v1\",\n        \"tic://tool/builtin/query_timeseries@v1\"\n      ]\n    },\n    {\n      \"action\": \"replicate_with_independent_scouts\",\n      \"cell_key\": \"NEAR|1m|sentiment|\",\n      \"entity\": \"NEAR\",\n      \"global_shape_summary\": {\n        \"avg_trade_scream_score\": 0.4462,\n        \"avg_verifier_readiness\": 0.6643,\n        \"cell_count\": 80,\n        \"route_directive_counts\": {\n          \"observe\": 18,\n          \"verify_now\": 2,\n          \"widen_scouts\": 60\n        }\n      },\n      \"horizon\": \"1m\",\n      \"lens\": \"sentiment\",\n      \"map_update_rule\": \"Persist the independent scout string as a replication edge, then recompute support mass and novelty.\",\n      \"missing_edges\": [\n        \"frontier_cell -> next_receptive_field\",\n        \"single_scout_cell -> independent_replication\"\n      ],\n      \"must_call_first\": \"tic://tool/talis_native/plan_alpha_geometry_actions@v1\",\n      \"owner\": \"seed_router\",\n      \"priority_score\": 0.5164,\n      \"rank\": 5,\n      \"reason\": \"The cell is novel but still needs independent scout replication.\",\n      \"route_directive\": \"widen_scouts\",\n      \"route_task_id\": \"shape_task_063200409e84\",\n      \"seed_slice\": {\n        \"bias_mode\": \"frontier\",\n        \"entity\": \"NEAR\",\n        \"horizon\": \"1m\",\n        \"lens\": \"sentiment\",\n        \"payload\": {\n          \"alpha_geometry_cell_key\": \"NEAR|1m|sentiment|\",\n          \"alpha_geometry_missing_edges\": [\n            \"frontier_cell -> next_receptive_field\",\n            \"single_scout_cell -> independent_replication\"\n          ],\n          \"alpha_geometry_route_directive\": \"widen_scouts\",\n          \"alpha_geometry_route_task_id\": \"shape_task_063200409e84\",\n          \"alpha_geometry_success_gate\": \"second scout confirms, contradicts, or kills the string\"\n        },\n        \"route_task_id\": \"shape_task_063200409e84\",\n        \"source\": \"alpha_geometry_route\",\n        \"theme\": \"alpha_geometry_widen_scouts\"\n      },\n      \"stop_condition\": \"Stop when an independent scout confirms, contradicts, or kills the original cell.\",\n      \"success_gate\": \"second scout confirms, contradicts, or kills the string\",\n      \"theme\": \"\",\n      \"tool_sequence\": [\n        \"tic://tool/builtin/query_events_recent@v1\",\n        \"tic://tool/builtin/query_timeseries@v1\"\n      ]\n    },\n    {\n      \"action\": \"replicate_with_independent_scouts\",\n      \"cell_key\": \"CRM|1d|polymarket|\",\n      \"entity\": \"CRM\",\n      \"global_shape_summary\": {\n        \"avg_trade_scream_score\": 0.4462,\n        \"avg_verifier_readiness\": 0.6643,\n        \"cell_count\": 80,\n        \"route_directive_counts\": {\n          \"observe\": 18,\n          \"verify_now\": 2,\n          \"widen_scouts\": 60\n        }\n      },\n      \"horizon\": \"1d\",\n      \"lens\": \"polymarket\",\n      \"map_update_rule\": \"Persist the independent scout string as a replication edge, then recompute support mass and novelty.\",\n      \"missing_edges\": [\n        \"frontier_cell -> next_receptive_field\",\n        \"single_scout_cell -> independent_replication\"\n      ],\n      \"must_call_first\": \"tic://tool/talis_native/plan_alpha_geometry_actions@v1\",\n      \"owner\": \"seed_router\",\n      \"priority_score\": 0.5115,\n      \"rank\": 6,\n      \"reason\": \"The cell is novel but still needs independent scout replication.\",\n      \"route_directive\": \"widen_scouts\",\n      \"route_task_id\": \"shape_task_9c2143c3e8e4\",\n      \"seed_slice\": {\n        \"bias_mode\": \"frontier\",\n        \"entity\": \"CRM\",\n        \"horizon\": \"1d\",\n        \"lens\": \"polymarket\",\n        \"payload\": {\n          \"alpha_geometry_cell_key\": \"CRM|1d|polymarket|\",\n          \"alpha_geometry_missing_edges\": [\n            \"frontier_cell -> next_receptive_field\",\n            \"single_scout_cell -> independent_replication\"\n          ],\n          \"alpha_geometry_route_directive\": \"widen_scouts\",\n          \"alpha_geometry_route_task_id\": \"shape_task_9c2143c3e8e4\",\n          \"alpha_geometry_success_gate\": \"second scout confirms, contradicts, or kills the string\"\n        },\n        \"route_task_id\": \"shape_task_9c2143c3e8e4\",\n        \"source\": \"alpha_geometry_route\",\n        \"theme\": \"alpha_geometry_widen_scouts\"\n      },\n      \"stop_condition\": \"Stop when an independent scout confirms, contradicts, or kills the original cell.\",\n      \"success_gate\": \"second scout confirms, contradicts, or kills the string\",\n      \"theme\": \"\",\n      \"tool_sequence\": [\n        \"tic://tool/builtin/query_events_recent@v1\",\n        \"tic://tool/builtin/query_timeseries@v1\"\n      ]\n    }\n  ],\n  \"top_actions\": [\n    {\n      \"action\": \"send_to_verifier_council\",\n      \"cell_key\": \"XPL|1q|polymarket|\",\n      \"coordinates\": {\n        \"color_fragility\": 0.0,\n        \"size_support_mass\": 0.7002,\n        \"x_source_independence\": 1.0,\n        \"y_frontier_pressure\": 0.7139,\n        \"z_tension\": 0.28\n      },\n      \"entity\": \"XPL\",\n      \"horizon\": \"1q\",\n      \"lens\": \"polymarket\",\n      \"metrics\": {\n        \"avg_attention\": 0.6776,\n        \"avg_conviction\": 0.5835,\n        \"avg_crowdedness\": 0.2975,\n        \"avg_novelty\": 0.7155,\n        \"contradiction_density\": 0.0,\n        \"evidence_coverage\": 1.0,\n        \"fragility\": 0.0,\n        \"frontier_pressure\": 0.7139,\n        \"geometry_weight_fragility_penalty\": 0.18,\n        \"geometry_weight_frontier_pressure\": 0.38,\n        \"geometry_weight_source_independence\": 0.0,\n        \"geometry_weight_support_mass\": 0.14,\n        \"geometry_weight_tension\": 0.24,\n        \"geometry_weight_verifier_readiness\": 0.24,\n        \"novelty_pressure\": 0.6283,\n        \"routing_threshold_repair_fragility_min\": 0.55,\n        \"routing_threshold_tension_min\": 0.45,\n        \"routing_threshold_tension_readiness_min\": 0.45,\n        \"routing_threshold_verify_allow_fragility_max\": 1.0,\n        \"routing_threshold_verify_readiness_min\": 0.55,\n        \"routing_threshold_verify_source_independence_min\": 0.0,\n        \"routing_threshold_verify_trade_scream_min\": 0.62,\n        \"routing_threshold_widen_scouts_novelty_min\": 0.35,\n        \"routing_threshold_widen_sources_frontier_min\": 0.5,\n        \"routing_threshold_widen_sources_source_max\": 0.45,\n        \"scout_independence\": 0.5,\n        \"source_entropy\": 1.0,\n        \"source_independence\": 1.0,\n        \"support_mass\": 0.7002,\n        \"tension\": 0.28,\n        \"trade_scream_score\": 0.6381,\n        \"verifier_readiness\": 0.8401\n      },\n      \"missing_edges\": [\n        \"claim -> verifier_decision\",\n        \"frontier_cell -> next_receptive_field\"\n      ],\n      \"owner\": \"verifier\",\n      \"priority_score\": 0.5527,\n      \"quality_flags\": [\n        \"frontier_trade_candidate\"\n      ],\n      \"reason\": \"The geometry is both high-signal and verifier-ready.\",\n      \"route_directive\": \"verify_now\",\n      \"route_task_id\": \"shape_task_a5f778dcd766\",\n      \"success_gate\": \"2_of_3 verifier majority with independent source receipts\",\n      \"suggested_next_tools\": [\n        \"tic://tool/builtin/query_source_health@v1\",\n        \"tic://tool/builtin/query_timeseries@v1\"\n      ],\n      \"theme\": \"\"\n    },\n    {\n      \"action\": \"send_to_verifier_council\",\n      \"cell_key\": \"DYDX|1w|sentiment|calendar_catalyst\",\n      \"coordinates\": {\n        \"color_fragility\": 0.0,\n        \"size_support_mass\": 0.6888,\n        \"x_source_independence\": 1.0,\n        \"y_frontier_pressure\": 0.7059,\n        \"z_tension\": 0.28\n      },\n      \"entity\": \"DYDX\",\n      \"horizon\": \"1w\",\n      \"lens\": \"sentiment\",\n      \"metrics\": {\n        \"avg_attention\": 0.666,\n        \"avg_conviction\": 0.5663,\n        \"avg_crowdedness\": 0.3025,\n        \"avg_novelty\": 0.705,\n        \"contradiction_density\": 0.0,\n        \"evidence_coverage\": 1.0,\n        \"fragility\": 0.0,\n        \"frontier_pressure\": 0.7059,\n        \"geometry_weight_fragility_penalty\": 0.18,\n        \"geometry_weight_frontier_pressure\": 0.38,\n        \"geometry_weight_source_independence\": 0.0,\n        \"geometry_weight_support_mass\": 0.14,\n        \"geometry_weight_tension\": 0.24,\n        \"geometry_weight_verifier_readiness\": 0.24,\n        \"novelty_pressure\": 0.6147,\n        \"routing_threshold_repair_fragility_min\": 0.55,\n        \"routing_threshold_tension_min\": 0.45,\n        \"routing_threshold_tension_readiness_min\": 0.45,\n        \"routing_threshold_verify_allow_fragility_max\": 1.0,\n        \"routing_threshold_verify_readiness_min\": 0.55,\n        \"routing_threshold_verify_source_independence_min\": 0.0,\n        \"routing_threshold_verify_trade_scream_min\": 0.62,\n        \"routing_threshold_widen_scouts_novelty_min\": 0.35,\n        \"routing_threshold_widen_sources_frontier_min\": 0.5,\n        \"routing_threshold_widen_sources_source_max\": 0.45,\n        \"scout_independence\": 0.5,\n        \"source_entropy\": 1.0,\n        \"source_independence\": 1.0,\n        \"support_mass\": 0.6888,\n        \"tension\": 0.28,\n        \"trade_scream_score\": 0.6327,\n        \"verifier_readiness\": 0.8366\n      },\n      \"missing_edges\": [\n        \"claim -> verifier_decision\",\n        \"frontier_cell -> next_receptive_field\"\n      ],\n      \"owner\": \"verifier\",\n      \"priority_score\": 0.5487,\n      \"quality_flags\": [\n        \"frontier_trade_candidate\"\n      ],\n      \"reason\": \"The geometry is both high-signal and verifier-ready.\",\n      \"route_directive\": \"verify_now\",\n      \"route_task_id\": \"shape_task_9ebaad0ceee4\",\n      \"success_gate\": \"2_of_3 verifier majority with independent source receipts\",\n      \"suggested_next_tools\": [\n        \"tic://tool/builtin/query_source_health@v1\",\n        \"tic://tool/builtin/query_timeseries@v1\"\n      ],\n      \"theme\": \"calendar_catalyst\"\n    },\n    {\n      \"action\": \"replicate_with_independent_scouts\",\n      \"cell_key\": \"GRIFFAIN|1m|sentiment|\",\n      \"coordinates\": {\n        \"color_fragility\": 0.0,\n        \"size_support_mass\": 0.6899,\n        \"x_source_independence\": 1.0,\n        \"y_frontier_pressure\": 0.6825,\n        \"z_tension\": 0.28\n      },\n      \"entity\": \"GRIFFAIN\",\n      \"horizon\": \"1m\",\n      \"lens\": \"sentiment\",\n      \"metrics\": {\n        \"avg_attention\": 0.6697,\n        \"avg_conviction\": 0.561,\n        \"avg_crowdedness\": 0.2825,\n        \"avg_novelty\": 0.7155,\n        \"contradiction_density\": 0.0,\n        \"evidence_coverage\": 1.0,\n        \"fragility\": 0.0,\n        \"frontier_pressure\": 0.6825,\n        \"geometry_weight_fragility_penalty\": 0.18,\n        \"geometry_weight_frontier_pressure\": 0.38,\n        \"geometry_weight_source_independence\": 0.0,\n        \"geometry_weight_support_mass\": 0.14,\n        \"geometry_weight_tension\": 0.24,\n        \"geometry_weight_verifier_readiness\": 0.24,\n        \"novelty_pressure\": 0.6417,\n        \"routing_threshold_repair_fragility_min\": 0.55,\n        \"routing_threshold_tension_min\": 0.45,\n        \"routing_threshold_tension_readiness_min\": 0.45,\n        \"routing_threshold_verify_allow_fragility_max\": 1.0,\n        \"routing_threshold_verify_readiness_min\": 0.55,\n        \"routing_threshold_verify_source_independence_min\": 0.0,\n        \"routing_threshold_verify_trade_scream_min\": 0.62,\n        \"routing_threshold_widen_scouts_novelty_min\": 0.35,\n        \"routing_threshold_widen_sources_frontier_min\": 0.5,\n        \"routing_threshold_widen_sources_source_max\": 0.45,\n        \"scout_independence\": 0.25,\n        \"source_entropy\": 1.0,\n        \"source_independence\": 1.0,\n        \"support_mass\": 0.6899,\n        \"tension\": 0.28,\n        \"trade_scream_score\": 0.6156,\n        \"verifier_readiness\": 0.802\n      },\n      \"missing_edges\": [\n        \"frontier_cell -> next_receptive_field\",\n        \"single_scout_cell -> independent_replication\"\n      ],\n      \"owner\": \"seed_router\",\n      \"priority_score\": 0.5318,\n      \"quality_flags\": [\n        \"multi_string_single_scout_cell\",\n        \"single_scout_cell\"\n      ],\n      \"reason\": \"The cell is novel but still needs independent scout replication.\",\n      \"route_directive\": \"widen_scouts\",\n      \"route_task_id\": \"shape_task_1cd6ecd483be\",\n      \"success_gate\": \"second scout confirms, contradicts, or kills the string\",\n      \"suggested_next_tools\": [\n        \"tic://tool/builtin/query_events_recent@v1\",\n        \"tic://tool/builtin/query_timeseries@v1\"\n      ],\n      \"theme\": \"\"\n    },\n    {\n      \"action\": \"replicate_with_independent_scouts\",\n      \"cell_key\": \"ARB|1d|polymarket|\",\n      \"coordinates\": {\n        \"color_fragility\": 0.0,\n        \"size_support_mass\": 0.6918,\n        \"x_source_independence\": 1.0,\n        \"y_frontier_pressure\": 0.6734,\n        \"z_tension\": 0.28\n      },\n      \"entity\": \"ARB\",\n      \"horizon\": \"1d\",\n      \"lens\": \"polymarket\",\n      \"metrics\": {\n        \"avg_attention\": 0.6689,\n        \"avg_conviction\": 0.5713,\n        \"avg_crowdedness\": 0.2975,\n        \"avg_novelty\": 0.705,\n        \"contradiction_density\": 0.0,\n        \"evidence_coverage\": 1.0,\n        \"fragility\": 0.0,\n        \"frontier_pressure\": 0.6734,\n        \"geometry_weight_fragility_penalty\": 0.18,\n        \"geometry_weight_frontier_pressure\": 0.38,\n        \"geometry_weight_source_independence\": 0.0,\n        \"geometry_weight_support_mass\": 0.14,\n        \"geometry_weight_tension\": 0.24,\n        \"geometry_weight_verifier_readiness\": 0.24,\n        \"novelty_pressure\": 0.6191,\n        \"routing_threshold_repair_fragility_min\": 0.55,\n        \"routing_threshold_tension_min\": 0.45,\n        \"routing_threshold_tension_readiness_min\": 0.45,\n        \"routing_threshold_verify_allow_fragility_max\": 1.0,\n        \"routing_threshold_verify_readiness_min\": 0.55,\n        \"routing_threshold_verify_source_independence_min\": 0.0,\n        \"routing_threshold_verify_trade_scream_min\": 0.62,\n        \"routing_threshold_widen_scouts_novelty_min\": 0.35,\n        \"routing_threshold_widen_sources_frontier_min\": 0.5,\n        \"routing_threshold_widen_sources_source_max\": 0.45,\n        \"scout_independence\": 0.25,\n        \"source_entropy\": 1.0,\n        \"source_independence\": 1.0,\n        \"support_mass\": 0.6918,\n        \"tension\": 0.28,\n        \"trade_scream_score\": 0.6126,\n        \"verifier_readiness\": 0.8026\n      },\n      \"missing_edges\": [\n        \"frontier_cell -> next_receptive_field\",\n        \"single_scout_cell -> independent_replication\"\n      ],\n      \"owner\": \"seed_router\",\n      \"priority_score\": 0.5292,\n      \"quality_flags\": [\n        \"multi_string_single_scout_cell\",\n        \"single_scout_cell\"\n      ],\n      \"reason\": \"The cell is novel but still needs independent scout replication.\",\n      \"route_directive\": \"widen_scouts\",\n      \"route_task_id\": \"shape_task_99ac0b62888e\",\n      \"success_gate\": \"second scout confirms, contradicts, or kills the string\",\n      \"suggested_next_tools\": [\n        \"tic://tool/builtin/query_events_recent@v1\",\n        \"tic://tool/builtin/query_timeseries@v1\"\n      ],\n      \"theme\": \"\"\n    },\n    {\n      \"action\": \"replicate_with_independent_scouts\",\n      \"cell_key\": \"NEAR|1m|sentiment|\",\n      \"coordinates\": {\n        \"color_fragility\": 0.0,\n        \"size_support_mass\": 0.661,\n        \"x_source_independence\": 1.0,\n        \"y_frontier_pressure\": 0.6489,\n        \"z_tension\": 0.2749\n      },\n      \"entity\": \"NEAR\",\n      \"horizon\": \"1m\",\n      \"lens\": \"sentiment\",\n      \"metrics\": {\n        \"avg_attention\": 0.6356,\n        \"avg_conviction\": 0.5287,\n        \"avg_crowdedness\": 0.3025,\n        \"avg_novelty\": 0.66,\n        \"contradiction_density\": 0.0,\n        \"evidence_coverage\": 1.0,\n        \"fragility\": 0.0,\n        \"frontier_pressure\": 0.6489,\n        \"geometry_weight_fragility_penalty\": 0.18,\n        \"geometry_weight_frontier_pressure\": 0.38,\n        \"geometry_weight_source_independence\": 0.0,\n        \"geometry_weight_support_mass\": 0.14,\n        \"geometry_weight_tension\": 0.24,\n        \"geometry_weight_verifier_readiness\": 0.24,\n        \"novelty_pressure\": 0.5754,\n        \"routing_threshold_repair_fragility_min\": 0.55,\n        \"routing_threshold_tension_min\": 0.45,\n        \"routing_threshold_tension_readiness_min\": 0.45,\n        \"routing_threshold_verify_allow_fragility_max\": 1.0,\n        \"routing_threshold_verify_readiness_min\": 0.55,\n        \"routing_threshold_verify_source_independence_min\": 0.0,\n        \"routing_threshold_verify_trade_scream_min\": 0.62,\n        \"routing_threshold_widen_scouts_novelty_min\": 0.35,\n        \"routing_threshold_widen_sources_frontier_min\": 0.5,\n        \"routing_threshold_widen_sources_source_max\": 0.45,\n        \"scout_independence\": 0.25,\n        \"source_entropy\": 1.0,\n        \"source_independence\": 1.0,\n        \"support_mass\": 0.661,\n        \"tension\": 0.2749,\n        \"trade_scream_score\": 0.5955,\n        \"verifier_readiness\": 0.7933\n      },\n      \"missing_edges\": [\n        \"frontier_cell -> next_receptive_field\",\n        \"single_scout_cell -> independent_replication\"\n      ],\n      \"owner\": \"seed_router\",\n      \"priority_score\": 0.5164,\n      \"quality_flags\": [\n        \"multi_string_single_scout_cell\",\n        \"single_scout_cell\"\n      ],\n      \"reason\": \"The cell is novel but still needs independent scout replication.\",\n      \"route_directive\": \"widen_scouts\",\n      \"route_task_id\": \"shape_task_063200409e84\",\n      \"success_gate\": \"second scout confirms, contradicts, or kills the string\",\n      \"suggested_next_tools\": [\n        \"tic://tool/builtin/query_events_recent@v1\",\n        \"tic://tool/builtin/query_timeseries@v1\"\n      ],\n      \"theme\": \"\"\n    },\n    {\n      \"action\": \"replicate_with_independent_scouts\",\n      \"cell_key\": \"CRM|1d|polymarket|\",\n      \"coordinates\": {\n        \"color_fragility\": 0.0,\n        \"size_support_mass\": 0.6782,\n        \"x_source_independence\": 1.0,\n        \"y_frontier_pressure\": 0.6219,\n        \"z_tension\": 0.28\n      },\n      \"entity\": \"CRM\",\n      \"horizon\": \"1d\",\n      \"lens\": \"polymarket\",\n      \"metrics\": {\n        \"avg_attention\": 0.6488,\n        \"avg_conviction\": 0.5663,\n        \"avg_crowdedness\": 0.4375,\n        \"avg_novelty\": 0.7155,\n        \"contradiction_density\": 0.0,\n        \"evidence_coverage\": 1.0,\n        \"fragility\": 0.0,\n        \"frontier_pressure\": 0.6219,\n        \"geometry_weight_fragility_penalty\": 0.18,\n        \"geometry_weight_frontier_pressure\": 0.38,\n        \"geometry_weight_source_independence\": 0.0,\n        \"geometry_weight_support_mass\": 0.14,\n        \"geometry_weight_tension\": 0.24,\n        \"geometry_weight_verifier_readiness\": 0.24,\n        \"novelty_pressure\": 0.5031,\n        \"routing_threshold_repair_fragility_min\": 0.55,\n        \"routing_threshold_tension_min\": 0.45,\n        \"routing_threshold_tension_readiness_min\": 0.45,\n        \"routing_threshold_verify_allow_fragility_max\": 1.0,\n        \"routing_threshold_verify_readiness_min\": 0.55,\n        \"routing_threshold_verify_source_independence_min\": 0.0,\n        \"routing_threshold_verify_trade_scream_min\": 0.62,\n        \"routing_threshold_widen_scouts_novelty_min\": 0.35,\n        \"routing_threshold_widen_sources_frontier_min\": 0.5,\n        \"routing_threshold_widen_sources_source_max\": 0.45,\n        \"scout_independence\": 0.25,\n        \"source_entropy\": 1.0,\n        \"source_independence\": 1.0,\n        \"support_mass\": 0.6782,\n        \"tension\": 0.28,\n        \"trade_scream_score\": 0.5901,\n        \"verifier_readiness\": 0.7985\n      },\n      \"missing_edges\": [\n        \"frontier_cell -> next_receptive_field\",\n        \"single_scout_cell -> independent_replication\"\n      ],\n      \"owner\": \"seed_router\",\n      \"priority_score\": 0.5115,\n      \"quality_flags\": [\n        \"multi_string_single_scout_cell\",\n        \"single_scout_cell\"\n      ],\n      \"reason\": \"The cell is novel but still needs independent scout replication.\",\n      \"route_directive\": \"widen_scouts\",\n      \"route_task_id\": \"shape_task_9c2143c3e8e4\",\n      \"success_gate\": \"second scout confirms, contradicts, or kills the string\",\n      \"suggested_next_tools\": [\n        \"tic://tool/builtin/query_events_recent@v1\",\n        \"tic://tool/builtin/query_timeseries@v1\"\n      ],\n      \"theme\": \"\"\n    }\n  ],\n  \"work_orders\": [\n    {\n      \"action\": \"send_to_verifier_council\",\n      \"cell_key\": \"XPL|1q|polymarket|\",\n      \"cycle_id\": \"cycle_readiness_market_evolve2_20260522\",\n      \"map_update_rule\": \"Attach verifier votes and independent source receipts to the source cell, then recompute readiness and fragility.\",\n      \"must_call_first\": \"tic://tool/talis_native/plan_alpha_geometry_actions@v1\",\n      \"order_id\": \"gcx_execute_shape_task_a5f778dcd766\",\n      \"owner\": \"verifier\",\n      \"route_task_id\": \"shape_task_a5f778dcd766\",\n      \"success_gate\": \"2_of_3 verifier majority with independent source receipts\",\n      \"tool_sequence\": [\n        \"tic://tool/builtin/query_source_health@v1\",\n        \"tic://tool/builtin/query_timeseries@v1\"\n      ]\n    },\n    {\n      \"action\": \"spawn_matched_policy_experiment\",\n      \"candidate_policy_patch\": {\n        \"routing_thresholds\": {\n          \"repair_fragility_min\": 0.55,\n          \"tension_min\": 0.45,\n          \"tension_readiness_min\": 0.45,\n          \"verify_allow_fragility_max\": 1.0,\n          \"verify_readiness_min\": 0.55,\n          \"verify_source_independence_min\": 0.0,\n          \"verify_trade_scream_min\": 0.62,\n          \"widen_scouts_novelty_min\": 0.35,\n          \"widen_sources_frontier_min\": 0.5,\n          \"widen_sources_source_max\": 0.58\n        },\n        \"tool_request_policy\": {\n          \"prefer_missing_source_family\": true\n        }\n      },\n      \"cycle_id\": \"cycle_readiness_market_evolve2_20260522\",\n      \"diagnostic_codes\": [\n        \"frontier_without_source_breadth\"\n      ],\n      \"map_update_rule\": \"Promote only through MarketEvolve experiment results, then recompute geometry with the active genome.\",\n      \"order_id\": \"gcx_propose_geometry_policy_mutation\",\n      \"owner\": \"market_evolve\",\n      \"success_gate\": \"candidate beats active policy on target metrics and passes falsification gates\"\n    },\n    {\n      \"action\": \"mutate_active_policy\",\n      \"mutation_kind\": null,\n      \"order_id\": \"gcx_evolution_frontier_followup\",\n      \"owner\": \"market_evolve\",\n      \"program_id\": \"mprog_305b736b8ad24821\",\n      \"success_gate\": \"frontier action either produces matched evidence or an explicit rejected proof packet\"\n    }\n  ]\n}"
+  },
+  "next_route_task": {
+    "action": "send_to_verifier_council",
+    "cell_key": "XPL|1q|polymarket|",
+    "entity": "XPL",
+    "global_shape_summary": {
+      "avg_trade_scream_score": 0.4462,
+      "avg_verifier_readiness": 0.6643,
+      "cell_count": 80,
+      "route_directive_counts": {
+        "observe": 18,
+        "verify_now": 2,
+        "widen_scouts": 60
+      }
+    },
+    "horizon": "1q",
+    "lens": "polymarket",
+    "map_update_rule": "Attach verifier votes and independent source receipts to the source cell, then recompute readiness and fragility.",
+    "missing_edges": [
+      "claim -> verifier_decision",
+      "frontier_cell -> next_receptive_field"
+    ],
+    "must_call_first": "tic://tool/talis_native/plan_alpha_geometry_actions@v1",
+    "owner": "verifier",
+    "priority_score": 0.5527,
+    "rank": 1,
+    "reason": "The geometry is both high-signal and verifier-ready.",
+    "route_directive": "verify_now",
+    "route_task_id": "shape_task_a5f778dcd766",
+    "seed_slice": {
+      "bias_mode": "verify",
+      "entity": "XPL",
+      "horizon": "1q",
+      "lens": "polymarket",
+      "payload": {
+        "alpha_geometry_cell_key": "XPL|1q|polymarket|",
+        "alpha_geometry_missing_edges": [
+          "claim -> verifier_decision",
+          "frontier_cell -> next_receptive_field"
+        ],
+        "alpha_geometry_route_directive": "verify_now",
+        "alpha_geometry_route_task_id": "shape_task_a5f778dcd766",
+        "alpha_geometry_success_gate": "2_of_3 verifier majority with independent source receipts"
+      },
+      "route_task_id": "shape_task_a5f778dcd766",
+      "source": "alpha_geometry_route",
+      "theme": "alpha_geometry_verify_now"
+    },
+    "stop_condition": "Stop when verifier majority passes/fails or source receipts remain insufficient.",
+    "success_gate": "2_of_3 verifier majority with independent source receipts",
+    "theme": "",
+    "tool_sequence": [
+      "tic://tool/builtin/query_source_health@v1",
+      "tic://tool/builtin/query_timeseries@v1"
+    ]
+  },
+  "proposed_geometry_policy": {
+    "experiment_unit": "matched_seed_cells",
+    "falsification_gates": [
+      {
+        "metric": "candidate_evaluator_score",
+        "operator": ">",
+        "reason": "If the shape is healthy, any mutation still needs to beat the active evaluator score.",
+        "threshold": 0.0
+      }
+    ],
+    "mutation_kind_hint": "retune_geometry_source_frontier_balance",
+    "policy_patch": {
+      "routing_thresholds": {
+        "repair_fragility_min": 0.55,
+        "tension_min": 0.45,
+        "tension_readiness_min": 0.45,
+        "verify_allow_fragility_max": 1.0,
+        "verify_readiness_min": 0.55,
+        "verify_source_independence_min": 0.0,
+        "verify_trade_scream_min": 0.62,
+        "widen_scouts_novelty_min": 0.35,
+        "widen_sources_frontier_min": 0.5,
+        "widen_sources_source_max": 0.58
+      },
+      "tool_request_policy": {
+        "prefer_missing_source_family": true
+      }
+    },
+    "target_metrics": {
+      "avg_frontier_pressure": "increase",
+      "avg_source_independence": "increase"
+    },
+    "why_this_matters": "The cortex can improve future routing by mutating the geometry policy around frontier_without_source_breadth."
+  },
+  "quality_flags": [
+    "alpha_geometry_cortex_review"
+  ],
+  "schema_version": "alpha_geometry_cortex_review_v1",
+  "shape_can_direct_next": true,
+  "shape_health": {
+    "avg_fragility": 0.1325,
+    "avg_frontier_pressure": 0.4571,
+    "avg_source_independence": 0.3375,
+    "avg_trade_scream_score": 0.4462,
+    "avg_verifier_readiness": 0.6643,
+    "cell_count": 80,
+    "fragile_verify_rate": 0.0,
+    "high_signal_observe_rate": 0.0875,
+    "route_action_rate": 0.775,
+    "route_contract_success_rate": 0.0,
+    "route_directive_counts": {
+      "observe": 18,
+      "verify_now": 2,
+      "widen_scouts": 60
+    },
+    "route_entropy": 0.5858,
+    "routed_cell_count": 62,
+    "routing_queue_length": 24
+  },
+  "status": "ready"
+}

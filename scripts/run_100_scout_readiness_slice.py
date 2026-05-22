@@ -28,10 +28,16 @@ from types import SimpleNamespace
 from typing import Any
 
 from talis_desk.information_map import (
+    apply_market_evolve_policy_to_seeds,
+    build_alpha_geometry_cortex_review,
+    build_market_evolve_lineage,
     compute_alpha_geometry,
+    load_market_evolve_policy_applications,
+    prepare_market_evolve_experiment_seed_pairs,
     plan_alpha_geometry_actions,
     recent_information_strings,
     run_information_synthesis,
+    run_market_evolve_step,
 )
 from talis_desk.market_map.coverage_audit import build_coverage_gap_manifest
 from talis_desk.market_map.governor import build_market_map_governor_plan
@@ -91,8 +97,12 @@ def main() -> int:
     try:
         atlas = regenerate_tool_atlas()
         universe = build_market_universe(default_entities=DEFAULT_ENTITIES)
+        market_evolve_pair_budget = _market_evolve_pair_budget(
+            args.n_scouts,
+            requested=args.market_evolve_pairs,
+        )
         seeds = generate_seeds(
-            n_seeds=args.n_scouts,
+            n_seeds=max(1, args.n_scouts - market_evolve_pair_budget),
             cycle_id=cycle_id,
             entities=universe.entity_symbols() or DEFAULT_ENTITIES,
             themes=DEFAULT_THEMES,
@@ -100,6 +110,28 @@ def main() -> int:
             theme_share=args.theme_share,
         )
         seeds = [_prepare_seed(seed) for seed in seeds]
+        market_evolve_planning_step = run_market_evolve_step(cycle_id=cycle_id, conn=store.conn)
+        paired_slices = prepare_market_evolve_experiment_seed_pairs(
+            seeds,
+            cycle_id=cycle_id,
+            conn=store.conn,
+            max_pairs=market_evolve_pair_budget,
+        )
+        if len(seeds) < args.n_scouts:
+            seeds.extend(_supplemental_seeds(
+                n=args.n_scouts - len(seeds),
+                cycle_id=cycle_id,
+                universe_entities=universe.entity_symbols() or DEFAULT_ENTITIES,
+                rng_seed=args.seed_rng + 991,
+                offset=len(seeds),
+            ))
+        if len(seeds) > args.n_scouts:
+            seeds = _trim_preserving_pairs(seeds, args.n_scouts)
+        market_evolve_program = apply_market_evolve_policy_to_seeds(
+            seeds,
+            cycle_id=cycle_id,
+            conn=store.conn,
+        )
         seed_path = prompt_output_dir / "100_scout_seeds.json"
         _write_json(seed_path, [_seed_payload(seed) for seed in seeds])
 
@@ -122,6 +154,12 @@ def main() -> int:
         )
         geometry = compute_alpha_geometry(cycle_id=cycle_id, conn=store.conn, persist=True)
         action_plan = plan_alpha_geometry_actions(cycle_id=cycle_id, conn=store.conn, limit=128)
+        cortex_review = build_alpha_geometry_cortex_review(
+            cycle_id=cycle_id,
+            conn=store.conn,
+            action_plan=action_plan,
+            use_llm=False,
+        )
         coverage = build_coverage_gap_manifest(cycle_id=cycle_id, conn=store.conn)
         governor = build_market_map_governor_plan(
             cycle_id=cycle_id,
@@ -169,6 +207,40 @@ def main() -> int:
             atlas_n_sources=getattr(atlas, "n_sources", 0),
             transcript=transcript,
             elapsed_s=time.perf_counter() - started,
+        )
+        market_evolve_step = run_market_evolve_step(cycle_id=cycle_id, conn=store.conn)
+        market_evolve_lineage = build_market_evolve_lineage(conn=store.conn)
+        policy_apps = load_market_evolve_policy_applications(cycle_id=cycle_id, conn=store.conn, limit=max(500, len(seeds) * 3))
+        market_evolve_hard_experiment = _market_evolve_hard_experiment_episode(
+            cycle_id=cycle_id,
+            planning_step=market_evolve_planning_step,
+            final_step=market_evolve_step,
+            policy_applications=policy_apps,
+            paired_slices=paired_slices,
+            active_program_id=market_evolve_program.program_id,
+        )
+        metrics["market_evolve"] = _market_evolve_metrics(
+            planning_step=market_evolve_planning_step,
+            final_step=market_evolve_step,
+            lineage=market_evolve_lineage,
+            policy_applications=policy_apps,
+            paired_slices=paired_slices,
+        )
+        _attach_effective_unique_seed_metrics(metrics)
+        _write_readiness_artifacts(
+            prompt_output_dir=prompt_output_dir,
+            cycle_id=cycle_id,
+            geometry=geometry,
+            action_plan=action_plan,
+            cortex_review=cortex_review,
+            coverage=coverage,
+            governor=governor,
+            self_healing_plan=self_healing_plan,
+            self_healing_dispatch=self_healing_dispatch,
+            self_healing_worker=self_healing_worker,
+            market_evolve_step=market_evolve_step,
+            market_evolve_hard_experiment=market_evolve_hard_experiment,
+            market_evolve_lineage=market_evolve_lineage,
         )
         readiness = _readiness_verdict(metrics)
         report = {
@@ -228,6 +300,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--cost-cap-usd", type=float, default=1.0)
     parser.add_argument("--model", default="deepseek:v4-flash")
     parser.add_argument("--fallback", default="anthropic:claude-haiku-4-5")
+    parser.add_argument(
+        "--market-evolve-pairs",
+        type=int,
+        default=-1,
+        help="Matched control/candidate policy pairs inside the scout slice. -1 chooses a sample-aware default.",
+    )
     return parser.parse_args()
 
 
@@ -511,6 +589,206 @@ def _deterministic_dispatch_uri(uri: str, args: dict[str, Any], context: Any) ->
     )
 
 
+def _market_evolve_pair_budget(n_scouts: int, *, requested: int) -> int:
+    if requested >= 0:
+        return max(0, min(int(requested), max(0, int(n_scouts) // 2)))
+    if n_scouts >= 100:
+        return min(20, n_scouts // 3)
+    if n_scouts >= 40:
+        return min(8, n_scouts // 4)
+    return 0
+
+
+def _supplemental_seeds(
+    *,
+    n: int,
+    cycle_id: str,
+    universe_entities: list[str],
+    rng_seed: int,
+    offset: int,
+) -> list[SeedCell]:
+    extra = generate_seeds(
+        n_seeds=n,
+        cycle_id=f"{cycle_id}_supplement",
+        entities=universe_entities,
+        themes=DEFAULT_THEMES,
+        rng_seed=rng_seed,
+        theme_share=0.0,
+    )
+    out: list[SeedCell] = []
+    for i, seed in enumerate(extra):
+        seed.seed_id = f"seed_{cycle_id}_X_{offset + i:04d}"
+        out.append(_prepare_seed(seed))
+    return out
+
+
+def _trim_preserving_pairs(seeds: list[SeedCell], n_scouts: int) -> list[SeedCell]:
+    if len(seeds) <= n_scouts:
+        return seeds
+    paired_ids = {
+        str((seed.payload or {}).get("market_evolve_pair_id") or "")
+        for seed in seeds
+        if (seed.payload or {}).get("market_evolve_pair_id")
+    }
+    protected = [
+        seed for seed in seeds
+        if str((seed.payload or {}).get("market_evolve_pair_id") or "") in paired_ids
+    ]
+    unpaired = [
+        seed for seed in seeds
+        if str((seed.payload or {}).get("market_evolve_pair_id") or "") not in paired_ids
+    ]
+    if len(protected) >= n_scouts:
+        return protected[:n_scouts]
+    return [*protected, *unpaired[: n_scouts - len(protected)]]
+
+
+def _write_readiness_artifacts(
+    *,
+    prompt_output_dir: Path,
+    cycle_id: str,
+    geometry: Any,
+    action_plan: dict[str, Any],
+    cortex_review: dict[str, Any],
+    coverage: dict[str, Any],
+    governor: dict[str, Any],
+    self_healing_plan: dict[str, Any],
+    self_healing_dispatch: dict[str, Any],
+    self_healing_worker: dict[str, Any],
+    market_evolve_step: Any,
+    market_evolve_hard_experiment: dict[str, Any],
+    market_evolve_lineage: dict[str, Any],
+) -> None:
+    cells = [_asdict(cell) for cell in (getattr(geometry, "cells", []) or [])]
+    geometry_payload = {
+        "cycle_id": cycle_id,
+        "global_metrics": getattr(geometry, "global_metrics", {}),
+        "quality_flags": getattr(geometry, "quality_flags", []),
+        "cells": cells,
+        "top_cell": cells[0] if cells else {},
+        "action_plan": action_plan,
+        "routing_queue": action_plan.get("routing_queue") or [],
+        "cortex_next_step": action_plan.get("cortex_next_step") or {},
+        "cortex_toolkit": action_plan.get("cortex_toolkit") or [],
+    }
+    _write_json(prompt_output_dir / "alpha_geometry.json", geometry_payload)
+    _write_json(prompt_output_dir / "alpha_geometry_cortex_review.json", cortex_review)
+    _write_json(prompt_output_dir / "coverage_gap_manifest.json", coverage)
+    _write_json(prompt_output_dir / "market_map_governor.json", governor)
+    _write_json(prompt_output_dir / "market_map_self_healing.json", self_healing_plan)
+    _write_json(prompt_output_dir / "market_map_self_healing_dispatch.json", self_healing_dispatch)
+    _write_json(prompt_output_dir / "market_map_self_healing_worker.json", self_healing_worker)
+    _write_json(prompt_output_dir / "market_evolve_step.json", _market_evolve_step_payload(market_evolve_step))
+    _write_json(prompt_output_dir / "market_evolve_hard_experiment.json", market_evolve_hard_experiment)
+    _write_json(prompt_output_dir / "market_evolve_lineage.json", market_evolve_lineage)
+
+
+def _market_evolve_step_payload(step: Any) -> dict[str, Any]:
+    best = getattr(step, "best_evaluation", None)
+    return {
+        "cycle_id": getattr(step, "cycle_id", ""),
+        "programs": [_asdict(row) for row in (getattr(step, "programs", []) or [])],
+        "evaluations": [_asdict(row) for row in (getattr(step, "evaluations", []) or [])],
+        "best_evaluation": _asdict(best) if best is not None else {},
+        "mutations": [_asdict(row) for row in (getattr(step, "mutations", []) or [])],
+        "child_programs": [_asdict(row) for row in (getattr(step, "child_programs", []) or [])],
+        "experiment_plans": _asdict(getattr(step, "experiment_plans", []) or []),
+        "experiment_results": _asdict(getattr(step, "experiment_results", []) or []),
+        "quality_flags": list(getattr(step, "quality_flags", []) or []),
+    }
+
+
+def _market_evolve_hard_experiment_episode(
+    *,
+    cycle_id: str,
+    planning_step: Any,
+    final_step: Any,
+    policy_applications: list[dict[str, Any]],
+    paired_slices: int,
+    active_program_id: str,
+) -> dict[str, Any]:
+    plans = _asdict(getattr(final_step, "experiment_plans", []) or getattr(planning_step, "experiment_plans", []) or [])
+    results = _asdict(getattr(final_step, "experiment_results", []) or [])
+    arm_counts = Counter(
+        str(row.get("experiment_arm") or "active")
+        for row in policy_applications
+    )
+    experiment_ids = sorted({
+        str(row.get("experiment_id") or "")
+        for row in policy_applications
+        if str(row.get("experiment_id") or "").strip()
+    })
+    result = results[0] if results else {}
+    status = "evaluated" if results else "planned" if plans else "not_planned"
+    return {
+        "schema_version": "market_evolve_hard_experiment_episode_v1",
+        "cycle_id": cycle_id,
+        "status": status,
+        "active_program_id": active_program_id,
+        "experiment_id": str(result.get("experiment_id") or (experiment_ids[0] if experiment_ids else "")),
+        "experiment_kind": str((plans[0] if plans else {}).get("experiment_kind") or "matched_policy_ab"),
+        "paired_seed_slices": paired_slices,
+        "policy_application_count": len(policy_applications),
+        "arm_counts": dict(arm_counts),
+        "experiment_ids": experiment_ids,
+        "plans": plans,
+        "results": results,
+        "final_decision": result.get("decision") or "pending",
+        "final_score_delta": result.get("score_delta"),
+        "proof": {
+            "policy_stamped_on_seeds": len(policy_applications) > 0,
+            "matched_seed_pairs_present": paired_slices > 0,
+            "control_arm_present": arm_counts.get("control", 0) > 0,
+            "candidate_arm_present": arm_counts.get("candidate", 0) > 0,
+            "experiment_result_evaluated": bool(results),
+            "falsification_gates_evaluated": bool(result.get("falsification_gate_results")),
+            "candidate_promoted_or_continued": result.get("decision") in {"promote_candidate", "continue_candidate"},
+            "quality_flags": result.get("quality_flags") or [],
+        },
+    }
+
+
+def _market_evolve_metrics(
+    *,
+    planning_step: Any,
+    final_step: Any,
+    lineage: dict[str, Any],
+    policy_applications: list[dict[str, Any]],
+    paired_slices: int,
+) -> dict[str, Any]:
+    best = getattr(final_step, "best_evaluation", None)
+    arm_counts = Counter(str(row.get("experiment_arm") or "active") for row in policy_applications)
+    results = list(getattr(final_step, "experiment_results", []) or [])
+    latest_result = results[0] if results else {}
+    return {
+        "planning_experiment_count": len(getattr(planning_step, "experiment_plans", []) or []),
+        "policy_application_count": len(policy_applications),
+        "paired_seed_slices": paired_slices,
+        "arm_counts": dict(arm_counts),
+        "final_score": getattr(best, "score", None),
+        "final_passed": getattr(best, "passed", None),
+        "mutation_count": len(getattr(final_step, "mutations", []) or []),
+        "child_program_count": len(getattr(final_step, "child_programs", []) or []),
+        "experiment_plan_count": len(getattr(final_step, "experiment_plans", []) or []),
+        "experiment_result_count": len(results),
+        "latest_experiment_decision": latest_result.get("decision") if isinstance(latest_result, dict) else None,
+        "lineage_nodes": len(lineage.get("nodes") or []),
+        "lineage_edges": len(lineage.get("edges") or []),
+        "frontier_count": len(lineage.get("frontier") or []),
+    }
+
+
+def _attach_effective_unique_seed_metrics(metrics: dict[str, Any]) -> None:
+    seeds = metrics.get("seeds") if isinstance(metrics.get("seeds"), dict) else {}
+    market_evolve = metrics.get("market_evolve") if isinstance(metrics.get("market_evolve"), dict) else {}
+    count = int(seeds.get("count") or 0)
+    unique = int(seeds.get("unique_cell_count") or 0)
+    paired = int(market_evolve.get("paired_seed_slices") or 0)
+    effective = min(count, unique + paired)
+    seeds["effective_unique_cell_count"] = effective
+    seeds["effective_unique_cell_ratio"] = round(effective / max(1, count), 4)
+
+
 def _metrics(
     *,
     cycle_id: str,
@@ -644,9 +922,12 @@ def _readiness_verdict(metrics: dict[str, Any]) -> dict[str, Any]:
     info = metrics.get("information_map") or {}
     geometry = metrics.get("geometry") or {}
     self_healing = metrics.get("self_healing") or {}
+    market_evolve = metrics.get("market_evolve") or {}
+    effective_unique_count = int(seeds.get("unique_cell_count") or 0) + int(market_evolve.get("paired_seed_slices") or 0)
+    effective_unique_ratio = effective_unique_count / max(1, int(seeds.get("count") or 0))
     gates = {
         "seed_count_100": seeds.get("count") == 100,
-        "unique_cell_ratio_ge_0_92": _metric_float(seeds.get("unique_cell_ratio")) >= 0.92,
+        "unique_or_experiment_cell_ratio_ge_0_92": effective_unique_ratio >= 0.92,
         "scout_success_rate_ge_0_95": _metric_float(scouts.get("success_rate")) >= 0.95,
         "avg_strings_ge_1_5": _metric_float(scouts.get("avg_information_strings_per_scout")) >= 1.5,
         "evidence_ok_rate_ge_0_95": _metric_float(scouts.get("evidence_ok_rate")) >= 0.95,
@@ -656,6 +937,16 @@ def _readiness_verdict(metrics: dict[str, Any]) -> dict[str, Any]:
         "routing_queue_created": int(geometry.get("routing_queue_count") or 0) >= 1,
         "self_healing_completed": int(self_healing.get("completed_tasks") or 0) >= 1,
         "no_self_healing_failures": int(self_healing.get("failed_tasks") or 0) == 0,
+        "market_evolve_policy_applied": int(market_evolve.get("policy_application_count") or 0) >= int(seeds.get("count") or 0),
+        "market_evolve_hard_experiment_planned": int(market_evolve.get("planning_experiment_count") or 0) >= 1,
+        "market_evolve_control_candidate_arms": (
+            int((market_evolve.get("arm_counts") or {}).get("control") or 0) > 0
+            and int((market_evolve.get("arm_counts") or {}).get("candidate") or 0) > 0
+        ),
+        "market_evolve_result_or_low_sample_boundary": (
+            int(market_evolve.get("experiment_result_count") or 0) >= 1
+            or int(market_evolve.get("paired_seed_slices") or 0) < 20
+        ),
     }
     failed = [name for name, ok in gates.items() if not ok]
     ready = not failed
@@ -753,12 +1044,16 @@ def _render_markdown(report: dict[str, Any]) -> str:
         f"- mode: `{report['mode']}`",
         f"- cycle: `{report['cycle_id']}`",
         f"- scouts: `{metrics['seeds']['count']}`",
+        f"- effective_unique_cell_ratio: `{metrics['seeds'].get('effective_unique_cell_ratio', metrics['seeds']['unique_cell_ratio'])}`",
         f"- success_rate: `{metrics['scouts']['success_rate']}`",
         f"- avg_strings_per_scout: `{metrics['scouts']['avg_information_strings_per_scout']}`",
         f"- evidence_ok_rate: `{metrics['scouts']['evidence_ok_rate']}`",
         f"- duplicate_hypothesis_rate: `{metrics['scouts']['duplicate_hypothesis_rate']}`",
         f"- geometry_cells: `{metrics['geometry']['cell_count']}`",
         f"- self_healing_completed_tasks: `{metrics['self_healing']['completed_tasks']}`",
+        f"- market_evolve_score: `{(metrics.get('market_evolve') or {}).get('final_score')}`",
+        f"- market_evolve_pairs: `{(metrics.get('market_evolve') or {}).get('paired_seed_slices')}`",
+        f"- market_evolve_latest_decision: `{(metrics.get('market_evolve') or {}).get('latest_experiment_decision')}`",
         "",
         "## Gates",
         "",
