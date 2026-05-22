@@ -54,6 +54,7 @@ from talis_desk.swarm.seed_generator import (
     DEFAULT_ENTITIES,
     SeedCell,
     entity_asset_class,
+    generate_policy_routed_seed_mix,
     generate_seeds,
 )
 from talis_desk.tool_atlas import regenerate_tool_atlas
@@ -102,16 +103,24 @@ def main() -> int:
             args.n_scouts,
             requested=args.market_evolve_pairs,
         )
-        seeds = generate_seeds(
+        market_evolve_planning_step = run_market_evolve_step(cycle_id=cycle_id, conn=store.conn)
+        planning_program = (
+            market_evolve_planning_step.programs[0]
+            if getattr(market_evolve_planning_step, "programs", None)
+            else None
+        )
+        seeds = generate_policy_routed_seed_mix(
             n_seeds=max(1, args.n_scouts - market_evolve_pair_budget),
             cycle_id=cycle_id,
             entities=universe.entity_symbols() or DEFAULT_ENTITIES,
             themes=DEFAULT_THEMES,
             rng_seed=args.seed_rng,
             theme_share=args.theme_share,
+            program=planning_program,
+            conn=store.conn,
+            use_llm_governor=False,
         )
         seeds = [_prepare_seed(seed) for seed in seeds]
-        market_evolve_planning_step = run_market_evolve_step(cycle_id=cycle_id, conn=store.conn)
         paired_slices = prepare_market_evolve_experiment_seed_pairs(
             seeds,
             cycle_id=cycle_id,

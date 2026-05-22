@@ -67,6 +67,8 @@ DEFAULT_MARKET_EVOLVE_GENOME: dict[str, Any] = {
         "use_frontier_llm_governor": True,
         "frontier_llm_governor_model": "anthropic:claude-opus-4-7",
         "frontier_llm_governor_seed_share": 0.25,
+        "use_llm_geometry_cortex": True,
+        "geometry_cortex_model": "anthropic:claude-opus-4-7",
     },
     "tool_request_policy": {
         "max_tool_candidates_per_seed": 10,
@@ -253,6 +255,9 @@ def run_market_evolve_step(
     *,
     cycle_id: str,
     conn: Optional[sqlite3.Connection] = None,
+    cortex_review: Optional[dict[str, Any]] = None,
+    use_llm_cortex: bool = False,
+    cortex_model: str = "",
 ) -> MarketEvolveStep:
     """Evaluate active research-policy programs and persist candidate mutations."""
     db = conn or get_desk_store().conn
@@ -272,27 +277,34 @@ def run_market_evolve_step(
             conn=db,
         )
         evaluations.append(evaluation)
-        cortex_review: dict[str, Any] = {}
-        try:
-            from .geometry_cortex import build_alpha_geometry_cortex_review
+        effective_cortex_review: dict[str, Any] = {}
+        if isinstance(cortex_review, dict) and cortex_review:
+            effective_cortex_review = copy.deepcopy(cortex_review)
+            effective_cortex_review.setdefault("consumed_by_market_evolve_step", True)
+        else:
+            try:
+                from .geometry_cortex import build_alpha_geometry_cortex_review
 
-            cortex_review = build_alpha_geometry_cortex_review(
-                cycle_id=cycle_id,
-                metrics=evaluation.metrics,
-                use_llm=False,
-                conn=db,
-            )
-        except Exception as exc:
-            cortex_review = {
-                "schema_version": "alpha_geometry_cortex_review_v1",
-                "status": "error",
-                "error": f"{type(exc).__name__}: {exc}",
-            }
+                kwargs: dict[str, Any] = {
+                    "cycle_id": cycle_id,
+                    "metrics": evaluation.metrics,
+                    "use_llm": bool(use_llm_cortex),
+                    "conn": db,
+                }
+                if cortex_model:
+                    kwargs["model"] = cortex_model
+                effective_cortex_review = build_alpha_geometry_cortex_review(**kwargs)
+            except Exception as exc:
+                effective_cortex_review = {
+                    "schema_version": "alpha_geometry_cortex_review_v1",
+                    "status": "error",
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
         children = propose_market_evolve_mutations(
             program=program,
             evaluation=evaluation,
             cycle_id=cycle_id,
-            cortex_review=cortex_review,
+            cortex_review=effective_cortex_review,
             experiment_results=experiment_results,
             conn=db,
         )

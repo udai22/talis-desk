@@ -1724,6 +1724,62 @@ def test_geometry_cortex_reviews_shape_and_proposes_policy_pressure(tmp_path):
     assert review["llm_cortex"]["enabled"] is False
 
 
+def test_market_evolve_step_consumes_supplied_cortex_review(tmp_path):
+    store = DeskStore(db_path=tmp_path / "desk.db")
+    import talis_desk.store as store_mod
+
+    store_mod._STORE = store
+    cortex_review = {
+        "schema_version": "alpha_geometry_cortex_review_v1",
+        "status": "ready",
+        "shape_can_direct_next": True,
+        "shape_health": {"route_action_rate": 0.12},
+        "diagnostics": [
+            {
+                "code": "route_contract_not_moving_edges",
+                "severity": "high",
+                "severity_score": 0.82,
+                "diagnosis": "Shape-routed scouts are not closing the missing edge.",
+                "target_metrics": ["candidate_route_contract_success_rate"],
+            }
+        ],
+        "cortex_work_orders": [{"order_id": "cwo_supplied_cortex"}],
+        "proposed_geometry_policy": {
+            "mutation_kind_hint": "tighten_shape_route_contract",
+            "policy_patch": {
+                "cortex_policy": {
+                    "min_task_completion_rate": 0.91,
+                    "require_shape_tool_before_followups": True,
+                }
+            },
+            "target_metrics": {"route_contract_success_rate": "increase"},
+            "falsification_gates": [
+                {
+                    "metric": "candidate_route_contract_success_rate",
+                    "operator": ">=",
+                    "threshold": 0.70,
+                }
+            ],
+            "why_this_matters": "The supplied cortex review should become a testable MarketEvolve mutation.",
+        },
+    }
+
+    step = run_market_evolve_step(
+        cycle_id="cycle_supplied_cortex",
+        conn=store.conn,
+        cortex_review=cortex_review,
+    )
+
+    mutation = next(
+        m for m in step.mutations
+        if (m.mutation or {}).get("_geometry_cortex_review", {}).get("source") == "alpha_geometry_cortex_review"
+    )
+    assert mutation.mutation_kind == "tighten_shape_route_contract"
+    assert mutation.mutation["_geometry_cortex_review"]["work_order_ids"] == ["cwo_supplied_cortex"]
+    child = next(p for p in step.child_programs if p.program_id == mutation.child_program_id)
+    assert child.genome["cortex_policy"]["min_task_completion_rate"] == 0.91
+
+
 def test_geometry_cortex_review_is_callable_through_tool_atlas(tmp_path):
     store = DeskStore(db_path=tmp_path / "desk.db")
     import talis_desk.store as store_mod

@@ -362,6 +362,34 @@ def test_governor_gap_plan_becomes_replayable_seed_cells(monkeypatch) -> None:
     )
 
 
+def test_policy_routed_seed_mix_includes_governor_and_broad_lanes(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TALIS_DISABLE_HL_META", "1")
+    _reset_hl_catalog()
+    store = reset_desk_store_for_test(tmp_path / "desk.db")
+
+    seeds = seed_generator.generate_policy_routed_seed_mix(
+        cycle_id="cycle_policy_seed_mix",
+        n_seeds=24,
+        entities=["BTC", "ETH", "HYPE"],
+        themes=["fresh_social_alpha"],
+        rng_seed=11,
+        theme_share=0.10,
+        conn=store.conn,
+        use_llm_governor=False,
+    )
+
+    lanes = [str((seed.payload or {}).get("policy_seed_mix_lane") or "") for seed in seeds]
+    assert len(seeds) == 24
+    assert "market_map_governor" in lanes
+    assert "broad_market_grid" in lanes
+    governor_seeds = [
+        seed for seed in seeds
+        if (seed.payload or {}).get("source") == "market_map_governor"
+    ]
+    assert governor_seeds
+    assert all((seed.payload or {}).get("tool_candidates") for seed in governor_seeds)
+
+
 def test_self_healing_orders_post_idempotent_task_contracts(tmp_path) -> None:
     store = reset_desk_store_for_test(tmp_path / "desk.db")
     get_schema_version(store.conn)

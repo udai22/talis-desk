@@ -69,7 +69,7 @@ from talis_desk.swarm.seed_generator import (
     INFORMATION_PERFUSION_TOOL_URI,
     SeedCell,
     generate_information_perfusion_seeds,
-    generate_seeds,
+    generate_policy_routed_seed_mix,
     narrow_tools_for_seed,
 )
 from talis_desk.tool_atlas import (
@@ -123,6 +123,17 @@ def main() -> int:
             args.n_scouts,
             requested=args.market_evolve_pairs,
         )
+        market_evolve_planning_step = run_market_evolve_step(cycle_id=cycle_id, conn=store.conn)
+        planning_program = (
+            market_evolve_planning_step.programs[0]
+            if getattr(market_evolve_planning_step, "programs", None)
+            else None
+        )
+        live_policy_controls = _live_policy_controls(
+            planning_program,
+            allow_live_spend=args.allow_live_spend,
+            args=args,
+        )
         base_seed_count = max(1, args.n_scouts - market_evolve_pair_budget)
         seeds, control_seed_routing = _generate_control_aware_live_seeds(
             args=args,
@@ -130,9 +141,10 @@ def main() -> int:
             conn=store.conn,
             universe_entities=universe.entity_symbols() or DEFAULT_ENTITIES,
             base_seed_count=base_seed_count,
+            program=planning_program,
+            live_policy_controls=live_policy_controls,
         )
         _write_json(prompt_output_dir / "live_scout_control_seed_routing.json", control_seed_routing)
-        market_evolve_planning_step = run_market_evolve_step(cycle_id=cycle_id, conn=store.conn)
         paired_slices = prepare_market_evolve_experiment_seed_pairs(
             seeds,
             cycle_id=cycle_id,
@@ -205,6 +217,7 @@ def main() -> int:
                 ramp_policy_application=ramp_policy_application,
                 ramp_policy_rehearsal=ramp_policy_rehearsal,
                 price_observation_start=price_observation_start,
+                live_policy_controls=live_policy_controls,
                 reason="explicit_live_spend_flag_missing",
                 elapsed_s=time.perf_counter() - started,
             )
@@ -227,6 +240,7 @@ def main() -> int:
                 ramp_policy_application=ramp_policy_application,
                 ramp_policy_rehearsal=ramp_policy_rehearsal,
                 price_observation_start=price_observation_start,
+                live_policy_controls=live_policy_controls,
                 reason="provider_import_failed",
                 elapsed_s=time.perf_counter() - started,
             )
@@ -249,6 +263,7 @@ def main() -> int:
                 ramp_policy_application=ramp_policy_application,
                 ramp_policy_rehearsal=ramp_policy_rehearsal,
                 price_observation_start=price_observation_start,
+                live_policy_controls=live_policy_controls,
                 reason="ramp_policy_rehearsal_failed",
                 elapsed_s=time.perf_counter() - started,
             )
@@ -324,7 +339,8 @@ def main() -> int:
             cycle_id=cycle_id,
             conn=store.conn,
             action_plan=action_plan,
-            use_llm=False,
+            use_llm=bool(live_policy_controls.get("use_llm_cortex")),
+            model=str(live_policy_controls.get("cortex_model") or ""),
         )
         coverage = build_coverage_gap_manifest(cycle_id=cycle_id, conn=store.conn)
         governor = build_market_map_governor_plan(
@@ -332,7 +348,9 @@ def main() -> int:
             conn=store.conn,
             coverage_manifest=coverage,
             scout_budget=args.n_scouts,
-            use_llm=False,
+            use_llm=bool(live_policy_controls.get("use_llm_governor")),
+            model=str(live_policy_controls.get("frontier_governor_model") or ""),
+            llm_seed_share=float(live_policy_controls.get("frontier_governor_seed_share") or 0.25),
         )
         trace = _readiness_trace(
             cycle_id=cycle_id,
@@ -389,7 +407,11 @@ def main() -> int:
             "final": _price_observation_summary(price_observation_final),
         }
         metrics["information_price_outcomes"] = information_price_outcomes.get("summary", {})
-        market_evolve_step = run_market_evolve_step(cycle_id=cycle_id, conn=store.conn)
+        market_evolve_step = run_market_evolve_step(
+            cycle_id=cycle_id,
+            conn=store.conn,
+            cortex_review=cortex_review,
+        )
         market_evolve_lineage = build_market_evolve_lineage(conn=store.conn)
         policy_apps = load_market_evolve_policy_applications(cycle_id=cycle_id, conn=store.conn, limit=max(500, len(seeds) * 3))
         market_evolve_hard_experiment = _market_evolve_hard_experiment_episode(
@@ -449,6 +471,7 @@ def main() -> int:
             "max_tool_iterations": args.max_tool_iterations,
             "repair_tool_proposal_contracts": args.repair_tool_proposal_contracts,
             "tool_proposal_repair_limit": args.tool_proposal_repair_limit,
+            "live_policy_controls": live_policy_controls,
             "ramp_policy_path": args.ramp_policy,
             "preserve_db": args.preserve_db,
             "collect_price_observations": args.collect_price_observations,
@@ -515,6 +538,18 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--prompt-variant", default="", help="Optional forced scout prompt variant for this canary.")
     parser.add_argument("--max-tool-iterations", type=int, default=1)
     parser.add_argument(
+        "--enable-frontier-governor",
+        action="store_true",
+        help="Allow the active MarketEvolve frontier LLM governor to shape seed allocation when --allow-live-spend is present.",
+    )
+    parser.add_argument(
+        "--enable-llm-cortex",
+        action="store_true",
+        help="Allow the geometry cortex LLM review to enter the MarketEvolve mutation loop when --allow-live-spend is present.",
+    )
+    parser.add_argument("--frontier-governor-model", default="")
+    parser.add_argument("--cortex-model", default="")
+    parser.add_argument(
         "--control-decision",
         default="",
         help="Cadence control decision that should shape the next scout slice.",
@@ -571,6 +606,8 @@ def _generate_control_aware_live_seeds(
     conn: Any,
     universe_entities: list[str],
     base_seed_count: int,
+    program: Any = None,
+    live_policy_controls: dict[str, Any] | None = None,
 ) -> tuple[list[SeedCell], dict[str, Any]]:
     objective = _control_perfusion_objective(
         decision=str(args.control_decision or ""),
@@ -591,13 +628,18 @@ def _generate_control_aware_live_seeds(
     broad_needed = max(0, base_seed_count - len(perfusion_seeds))
     broad_seeds: list[SeedCell] = []
     if broad_needed:
-        broad_seeds = generate_seeds(
-            n_seeds=broad_needed,
+        controls = live_policy_controls if isinstance(live_policy_controls, dict) else {}
+        broad_seeds = generate_policy_routed_seed_mix(
             cycle_id=cycle_id,
+            n_seeds=broad_needed,
             entities=universe_entities,
             themes=DEFAULT_THEMES,
             rng_seed=args.seed_rng,
             theme_share=args.theme_share,
+            program=program,
+            conn=conn,
+            use_llm_governor=bool(controls.get("use_llm_governor")),
+            llm_governor_model=str(controls.get("frontier_governor_model") or ""),
         )
     seeds = [_prepare_live_seed(seed, args=args) for seed in [*perfusion_seeds, *broad_seeds]]
     if proof_metrics:
@@ -622,7 +664,8 @@ def _generate_control_aware_live_seeds(
         "perfusion_seed_count": len(perfusion_seeds),
         "broad_seed_count": len(broad_seeds),
         "proof_metric_seed_count": len(seeds) if proof_metrics else 0,
-        "status": "perfusion_routed" if perfusion_seeds else "broad_market_grid",
+        "policy_seed_mix_counts": dict(Counter(str((seed.payload or {}).get("policy_seed_mix_lane") or "control") for seed in seeds)),
+        "status": "perfusion_routed" if perfusion_seeds else "policy_seed_mix",
         "quality_flags": (
             []
             if not objective or perfusion_seeds
@@ -630,6 +673,40 @@ def _generate_control_aware_live_seeds(
         ),
     }
     return seeds, report
+
+
+def _live_policy_controls(
+    program: Any,
+    *,
+    allow_live_spend: bool,
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    genome = getattr(program, "genome", None) if program is not None else {}
+    routing = dict((genome.get("routing_thresholds") if isinstance(genome, dict) else {}) or {})
+    live_allowed = bool(allow_live_spend)
+    use_governor = live_allowed and bool(
+        args.enable_frontier_governor or routing.get("use_frontier_llm_governor")
+    )
+    use_cortex = live_allowed and bool(
+        args.enable_llm_cortex or routing.get("use_llm_geometry_cortex")
+    )
+    return {
+        "schema_version": "talis_live_policy_controls_v1",
+        "allow_live_spend": live_allowed,
+        "program_id": getattr(program, "program_id", "") if program is not None else "",
+        "use_llm_governor": use_governor,
+        "frontier_governor_model": (
+            args.frontier_governor_model
+            or str(routing.get("frontier_llm_governor_model") or "anthropic:claude-opus-4-7")
+        ),
+        "frontier_governor_seed_share": float(routing.get("frontier_llm_governor_seed_share") or 0.25),
+        "use_llm_cortex": use_cortex,
+        "cortex_model": (
+            args.cortex_model
+            or str(routing.get("geometry_cortex_model") or "anthropic:claude-opus-4-7")
+        ),
+        "quality_flags": [] if live_allowed else ["llm_controls_blocked_by_spend_gate"],
+    }
 
 
 def _control_perfusion_objective(*, decision: str, allowed_next_step: str) -> str:
@@ -1444,6 +1521,7 @@ def _blocked_report(
     price_observation_start: dict[str, Any],
     reason: str,
     elapsed_s: float,
+    live_policy_controls: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     gates = {
         "tic_root_ok": bool(preflight.get("tic_root_ok")),
@@ -1475,6 +1553,7 @@ def _blocked_report(
         "collect_price_observations": args.collect_price_observations,
         "repair_tool_proposal_contracts": args.repair_tool_proposal_contracts,
         "tool_proposal_repair_limit": args.tool_proposal_repair_limit,
+        "live_policy_controls": live_policy_controls or {},
         "ramp_policy_path": args.ramp_policy,
         "ramp_policy": ramp_policy,
         "ramp_policy_application": ramp_policy_application,

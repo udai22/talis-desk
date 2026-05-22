@@ -544,6 +544,97 @@ def generate_market_map_governor_seeds(
     return out
 
 
+def generate_policy_routed_seed_mix(
+    *,
+    cycle_id: str,
+    n_seeds: int,
+    entities: list[str],
+    themes: list[str] | None = None,
+    rng_seed: int = 0,
+    theme_share: float = 0.20,
+    program: Any = None,
+    conn: Optional[sqlite3.Connection] = None,
+    use_llm_governor: bool = False,
+    llm_governor_model: Optional[str] = None,
+    geometry_cycle_id: Optional[str] = None,
+) -> list[SeedCell]:
+    """Build the production scout slice from policy-routed lanes.
+
+    The old broad grid sampler is still the ballast, but it should not be the
+    whole allocation. A serious 100/1,000 scout pass needs lanes for:
+    prior alpha-geometry routes, market-map coverage gaps, and broad Latin
+    hypercube exploration. MarketEvolve controls the lane shares through its
+    routing thresholds, so evaluator wins can change future slices.
+    """
+    budget = max(0, int(n_seeds))
+    if budget <= 0:
+        return []
+    db = conn or get_desk_store().conn
+    active_program = program
+    if active_program is None:
+        try:
+            from ..information_map.market_evolve import load_active_market_evolve_program
+
+            active_program = load_active_market_evolve_program(cycle_id=cycle_id, conn=db)
+        except Exception:
+            active_program = None
+
+    out: list[SeedCell] = []
+    seen_seed_ids: set[str] = set()
+
+    def add_lane(seeds: list[SeedCell], lane: str) -> None:
+        for seed in seeds:
+            if len(out) >= budget:
+                return
+            sid = str(seed.seed_id or "")
+            if not sid or sid in seen_seed_ids:
+                continue
+            seen_seed_ids.add(sid)
+            payload = dict(seed.payload or {})
+            payload["policy_seed_mix_lane"] = lane
+            if active_program is not None:
+                payload["policy_seed_mix_program_id"] = getattr(active_program, "program_id", "")
+                payload["policy_seed_mix_program_generation"] = getattr(active_program, "generation", 0)
+            seed.payload = payload
+            out.append(seed)
+
+    add_lane(
+        generate_alpha_geometry_route_seeds(
+            cycle_id=cycle_id,
+            n_seed_budget=budget,
+            source_cycle_id=geometry_cycle_id,
+            program=active_program,
+            conn=db,
+        ),
+        "alpha_geometry_route",
+    )
+    add_lane(
+        generate_market_map_governor_seeds(
+            cycle_id=cycle_id,
+            n_seed_budget=budget,
+            program=active_program,
+            conn=db,
+            use_llm=use_llm_governor,
+            llm_model=llm_governor_model,
+            geometry_cycle_id=geometry_cycle_id,
+        ),
+        "market_map_governor",
+    )
+
+    broad_needed = budget - len(out)
+    if broad_needed > 0:
+        broad = generate_seeds(
+            n_seeds=broad_needed,
+            cycle_id=cycle_id,
+            entities=entities,
+            themes=themes or [],
+            rng_seed=rng_seed,
+            theme_share=theme_share,
+        )
+        add_lane(broad, "broad_market_grid")
+    return out[:budget]
+
+
 def generate_information_perfusion_seeds(
     *,
     cycle_id: str,
