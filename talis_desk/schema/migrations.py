@@ -33,7 +33,7 @@ from typing import Callable
 
 
 #: Current schema version. Bump when adding a Migration below.
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 24
 
 
 # ============================================================================
@@ -625,6 +625,159 @@ def _m10_coordination_contracts(conn: sqlite3.Connection) -> None:
     )
 
 
+def _m11_flow_reaction_ledger(conn: sqlite3.Connection) -> None:
+    """v11: FlowSim — calibrated counterparty-reaction ledger.
+
+    Four tables that together implement the closed loop:
+      - `flow_reaction_forecasts`: one row per (cycle, brief, thesis)
+        FlowSim run. Stores the aggregate forecast + verdict.
+      - `flow_archetype_reactions`: per-archetype reaction (15 per
+        forecast typically). Lets us Brier-score each archetype.
+      - `flow_outcome_resolutions`: actual market reaction recorded when
+        the catalyst resolves. The "real outcome" half of the loop.
+      - `flow_calibration_weights`: rolling per-(archetype × sector ×
+        catalyst × horizon) weights, updated by the Brier scorer.
+
+    All bitemporally versioned (valid_from / transaction_from).
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS flow_reaction_forecasts (
+            forecast_id TEXT PRIMARY KEY,
+            brief_id TEXT,
+            cycle_id TEXT NOT NULL,
+            entity TEXT NOT NULL,
+            thesis_summary TEXT NOT NULL,
+            net_buy_pressure REAL NOT NULL,
+            net_vol_pressure REAL NOT NULL,
+            flow_disagreement REAL NOT NULL,
+            timing_concentration REAL NOT NULL,
+            publication_recommendation TEXT NOT NULL
+                CHECK (publication_recommendation IN
+                       ('publish','publish_size_down','revise','kill')),
+            simulator_confidence REAL NOT NULL,
+            rationale TEXT,
+            quality_flags TEXT,
+            cost_usd REAL NOT NULL DEFAULT 0,
+            elapsed_s REAL,
+            payload TEXT,
+            as_of TEXT NOT NULL,
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_flow_forecasts_cycle "
+        "ON flow_reaction_forecasts(cycle_id, entity)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_flow_forecasts_brief "
+        "ON flow_reaction_forecasts(brief_id)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_flow_forecasts_open "
+        "ON flow_reaction_forecasts(as_of) WHERE transaction_to IS NULL"
+    )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS flow_archetype_reactions (
+            id TEXT PRIMARY KEY,
+            forecast_id TEXT NOT NULL,
+            archetype_id TEXT NOT NULL,
+            action TEXT NOT NULL,
+            action_probability REAL NOT NULL,
+            size_pressure REAL NOT NULL,
+            confidence REAL NOT NULL,
+            timing_hours REAL NOT NULL,
+            rationale TEXT,
+            model_used TEXT,
+            provider TEXT,
+            cost_usd REAL NOT NULL DEFAULT 0,
+            elapsed_s REAL,
+            quality_flags TEXT,
+            error TEXT,
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT,
+            FOREIGN KEY (forecast_id) REFERENCES flow_reaction_forecasts(forecast_id)
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_flow_reactions_forecast "
+        "ON flow_archetype_reactions(forecast_id)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_flow_reactions_arch "
+        "ON flow_archetype_reactions(archetype_id, action)"
+    )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS flow_outcome_resolutions (
+            id TEXT PRIMARY KEY,
+            forecast_id TEXT NOT NULL,
+            entity TEXT NOT NULL,
+            sector TEXT,
+            catalyst TEXT,
+            horizon_hours REAL NOT NULL,
+            actual_return REAL,
+            actual_vol_change REAL,
+            actual_volume_z REAL,
+            actual_sector_relative REAL,
+            outcome_payload TEXT,
+            resolved_at TEXT NOT NULL,
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT,
+            FOREIGN KEY (forecast_id) REFERENCES flow_reaction_forecasts(forecast_id)
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_flow_outcomes_forecast "
+        "ON flow_outcome_resolutions(forecast_id)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_flow_outcomes_resolved "
+        "ON flow_outcome_resolutions(resolved_at)"
+    )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS flow_calibration_weights (
+            id TEXT PRIMARY KEY,
+            archetype_id TEXT NOT NULL,
+            sector TEXT,
+            catalyst_kind TEXT,
+            horizon_bucket TEXT,
+            weight REAL NOT NULL,
+            brier_score REAL,
+            n_observations INTEGER NOT NULL DEFAULT 0,
+            last_outcome_at TEXT,
+            payload TEXT,
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_flow_weights_open "
+        "ON flow_calibration_weights("
+        "archetype_id, COALESCE(sector,''), COALESCE(catalyst_kind,''), "
+        "COALESCE(horizon_bucket,'')) "
+        "WHERE transaction_to IS NULL"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_flow_weights_arch "
+        "ON flow_calibration_weights(archetype_id)"
+    )
+
+
 _MIGRATIONS: list[Migration] = [
     Migration(version=1, name="sota_baseline", forward=_m1_sota_baseline),
     Migration(
@@ -648,7 +801,1247 @@ _MIGRATIONS: list[Migration] = [
         name="coordination_contracts",
         forward=_m10_coordination_contracts,
     ),
+    Migration(
+        version=11,
+        name="flow_reaction_ledger",
+        forward=_m11_flow_reaction_ledger,
+    ),
+    Migration(
+        version=12,
+        name="pm_overlay_and_execution",
+        forward=lambda c: _m12_pm_overlay_and_execution(c),
+    ),
+    Migration(
+        version=13,
+        name="order_flow_asset_state_and_levels",
+        forward=lambda c: _m13_order_flow_asset_state_and_levels(c),
+    ),
+    Migration(
+        version=14,
+        name="information_map_strings",
+        forward=lambda c: _m14_information_map_strings(c),
+    ),
+    Migration(
+        version=15,
+        name="information_string_quality_fields",
+        forward=lambda c: _m15_information_string_quality_fields(c),
+    ),
+    Migration(
+        version=16,
+        name="information_synthesis_routing_tables",
+        forward=lambda c: _m16_information_synthesis_routing_tables(c),
+    ),
+    Migration(
+        version=17,
+        name="information_temporal_pyramid",
+        forward=lambda c: _m17_information_temporal_pyramid(c),
+    ),
+    Migration(
+        version=18,
+        name="market_event_intelligence",
+        forward=lambda c: _m18_market_event_intelligence(c),
+    ),
+    Migration(
+        version=19,
+        name="node_intelligence",
+        forward=lambda c: _m19_node_intelligence(c),
+    ),
+    Migration(
+        version=20,
+        name="analysis_tool_proposals",
+        forward=lambda c: _m20_analysis_tool_proposals(c),
+    ),
+    Migration(
+        version=21,
+        name="information_alpha_geometry",
+        forward=lambda c: _m21_information_alpha_geometry(c),
+    ),
+    Migration(
+        version=22,
+        name="market_evolve_programs",
+        forward=lambda c: _m22_market_evolve_programs(c),
+    ),
+    Migration(
+        version=23,
+        name="market_evolve_experiments",
+        forward=lambda c: _m23_market_evolve_experiments(c),
+    ),
+    Migration(
+        version=24,
+        name="market_evolve_experiment_results",
+        forward=lambda c: _m24_market_evolve_experiment_results(c),
+    ),
 ]
+
+
+def _m13_order_flow_asset_state_and_levels(conn: sqlite3.Connection) -> None:
+    """v13: per-asset order-flow state + level catalog.
+
+    Two bitemporal tables:
+      - `order_flow_asset_state`: rolling per-asset memory (recent VPOCs,
+        naked POCs, persistent HVN/LVN, dominance pivots).
+      - `order_flow_levels`: every level called per asset with track-record
+        outcome — feeds the self-calibration loop.
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS order_flow_asset_state (
+            id TEXT PRIMARY KEY,
+            asset TEXT NOT NULL,
+            payload TEXT NOT NULL,
+            levels_called_total INTEGER NOT NULL DEFAULT 0,
+            levels_held_total INTEGER NOT NULL DEFAULT 0,
+            last_updated TEXT NOT NULL,
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_of_asset_state_open "
+        "ON order_flow_asset_state(asset) WHERE transaction_to IS NULL"
+    )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS order_flow_levels (
+            id TEXT PRIMARY KEY,
+            asset TEXT NOT NULL,
+            price REAL NOT NULL,
+            source TEXT NOT NULL,
+            side TEXT NOT NULL,
+            strength REAL NOT NULL,
+            distance_from_mark_pct REAL,
+            age_sessions INTEGER NOT NULL DEFAULT 0,
+            hit_count INTEGER NOT NULL DEFAULT 0,
+            rationale TEXT,
+            tested_outcome TEXT,
+            tested_at TEXT,
+            called_at TEXT NOT NULL,
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_of_levels_asset_recent "
+        "ON order_flow_levels(asset, called_at DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_of_levels_outcome "
+        "ON order_flow_levels(tested_outcome, asset)"
+    )
+
+
+def _m14_information_map_strings(conn: sqlite3.Connection) -> None:
+    """v14: persistent information strings + graph synthesis.
+
+    This is the compounding layer for the DeepSeek Flash scout swarm:
+      - `information_strings`: causal chains produced by scouts.
+      - `information_map_nodes`: durable entity/theme/mechanism nodes.
+      - `information_map_edges`: weighted causal links between nodes.
+      - `information_syntheses`: cross-string confluence/tension summaries
+        that promote the best map discoveries back into verification.
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS information_strings (
+            id TEXT PRIMARY KEY,
+            cycle_id TEXT NOT NULL,
+            coverage_cell_key TEXT,
+            scout_id TEXT,
+            seed_id TEXT,
+            entity TEXT,
+            theme TEXT,
+            horizon TEXT,
+            lens TEXT,
+            bias_mode TEXT,
+            title TEXT,
+            thesis TEXT NOT NULL,
+            mechanism TEXT,
+            expected_outcome TEXT,
+            time_horizon TEXT,
+            kill_signal TEXT,
+            extends_or_contradicts TEXT,
+            would_change_decision INTEGER NOT NULL DEFAULT 1,
+            expires_at TEXT,
+            crowdedness REAL NOT NULL DEFAULT 0.5,
+            conviction REAL NOT NULL DEFAULT 0.5,
+            novelty_score REAL NOT NULL DEFAULT 0.5,
+            attention_score REAL NOT NULL DEFAULT 0.0,
+            entities_chain TEXT,
+            depth_layers TEXT,
+            evidence_refs TEXT,
+            prior_thread_refs TEXT,
+            source_tool_call_ids TEXT,
+            model_used TEXT,
+            provider TEXT,
+            cost_usd REAL NOT NULL DEFAULT 0.0,
+            quality_flags TEXT,
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_info_strings_cycle "
+        "ON information_strings(cycle_id, attention_score DESC, conviction DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_info_strings_cell "
+        "ON information_strings(coverage_cell_key, attention_score DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_info_strings_entity "
+        "ON information_strings(entity, horizon, valid_from DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_info_strings_theme "
+        "ON information_strings(theme, valid_from DESC)"
+    )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS information_map_nodes (
+            node_key TEXT PRIMARY KEY,
+            node_type TEXT NOT NULL,
+            label TEXT NOT NULL,
+            entity TEXT,
+            theme TEXT,
+            first_seen_cycle_id TEXT,
+            last_seen_cycle_id TEXT,
+            strength REAL NOT NULL DEFAULT 0.0,
+            evidence_count INTEGER NOT NULL DEFAULT 0,
+            payload TEXT,
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_info_nodes_type_strength "
+        "ON information_map_nodes(node_type, strength DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_info_nodes_seen "
+        "ON information_map_nodes(last_seen_cycle_id)"
+    )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS information_map_edges (
+            id TEXT PRIMARY KEY,
+            cycle_id TEXT NOT NULL,
+            string_id TEXT,
+            source_node_key TEXT NOT NULL,
+            target_node_key TEXT NOT NULL,
+            edge_type TEXT NOT NULL,
+            mechanism TEXT,
+            horizon TEXT,
+            strength REAL NOT NULL DEFAULT 0.0,
+            evidence_refs TEXT,
+            payload TEXT,
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_info_edges_source "
+        "ON information_map_edges(source_node_key, strength DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_info_edges_target "
+        "ON information_map_edges(target_node_key, strength DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_info_edges_cycle "
+        "ON information_map_edges(cycle_id, strength DESC)"
+    )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS information_syntheses (
+            id TEXT PRIMARY KEY,
+            cycle_id TEXT NOT NULL,
+            summary TEXT,
+            confluences_json TEXT,
+            tensions_json TEXT,
+            promoted_string_ids_json TEXT,
+            promoted_hypotheses_json TEXT,
+            model_used TEXT,
+            provider TEXT,
+            cost_usd REAL NOT NULL DEFAULT 0.0,
+            quality_flags TEXT,
+            created_at TEXT NOT NULL,
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_info_synth_cycle "
+        "ON information_syntheses(cycle_id, created_at DESC)"
+    )
+    _create_information_synthesis_routing_tables(conn)
+
+
+def _m15_information_string_quality_fields(conn: sqlite3.Connection) -> None:
+    """v15: make anti-waste scout-string fields queryable.
+
+    v14 stored the causal strings. v15 adds the quality/slicing fields the
+    scout prompt now asks for so downstream selection can rank by decision
+    value instead of re-parsing JSON blobs.
+    """
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(information_strings)")}
+    additions = {
+        "coverage_cell_key": "TEXT",
+        "extends_or_contradicts": "TEXT",
+        "would_change_decision": "INTEGER NOT NULL DEFAULT 1",
+        "expires_at": "TEXT",
+        "attention_score": "REAL NOT NULL DEFAULT 0.0",
+    }
+    for name, ddl in additions.items():
+        if name not in cols:
+            conn.execute(f"ALTER TABLE information_strings ADD COLUMN {name} {ddl}")
+    conn.execute(
+        """
+        UPDATE information_strings
+        SET attention_score =
+            MIN(1.0, MAX(0.0,
+                COALESCE(conviction, 0.0) * 0.45
+                + COALESCE(novelty_score, 0.0) * 0.30
+                + (1.0 - COALESCE(crowdedness, 0.5)) * 0.15
+            ))
+        WHERE attention_score IS NULL OR attention_score = 0.0
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_info_strings_cell "
+        "ON information_strings(coverage_cell_key, attention_score DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_info_strings_attention "
+        "ON information_strings(cycle_id, attention_score DESC, conviction DESC)"
+    )
+
+
+def _m16_information_synthesis_routing_tables(conn: sqlite3.Connection) -> None:
+    """v16: queryable synthesis items, promoted candidates, and artifact edges.
+
+    v14/v15 made scout strings durable. This migration turns synthesis from
+    a JSON sidecar into a routing substrate: each confluence/tension and each
+    promoted candidate gets its own row, with typed edges back to source
+    strings. The JSON columns stay as debug snapshots, not the primary API.
+    """
+    _create_information_synthesis_routing_tables(conn)
+
+
+def _create_information_synthesis_routing_tables(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS information_synthesis_items (
+            id TEXT PRIMARY KEY,
+            synthesis_id TEXT NOT NULL,
+            cycle_id TEXT NOT NULL,
+            item_type TEXT NOT NULL
+              CHECK (item_type IN ('confluence','tension')),
+            label TEXT NOT NULL,
+            coverage_cell_key TEXT,
+            entity TEXT,
+            theme TEXT,
+            horizon TEXT,
+            lens TEXT,
+            why_it_matters TEXT,
+            string_ids_json TEXT NOT NULL,
+            strength REAL NOT NULL DEFAULT 0.0,
+            quality_flags TEXT,
+            created_at TEXT NOT NULL,
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_info_synth_items_synth "
+        "ON information_synthesis_items(synthesis_id, strength DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_info_synth_items_slice "
+        "ON information_synthesis_items(cycle_id, entity, horizon, lens, strength DESC)"
+    )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS promoted_candidates (
+            id TEXT PRIMARY KEY,
+            synthesis_id TEXT,
+            synthesis_item_id TEXT,
+            cycle_id TEXT NOT NULL,
+            coverage_cell_key TEXT,
+            entity TEXT,
+            theme TEXT,
+            horizon TEXT,
+            lens TEXT,
+            bias_mode TEXT,
+            hypothesis TEXT NOT NULL,
+            rationale_brief TEXT,
+            confidence REAL NOT NULL DEFAULT 0.5,
+            promotion_score REAL NOT NULL DEFAULT 0.0,
+            source_string_ids_json TEXT NOT NULL,
+            suggested_tools_json TEXT,
+            status TEXT NOT NULL DEFAULT 'queued_verifier',
+            quality_flags TEXT,
+            created_at TEXT NOT NULL,
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_promoted_candidates_synth "
+        "ON promoted_candidates(synthesis_id, promotion_score DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_promoted_candidates_slice "
+        "ON promoted_candidates(cycle_id, entity, horizon, lens, promotion_score DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_promoted_candidates_status "
+        "ON promoted_candidates(status, cycle_id)"
+    )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS information_artifact_edges (
+            id TEXT PRIMARY KEY,
+            cycle_id TEXT NOT NULL,
+            from_kind TEXT NOT NULL,
+            from_id TEXT NOT NULL,
+            to_kind TEXT NOT NULL,
+            to_id TEXT NOT NULL,
+            edge_kind TEXT NOT NULL,
+            strength REAL NOT NULL DEFAULT 0.0,
+            evidence_role TEXT,
+            payload TEXT,
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_info_artifact_edges_from "
+        "ON information_artifact_edges(from_kind, from_id, edge_kind)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_info_artifact_edges_to "
+        "ON information_artifact_edges(to_kind, to_id, edge_kind)"
+    )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS information_string_evidence (
+            id TEXT PRIMARY KEY,
+            cycle_id TEXT NOT NULL,
+            string_id TEXT NOT NULL,
+            evidence_ref TEXT NOT NULL,
+            evidence_kind TEXT,
+            role TEXT,
+            created_at TEXT NOT NULL,
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_info_string_evidence_string "
+        "ON information_string_evidence(string_id, evidence_kind)"
+    )
+
+
+def _m17_information_temporal_pyramid(conn: sqlite3.Connection) -> None:
+    """v17: time-coherent context fields for information strings.
+
+    The scout layer now reasons across a temporal pyramid: tick/nanosecond,
+    second, minute, hour, day, week, month, quarter, year, structural. These
+    fields prevent a 1-minute observation from being silently mixed with a
+    1-month conclusion without an explicit bridge.
+    """
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(information_strings)")}
+    additions = {
+        "time_scale": "TEXT",
+        "event_time_start": "TEXT",
+        "event_time_end": "TEXT",
+        "observed_at": "TEXT",
+        "ingested_at": "TEXT",
+        "source_time_basis": "TEXT",
+        "rollup_parent_ids": "TEXT",
+        "lower_timeframe_refs": "TEXT",
+        "higher_timeframe_context_refs": "TEXT",
+        "temporal_confidence": "REAL NOT NULL DEFAULT 0.5",
+    }
+    for name, ddl in additions.items():
+        if name not in cols:
+            conn.execute(f"ALTER TABLE information_strings ADD COLUMN {name} {ddl}")
+    conn.execute(
+        """
+        UPDATE information_strings
+        SET time_scale = COALESCE(time_scale, time_horizon, horizon),
+            ingested_at = COALESCE(ingested_at, transaction_from),
+            temporal_confidence = COALESCE(temporal_confidence, conviction, 0.5)
+        WHERE time_scale IS NULL OR ingested_at IS NULL
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_info_strings_time_scale "
+        "ON information_strings(time_scale, event_time_start, event_time_end)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_info_strings_temporal_slice "
+        "ON information_strings(entity, time_scale, valid_from DESC)"
+    )
+
+
+def _m18_market_event_intelligence(conn: sqlite3.Connection) -> None:
+    """v18: data-complete market event intelligence bundles.
+
+    Hyperview can show the event row. Talis needs the row plus every
+    supporting datapoint needed to explain whether it matters: actor identity,
+    liquidity context, derivatives context, historical analogs, scenarios, and
+    watch triggers.
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS market_event_intelligence (
+            id TEXT PRIMARY KEY,
+            cycle_id TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            entity TEXT NOT NULL,
+            asset TEXT,
+            protocol TEXT,
+            event_time TEXT,
+            source_time_basis TEXT,
+            actor_label TEXT,
+            actor_address TEXT,
+            actor_cluster_id TEXT,
+            actor_type TEXT,
+            amount REAL,
+            amount_unit TEXT,
+            notional_usd REAL,
+            severity_score REAL NOT NULL DEFAULT 0.5,
+            intelligence_score REAL NOT NULL DEFAULT 0.5,
+            directional_bias TEXT NOT NULL DEFAULT 'neutral',
+            summary TEXT,
+            base_case TEXT,
+            bull_case TEXT,
+            bear_case TEXT,
+            kill_signal TEXT,
+            source_refs_json TEXT,
+            quality_flags TEXT,
+            raw_event_json TEXT,
+            created_at TEXT NOT NULL,
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_market_event_intel_cycle "
+        "ON market_event_intelligence(cycle_id, intelligence_score DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_market_event_intel_entity "
+        "ON market_event_intelligence(entity, event_time, intelligence_score DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_market_event_intel_actor "
+        "ON market_event_intelligence(actor_address, actor_cluster_id, event_time)"
+    )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS market_event_data_points (
+            id TEXT PRIMARY KEY,
+            bundle_id TEXT NOT NULL,
+            cycle_id TEXT NOT NULL,
+            category TEXT NOT NULL CHECK (
+                category IN (
+                    'event_fact',
+                    'actor_profile',
+                    'liquidity_context',
+                    'derivatives_context',
+                    'historical_analog',
+                    'scenario',
+                    'watch_trigger',
+                    'raw_source'
+                )
+            ),
+            label TEXT NOT NULL,
+            value_text TEXT,
+            numeric_value REAL,
+            unit TEXT,
+            source_ref TEXT,
+            confidence REAL NOT NULL DEFAULT 0.5,
+            observed_at TEXT,
+            payload_json TEXT,
+            created_at TEXT NOT NULL,
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_market_event_dp_bundle "
+        "ON market_event_data_points(bundle_id, category, label)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_market_event_dp_source "
+        "ON market_event_data_points(source_ref, observed_at)"
+    )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS market_event_watch_triggers (
+            id TEXT PRIMARY KEY,
+            bundle_id TEXT NOT NULL,
+            cycle_id TEXT NOT NULL,
+            trigger_kind TEXT NOT NULL,
+            description TEXT NOT NULL,
+            horizon TEXT,
+            direction TEXT,
+            severity TEXT NOT NULL DEFAULT 'yellow',
+            source_refs_json TEXT,
+            status TEXT NOT NULL DEFAULT 'active',
+            created_at TEXT NOT NULL,
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_market_event_triggers_bundle "
+        "ON market_event_watch_triggers(bundle_id, status, severity)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_market_event_triggers_cycle "
+        "ON market_event_watch_triggers(cycle_id, severity, created_at)"
+    )
+
+
+def _m19_node_intelligence(conn: sqlite3.Connection) -> None:
+    """v19: Hydromancer/node-native intelligence snapshots.
+
+    This is the substrate for "know everything from our node": one snapshot
+    links Hydromancer, HL-node/reject-corpus, event-store, and timeseries
+    observations into a scored actor/flow/state view that can be routed into
+    information strings, verifier tasks, and monitor panels.
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS node_intelligence_snapshots (
+            id TEXT PRIMARY KEY,
+            cycle_id TEXT NOT NULL,
+            entity TEXT NOT NULL,
+            chain TEXT NOT NULL DEFAULT 'hyperliquid',
+            protocol TEXT NOT NULL DEFAULT 'hyperliquid',
+            as_of TEXT NOT NULL,
+            summary TEXT,
+            edge_summary TEXT,
+            node_score REAL NOT NULL DEFAULT 0.0,
+            source_refs_json TEXT NOT NULL DEFAULT '[]',
+            source_families_json TEXT NOT NULL DEFAULT '[]',
+            coverage_json TEXT NOT NULL DEFAULT '{}',
+            actor_summaries_json TEXT NOT NULL DEFAULT '[]',
+            quality_flags TEXT NOT NULL DEFAULT '[]',
+            raw_payload_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL,
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_node_intel_cycle "
+        "ON node_intelligence_snapshots(cycle_id, node_score DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_node_intel_entity "
+        "ON node_intelligence_snapshots(entity, as_of DESC, node_score DESC)"
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS node_intelligence_observations (
+            id TEXT PRIMARY KEY,
+            snapshot_id TEXT NOT NULL,
+            cycle_id TEXT NOT NULL,
+            category TEXT NOT NULL CHECK (
+                category IN (
+                    'hydromancer_leaderboard',
+                    'wallet_quality',
+                    'wallet_trade',
+                    'wallet_order_quality',
+                    'wallet_state',
+                    'builder_flow',
+                    'onchain_event',
+                    'market_state',
+                    'node_reject_corpus',
+                    'raw_source'
+                )
+            ),
+            label TEXT NOT NULL,
+            actor TEXT,
+            value_text TEXT,
+            numeric_value REAL,
+            unit TEXT,
+            source_ref TEXT,
+            source_family TEXT,
+            confidence REAL NOT NULL DEFAULT 0.5,
+            observed_at TEXT,
+            payload_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL,
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_node_obs_snapshot "
+        "ON node_intelligence_observations(snapshot_id, category, actor)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_node_obs_actor "
+        "ON node_intelligence_observations(actor, source_family, observed_at)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_node_obs_source "
+        "ON node_intelligence_observations(source_ref, category, observed_at)"
+    )
+
+
+def _m20_analysis_tool_proposals(conn: sqlite3.Connection) -> None:
+    """v20: analysis-wide tool creation and iteration proposals."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS analysis_tool_proposals (
+            id TEXT PRIMARY KEY,
+            cycle_id TEXT NOT NULL,
+            artifact_kind TEXT NOT NULL,
+            artifact_id TEXT NOT NULL,
+            entity TEXT,
+            horizon TEXT,
+            lens TEXT,
+            proposal_kind TEXT NOT NULL DEFAULT 'new_tool',
+            tool_name TEXT NOT NULL,
+            purpose TEXT NOT NULL,
+            source_family TEXT,
+            trigger TEXT,
+            input_shape_json TEXT NOT NULL DEFAULT '{}',
+            promotion_gate_json TEXT NOT NULL DEFAULT '{}',
+            eval_plan_json TEXT NOT NULL DEFAULT '{}',
+            priority TEXT NOT NULL DEFAULT 'medium',
+            status TEXT NOT NULL DEFAULT 'proposed',
+            parent_proposal_id TEXT,
+            iteration INTEGER NOT NULL DEFAULT 0,
+            created_by TEXT NOT NULL DEFAULT 'analysis_tool_discovery',
+            quality_flags TEXT NOT NULL DEFAULT '[]',
+            created_at TEXT NOT NULL,
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_analysis_tool_prop_cycle "
+        "ON analysis_tool_proposals(cycle_id, status, priority)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_analysis_tool_prop_artifact "
+        "ON analysis_tool_proposals(artifact_kind, artifact_id)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_analysis_tool_prop_parent "
+        "ON analysis_tool_proposals(parent_proposal_id, iteration)"
+    )
+
+
+def _m21_information_alpha_geometry(conn: sqlite3.Connection) -> None:
+    """v21: market-specific alpha geometry over information strings.
+
+    This stores the measurable shape of the information map: source entropy,
+    scout independence, evidence coverage, fragility, tension, frontier
+    pressure, verifier readiness, and the final trade-scream score per
+    entity/horizon/lens/theme cell.
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS information_geometry_snapshots (
+            id TEXT PRIMARY KEY,
+            cycle_id TEXT NOT NULL,
+            cell_key TEXT NOT NULL,
+            entity TEXT,
+            theme TEXT,
+            horizon TEXT,
+            lens TEXT,
+            string_count INTEGER NOT NULL DEFAULT 0,
+            scout_count INTEGER NOT NULL DEFAULT 0,
+            evidence_ref_count INTEGER NOT NULL DEFAULT 0,
+            source_families_json TEXT NOT NULL DEFAULT '[]',
+            coordinates_json TEXT NOT NULL DEFAULT '{}',
+            metrics_json TEXT NOT NULL DEFAULT '{}',
+            route_directive TEXT NOT NULL DEFAULT 'observe',
+            trade_scream_score REAL NOT NULL DEFAULT 0.0,
+            verifier_readiness REAL NOT NULL DEFAULT 0.0,
+            quality_flags TEXT NOT NULL DEFAULT '[]',
+            created_at TEXT NOT NULL,
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_info_geometry_cycle "
+        "ON information_geometry_snapshots(cycle_id, trade_scream_score DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_info_geometry_route "
+        "ON information_geometry_snapshots(route_directive, cycle_id, verifier_readiness DESC)"
+    )
+
+
+def _m22_market_evolve_programs(conn: sqlite3.Connection) -> None:
+    """v22: evaluator-guided MarketEvolve program database.
+
+    AlphaEvolve evolves code against automated evaluators. MarketEvolve evolves
+    Talis research policy: prompt selection, evidence routing, tool-request
+    gates, and alpha-geometry thresholds. Programs are never trusted by name;
+    they must earn promotion through persisted cycle evaluations.
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS market_evolve_programs (
+            id TEXT PRIMARY KEY,
+            program_kind TEXT NOT NULL,
+            name TEXT NOT NULL,
+            generation INTEGER NOT NULL DEFAULT 0,
+            parent_program_ids_json TEXT NOT NULL DEFAULT '[]',
+            genome_json TEXT NOT NULL DEFAULT '{}',
+            objective_json TEXT NOT NULL DEFAULT '{}',
+            status TEXT NOT NULL DEFAULT 'candidate',
+            created_from_cycle_id TEXT,
+            score REAL NOT NULL DEFAULT 0.0,
+            metrics_json TEXT NOT NULL DEFAULT '{}',
+            quality_flags TEXT NOT NULL DEFAULT '[]',
+            created_at TEXT NOT NULL,
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_market_evolve_programs_status "
+        "ON market_evolve_programs(status, program_kind, score DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_market_evolve_programs_generation "
+        "ON market_evolve_programs(program_kind, generation DESC, score DESC)"
+    )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS market_evolve_evaluations (
+            id TEXT PRIMARY KEY,
+            program_id TEXT NOT NULL,
+            cycle_id TEXT NOT NULL,
+            evaluator_version TEXT NOT NULL,
+            score REAL NOT NULL DEFAULT 0.0,
+            metrics_json TEXT NOT NULL DEFAULT '{}',
+            baseline_metrics_json TEXT NOT NULL DEFAULT '{}',
+            passed INTEGER NOT NULL DEFAULT 0,
+            rationale TEXT,
+            quality_flags TEXT NOT NULL DEFAULT '[]',
+            evaluated_at TEXT NOT NULL,
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_market_evolve_eval_cycle "
+        "ON market_evolve_evaluations(cycle_id, score DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_market_evolve_eval_program "
+        "ON market_evolve_evaluations(program_id, evaluated_at DESC)"
+    )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS market_evolve_mutations (
+            id TEXT PRIMARY KEY,
+            parent_program_id TEXT NOT NULL,
+            child_program_id TEXT NOT NULL,
+            cycle_id TEXT NOT NULL,
+            mutation_kind TEXT NOT NULL,
+            mutation_json TEXT NOT NULL DEFAULT '{}',
+            rationale TEXT,
+            status TEXT NOT NULL DEFAULT 'proposed',
+            created_at TEXT NOT NULL,
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_market_evolve_mut_parent "
+        "ON market_evolve_mutations(parent_program_id, created_at DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_market_evolve_mut_cycle "
+        "ON market_evolve_mutations(cycle_id, status)"
+    )
+
+
+def _m23_market_evolve_experiments(conn: sqlite3.Connection) -> None:
+    """v23: close the MarketEvolve loop into live policy application.
+
+    v22 persisted programs, evaluations, and mutations. v23 records which
+    policy actually shaped each scout seed, and stores planned hard experiments
+    for candidate policies before they can become active.
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS market_evolve_policy_applications (
+            id TEXT PRIMARY KEY,
+            cycle_id TEXT NOT NULL,
+            program_id TEXT NOT NULL,
+            program_name TEXT,
+            generation INTEGER NOT NULL DEFAULT 0,
+            seed_id TEXT NOT NULL,
+            entity TEXT,
+            horizon TEXT,
+            lens TEXT,
+            bias_mode TEXT,
+            theme TEXT,
+            prompt_variant TEXT,
+            tool_candidate_limit INTEGER NOT NULL DEFAULT 0,
+            evidence_tool_limit INTEGER NOT NULL DEFAULT 0,
+            applied_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL,
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_market_evolve_policy_app_cycle "
+        "ON market_evolve_policy_applications(cycle_id, program_id)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_market_evolve_policy_app_seed "
+        "ON market_evolve_policy_applications(seed_id, cycle_id)"
+    )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS market_evolve_experiments (
+            id TEXT PRIMARY KEY,
+            cycle_id TEXT NOT NULL,
+            parent_program_id TEXT NOT NULL,
+            candidate_program_id TEXT NOT NULL,
+            experiment_kind TEXT NOT NULL,
+            matched_slice_json TEXT NOT NULL DEFAULT '{}',
+            arms_json TEXT NOT NULL DEFAULT '[]',
+            success_criteria_json TEXT NOT NULL DEFAULT '{}',
+            status TEXT NOT NULL DEFAULT 'planned',
+            rationale TEXT,
+            quality_flags TEXT NOT NULL DEFAULT '[]',
+            created_at TEXT NOT NULL,
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_market_evolve_exp_cycle "
+        "ON market_evolve_experiments(cycle_id, status)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_market_evolve_exp_candidate "
+        "ON market_evolve_experiments(candidate_program_id, status)"
+    )
+
+
+def _m24_market_evolve_experiment_results(conn: sqlite3.Connection) -> None:
+    """v24: arm-level online experiment results and promotion decisions."""
+    cols = {
+        row[1]
+        for row in conn.execute("PRAGMA table_info(market_evolve_policy_applications)")
+    }
+    if "experiment_id" not in cols:
+        conn.execute("ALTER TABLE market_evolve_policy_applications ADD COLUMN experiment_id TEXT")
+    if "experiment_arm" not in cols:
+        conn.execute("ALTER TABLE market_evolve_policy_applications ADD COLUMN experiment_arm TEXT")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_market_evolve_policy_app_experiment "
+        "ON market_evolve_policy_applications(experiment_id, experiment_arm, cycle_id)"
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS market_evolve_experiment_results (
+            id TEXT PRIMARY KEY,
+            experiment_id TEXT NOT NULL,
+            cycle_id TEXT NOT NULL,
+            parent_program_id TEXT NOT NULL,
+            candidate_program_id TEXT NOT NULL,
+            control_metrics_json TEXT NOT NULL DEFAULT '{}',
+            candidate_metrics_json TEXT NOT NULL DEFAULT '{}',
+            control_score REAL NOT NULL DEFAULT 0.0,
+            candidate_score REAL NOT NULL DEFAULT 0.0,
+            score_delta REAL NOT NULL DEFAULT 0.0,
+            decision TEXT NOT NULL,
+            rationale TEXT,
+            quality_flags TEXT NOT NULL DEFAULT '[]',
+            created_at TEXT NOT NULL,
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_market_evolve_exp_result_cycle "
+        "ON market_evolve_experiment_results(cycle_id, decision, score_delta)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_market_evolve_exp_result_experiment "
+        "ON market_evolve_experiment_results(experiment_id, created_at DESC)"
+    )
+
+
+def _m12_pm_overlay_and_execution(conn: sqlite3.Connection) -> None:
+    """v12: PM overlay + executable expressions + watchtower rulesets.
+
+    Six new bitemporal tables that together make the brief actionable:
+      - `pm_overlay_user_state`: per-user (or 'house') risk overlay snapshot
+      - `convexity_scores`: deterministic convexity audit per candidate
+      - `executable_expressions`: HL-validated trade instructions
+      - `watchtower_rulesets`: machine-readable invalidators per thesis
+      - `watchtower_triggers`: rule-trigger event log
+      - `watchtower_position_state`: per-position tracking state
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS pm_overlay_user_state (
+            id TEXT PRIMARY KEY,
+            user_id TEXT,                          -- NULL = house default
+            nav_usd REAL NOT NULL,
+            drawdown_pct REAL NOT NULL,
+            max_loss_per_thesis_pct REAL NOT NULL,
+            max_total_open_risk_pct REAL NOT NULL,
+            max_leverage REAL NOT NULL,
+            max_book_correlation REAL NOT NULL,
+            can_execute_hl INTEGER NOT NULL,
+            existing_positions_json TEXT,
+            risk_appetite TEXT,
+            as_of TEXT NOT NULL,
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_pm_overlay_user "
+        "ON pm_overlay_user_state(user_id) WHERE transaction_to IS NULL"
+    )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS convexity_scores (
+            id TEXT PRIMARY KEY,
+            forecast_id TEXT,
+            candidate_id TEXT NOT NULL,
+            cycle_id TEXT NOT NULL,
+            calibrated_edge REAL NOT NULL,
+            payoff_asymmetry REAL NOT NULL,
+            catalyst_tightness REAL NOT NULL,
+            liquidity REAL NOT NULL,
+            crowding REAL NOT NULL,
+            funding_bleed REAL NOT NULL,
+            correlation_to_book REAL NOT NULL,
+            stale_data REAL NOT NULL,
+            convexity_score REAL NOT NULL,
+            rationale TEXT,
+            quality_flags TEXT,
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_convexity_cycle "
+        "ON convexity_scores(cycle_id, convexity_score DESC)"
+    )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS executable_expressions (
+            id TEXT PRIMARY KEY,
+            forecast_id TEXT,
+            candidate_id TEXT NOT NULL,
+            cycle_id TEXT NOT NULL,
+            exchange TEXT NOT NULL,
+            hl_coin TEXT,
+            asset_id INTEGER,
+            dex TEXT,
+            is_hip3 INTEGER,
+            direction TEXT NOT NULL CHECK (direction IN ('long','short','none')),
+            leverage REAL NOT NULL,
+            target_size_usd REAL NOT NULL,
+            target_size_units REAL NOT NULL,
+            margin_required_usd REAL NOT NULL,
+            tick_size REAL NOT NULL,
+            size_decimals INTEGER NOT NULL,
+            min_notional_usd REAL NOT NULL,
+            mark_price REAL NOT NULL,
+            entry_ladder_json TEXT,
+            stop_price REAL,
+            tp1_price REAL,
+            tp2_price REAL,
+            liquidation_price_est REAL,
+            funding_8h_bps REAL,
+            funding_breakeven_hours REAL,
+            data_quality TEXT NOT NULL,
+            stale_age_ms INTEGER NOT NULL DEFAULT 0,
+            protective_order_status TEXT NOT NULL,
+            catalog_source TEXT NOT NULL,
+            convexity_score REAL,
+            survival_pct_nav REAL,
+            publication_label TEXT,
+            rationale_short TEXT,
+            quality_flags TEXT,
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_executable_cycle "
+        "ON executable_expressions(cycle_id, publication_label)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_executable_coin_open "
+        "ON executable_expressions(hl_coin) WHERE transaction_to IS NULL"
+    )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS watchtower_rulesets (
+            id TEXT PRIMARY KEY,
+            forecast_id TEXT,
+            candidate_id TEXT NOT NULL,
+            executable_id TEXT,
+            cycle_id TEXT NOT NULL,
+            hl_coin TEXT NOT NULL,
+            direction TEXT NOT NULL,
+            rules_json TEXT NOT NULL,
+            compiled_at TEXT NOT NULL,
+            quality_flags TEXT,
+            status TEXT NOT NULL DEFAULT 'active',
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_watchtower_rulesets_active "
+        "ON watchtower_rulesets(hl_coin, status) WHERE transaction_to IS NULL"
+    )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS watchtower_triggers (
+            id TEXT PRIMARY KEY,
+            ruleset_id TEXT NOT NULL,
+            forecast_id TEXT,
+            rule_id TEXT NOT NULL,
+            rule_kind TEXT NOT NULL,
+            severity TEXT NOT NULL,
+            label TEXT,
+            threshold REAL,
+            current_value REAL,
+            triggered_at TEXT NOT NULL,
+            snapshot_json TEXT,
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_watchtower_triggers_ruleset "
+        "ON watchtower_triggers(ruleset_id, triggered_at)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_watchtower_triggers_severity "
+        "ON watchtower_triggers(severity, triggered_at)"
+    )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS watchtower_position_state (
+            id TEXT PRIMARY KEY,
+            ruleset_id TEXT,
+            forecast_id TEXT,
+            candidate_id TEXT NOT NULL,
+            hl_coin TEXT NOT NULL,
+            direction TEXT NOT NULL,
+            entry_price REAL NOT NULL,
+            current_size_units REAL NOT NULL,
+            intended_size_units REAL NOT NULL,
+            mark_price_at_open REAL NOT NULL,
+            opened_at TEXT NOT NULL,
+            last_evaluated_at TEXT NOT NULL,
+            last_mark_price REAL NOT NULL,
+            last_funding_8h_bps REAL,
+            last_mini_flow_at TEXT,
+            status TEXT NOT NULL DEFAULT 'open',
+            quality_flags TEXT,
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_watchtower_position_open "
+        "ON watchtower_position_state(hl_coin, status) WHERE transaction_to IS NULL"
+    )
 
 
 # ============================================================================
@@ -664,9 +2057,8 @@ def apply_migrations(
     fresh DB this advances 0 -> SCHEMA_VERSION; on a healthy DB this is
     a no-op (no migrations fire, version unchanged).
 
-    Postgres dispatching is not yet implemented — for now we delegate to
-    `apply_sota_schema(conn, dialect='postgres')` which returns the
-    spec SQL without auto-applying it.
+    For Postgres, delegate to `apply_sota_schema(conn, dialect='postgres')`
+    which applies the baseline DB-API DDL bundle.
     """
     if dialect == "postgres":
         from .sota import apply_sota_schema as _baseline

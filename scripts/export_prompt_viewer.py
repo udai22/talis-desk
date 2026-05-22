@@ -44,6 +44,7 @@ FILENAMES = {
     "market_universe_manifest": "market_universe_manifest.json",
     "market_map_governor": "market_map_governor.json",
     "market_map_self_healing": "market_map_self_healing.json",
+    "market_map_self_healing_dispatch": "market_map_self_healing_dispatch.json",
     "coverage_gap_manifest": "coverage_gap_manifest.json",
 }
 
@@ -229,6 +230,7 @@ def render_html(data: dict[str, Any]) -> str:
         _render_panel("universe", "Market Universe", data, "market_universe_manifest"),
         _render_panel("governor", "Map Governor", data, "market_map_governor"),
         _render_panel("selfheal", "Self-Healing Plan", data, "market_map_self_healing"),
+        _render_panel("selfhealdispatch", "Self-Healing Tasks", data, "market_map_self_healing_dispatch"),
         _render_panel("coverage", "Coverage Gaps", data, "coverage_gap_manifest"),
     ])
     cohesive_story_html = _render_cohesive_story(
@@ -2970,6 +2972,17 @@ def _render_market_map_governor_chapter(*, data: dict[str, Any]) -> str:
 
 def _render_self_healing_chapter(*, data: dict[str, Any]) -> str:
     plan = _artifact_json(data, "market_map_self_healing")
+    dispatch_artifact = _artifact_json(data, "market_map_self_healing_dispatch")
+    dispatch = (
+        dispatch_artifact.get("dispatch")
+        if isinstance(dispatch_artifact.get("dispatch"), dict)
+        else {}
+    )
+    repeat_dispatch = (
+        dispatch_artifact.get("repeat_dispatch")
+        if isinstance(dispatch_artifact.get("repeat_dispatch"), dict)
+        else {}
+    )
     orders = [row for row in (plan.get("work_orders") or []) if isinstance(row, dict)]
     context = plan.get("context_packet") if isinstance(plan.get("context_packet"), dict) else {}
     order_cards = "".join(
@@ -2995,6 +3008,34 @@ def _render_self_healing_chapter(*, data: dict[str, Any]) -> str:
         ]
     )
     prompt = str(plan.get("llm_gap_prompt") or "")
+    dispatch_rows = "".join(
+        f'<div><span>{html.escape(label)}</span><strong>{html.escape(_compact_value(value, limit=140))}</strong></div>'
+        for label, value in [
+            ("posted tasks", dispatch.get("posted_count")),
+            ("existing on repeat", repeat_dispatch.get("existing_count")),
+            ("requested orders", dispatch.get("requested_count")),
+            ("status", dispatch.get("status")),
+            ("task proof", dispatch.get("proof")),
+        ]
+    )
+    posted_preview = {
+        "schema_version": dispatch.get("schema_version"),
+        "posted_count": dispatch.get("posted_count"),
+        "existing_count": dispatch.get("existing_count"),
+        "posted_tasks": [
+            {
+                "topic": task.get("topic"),
+                "title": task.get("title"),
+                "allowed_tools": task.get("allowed_tools"),
+                "success_gate": (task.get("promotion_criteria") or {}).get("success_gate")
+                if isinstance(task.get("promotion_criteria"), dict) else None,
+                "stop_condition": (task.get("kill_criteria") or {}).get("stop_condition")
+                if isinstance(task.get("kill_criteria"), dict) else None,
+            }
+            for task in (dispatch.get("posted_tasks") or [])[:6]
+            if isinstance(task, dict)
+        ],
+    }
     return f"""
         <section class="chapter">
           <div class="chapter-head">
@@ -3006,9 +3047,15 @@ def _render_self_healing_chapter(*, data: dict[str, Any]) -> str:
             <div><strong>{html.escape(str(len(orders)))}</strong><small>repair / expansion orders</small></div>
             <div><strong>{html.escape(str(plan.get("status") or "unknown"))}</strong><small>planner status</small></div>
             <div><strong>{html.escape(_compact_value(context.get("route")))}</strong><small>geometry route</small></div>
-            <div><strong>{html.escape(str(len(prompt)))}</strong><small>LLM context prompt chars</small></div>
+            <div><strong>{html.escape(str(dispatch.get("posted_count") or 0))}</strong><small>task contracts posted</small></div>
           </div>
           <div class="output-grid" style="margin-top:10px">{order_cards}</div>
+          <article class="workbench-panel" style="margin-top:10px">
+            <h3>Repair tasks posted</h3>
+            <p>The orders now cross the execution boundary: each one becomes a schedulable task contract with allowed tools, source refs, a success gate, a stop condition, and idempotent repost behavior.</p>
+            <div class="trace-meta">{dispatch_rows}</div>
+            <pre class="prompt-slice">{html.escape(json.dumps(posted_preview, indent=2, sort_keys=True, ensure_ascii=True, default=str))}</pre>
+          </article>
           <article class="workbench-panel" style="margin-top:10px">
             <h3>Worker context packet</h3>
             <p>This is the compact state a repair worker receives before it acts.</p>

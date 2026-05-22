@@ -33,12 +33,14 @@ stable snapshot via get_atlas_snapshot_for_cycle(cycle_id) — second call for
 the same cycle returns identical state even if atlas mutated between them.
 This preserves replay determinism (v2 line 64).
 
-# Honest gaps
+# Explicit fallbacks
 
   - Tool affinity per specialist reads mv_top_tools_per_specialist_30d which
-    is empty until Phase 6. For now we return uniform top-15.
-  - Learned tools directory learned_tools/ doesn't exist yet (AGENT_INFRA_PLAN
-    Phase 2 creates it); for now load_learned_tools returns empty list.
+    can be empty on a fresh desk. In that case the registry uses an unweighted
+    curated ordering and marks the snapshot normally.
+  - Learned tools are loaded from learned_tools/<slug>/manifest.json when
+    present. Missing directories are treated as "no learned tools installed",
+    not as generated capabilities.
   - Cost estimates for tools that don't carry an explicit cost_hint default
     to $0.001/call.
   - The tool_atlas and tool_call_log table DDLs are owned by the sibling
@@ -426,6 +428,15 @@ def _utcnow_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def learned_tools_dir() -> Path:
+    """Runtime-overridable learned-tool root.
+
+    Tests and smoke runs can set TALIS_LEARNED_TOOLS_DIR so generated learned
+    tools do not dirty the repo. Production defaults to repo/learned_tools.
+    """
+    return Path(os.environ.get("TALIS_LEARNED_TOOLS_DIR") or LEARNED_TOOLS_DIR)
+
+
 # ============================================================================
 # 5. Provider classification — maps a TOOLS entry to (kind, sub_kind, provider)
 # ============================================================================
@@ -446,6 +457,14 @@ _AGENT_NATIVE_TOOL_NAMES = {
 
 _PARALLEL_SEARCH_NAMES = {"parallel_search"}
 _WEB_SEARCH_NAMES = {"web_search"}
+_JARVIS_BRIDGE_TOOL_NAMES = {
+    "jarvis_intelligence_surfaces",
+    "jarvis_surface_search",
+}
+
+_TALIS_NATIVE_TOOL_NAMES = {
+    "plan_alpha_geometry_actions",
+}
 
 
 def _classify_tool(name: str, spec: dict[str, Any]) -> tuple[str, str, str]:
@@ -463,6 +482,10 @@ def _classify_tool(name: str, spec: dict[str, Any]) -> tuple[str, str, str]:
         return ("external", "parallel", "parallel.ai")
     if name in _WEB_SEARCH_NAMES:
         return ("external", "perplexity", "perplexity")
+    if name in _JARVIS_BRIDGE_TOOL_NAMES:
+        return ("builtin", "jarvis_bridge", "jarvis-trading-engine")
+    if name in _TALIS_NATIVE_TOOL_NAMES:
+        return ("builtin", "talis_native", "talis_desk")
     return ("builtin", "builtin", "tic")
 
 
@@ -599,7 +622,11 @@ def _parse_json_or_text(s: str) -> Any:
 def _scan_builtin_tools() -> list[dict[str, Any]]:
     """Walk the live TOOLS registry and emit one atlas row per entry."""
     # Local import to avoid circular at module load.
-    from tic.desk.tools import TOOLS  # type: ignore
+    try:
+        from tic.desk.tools import TOOLS  # type: ignore
+    except Exception as e:
+        warnings.warn(f"builtin_tool_scan_failed: {e}")
+        return []
 
     rows: list[dict[str, Any]] = []
     for name, spec in TOOLS.items():
@@ -628,6 +655,34 @@ def _scan_builtin_tools() -> list[dict[str, Any]]:
             "cost_hint": cost_hint,
             "status": "active",
             "code_sha256": _hash_callable(fn),
+            "skill_md_path": None,
+        })
+    return rows
+
+
+def _scan_talis_native_tools() -> list[dict[str, Any]]:
+    try:
+        from .native_tools import native_tool_specs
+    except Exception as e:
+        warnings.warn(f"talis_native_tool_scan_failed: {e}")
+        return []
+    rows: list[dict[str, Any]] = []
+    for spec in native_tool_specs():
+        rows.append({
+            "tool_uri": spec.tool_uri,
+            "tool_name": spec.tool_name,
+            "version": spec.version,
+            "kind": "builtin",
+            "provider": spec.provider,
+            "callable_ref": _callable_ref(spec.callable),
+            "schema_json": spec.input_schema,
+            "description": spec.description,
+            "source_dependencies": spec.source_dependencies,
+            "permission_scope": spec.permission_scope,
+            "network_hosts": spec.network_hosts,
+            "cost_hint": spec.cost_hint,
+            "status": "active",
+            "code_sha256": _hash_callable(spec.callable),
             "skill_md_path": None,
         })
     return rows
@@ -759,10 +814,11 @@ def _try_load_skill_callable(tool_py: Path) -> Optional[Callable]:
 def _scan_learned_tools() -> list[dict[str, Any]]:
     """Walk learned_tools/<slug>/ entries. Returns [] if directory missing
     (AGENT_INFRA_PLAN Phase 2 creates this)."""
-    if not LEARNED_TOOLS_DIR.exists():
+    root = learned_tools_dir()
+    if not root.exists():
         return []
     rows: list[dict[str, Any]] = []
-    for tool_dir in sorted(LEARNED_TOOLS_DIR.iterdir()):
+    for tool_dir in sorted(root.iterdir()):
         if not tool_dir.is_dir():
             continue
         meta_path = tool_dir / "manifest.json"
@@ -847,11 +903,12 @@ def regenerate_tool_atlas(
     as_of_iso = as_of.isoformat() if isinstance(as_of, datetime) else str(as_of)
 
     builtin = _scan_builtin_tools()
+    talis_native = _scan_talis_native_tools()
     sources = _scan_sources()
     skills, manifests = _scan_skills()
     learned = _scan_learned_tools()
 
-    all_rows = builtin + sources + skills + learned
+    all_rows = builtin + talis_native + sources + skills + learned
     all_rows = _enforce_skill_cap(all_rows, manifests)
 
     if not include_candidates:
@@ -1029,6 +1086,18 @@ def _lookup_callable(parsed: ParsedURI, name: str) -> Optional[Callable]:
                 return fetch_live(name, **kw)
             _src_call.__name__ = f"fetch_live_{name}"
             return _src_call
+        except Exception:
+            return None
+    if parsed.authority == "tool" and parsed.sub_kind == "learned":
+        try:
+            from .learned_runtime import get_learned_callable
+            return get_learned_callable(name)
+        except Exception:
+            return None
+    if parsed.authority == "tool" and parsed.sub_kind == "talis_native":
+        try:
+            from .native_tools import get_native_callable
+            return get_native_callable(name)
         except Exception:
             return None
     if parsed.authority == "tool":
@@ -1281,13 +1350,13 @@ def get_atlas_snapshot_for_cycle(cycle_id: str) -> ToolAtlasSnapshot:
 # 11. Smoke test
 # ============================================================================
 
-def _write_synthetic_skill_for_smoke() -> Path:
+def _write_synthetic_skill_for_smoke() -> tuple[Path, bool]:
     """Create skills/example_skill/SKILL.md if it doesn't exist (test only)."""
     d = SKILLS_DIR / "example_skill"
     d.mkdir(parents=True, exist_ok=True)
     md = d / "SKILL.md"
     if md.exists():
-        return md
+        return md, False
     md.write_text(
         """## name
 example_skill
@@ -1300,7 +1369,7 @@ load_skill_registry to confirm the SKILL.md parser works end-to-end.
 ticker: string — symbol to analyze
 
 ## outputs
-dict with placeholder fields
+dict with ticker, ok, and source fields
 
 ## example_invocations
 - example_skill(ticker='BTC')
@@ -1323,10 +1392,11 @@ microstructure
     )
     # Also drop a tool.py so the callable_ref is populated.
     (d / "tool.py").write_text(
-        "def run(ticker: str) -> dict:\n    return {'ticker': ticker, 'ok': True}\n",
+        "def run(ticker: str) -> dict:\n"
+        "    return {'ticker': ticker, 'ok': True, 'source': 'tool_atlas_smoke'}\n",
         encoding="utf-8",
     )
-    return md
+    return md, True
 
 
 def _smoke_test() -> None:
@@ -1334,7 +1404,7 @@ def _smoke_test() -> None:
     ctx = AgentContext(cycle_id="smoke_test", specialist_id="test")
 
     # Make sure at least one synthetic SKILL.md exists.
-    _write_synthetic_skill_for_smoke()
+    smoke_skill_md, created_smoke_skill = _write_synthetic_skill_for_smoke()
 
     # (2) Regenerate
     t0 = time.perf_counter()
@@ -1447,6 +1517,15 @@ def _smoke_test() -> None:
         tmp.rmdir()
     except Exception:
         pass
+    if created_smoke_skill:
+        try:
+            tool_py = smoke_skill_md.parent / "tool.py"
+            if tool_py.exists():
+                tool_py.unlink()
+            smoke_skill_md.unlink()
+            smoke_skill_md.parent.rmdir()
+        except Exception:
+            pass
 
     print(f"\nTOOLS atlas now has {snap.n_tools} tools, "
           f"{snap.n_skills} skills, {snap.n_sources} sources")

@@ -46,8 +46,19 @@ from typing import Any, Optional
 from talis_desk._tic_config import ensure_tic_on_path as _ensure_tic_on_path
 from talis_desk._tic_config import get_tic_root as _get_tic_root
 
-_ensure_tic_on_path()
-TIC_PATH = str(_get_tic_root())
+
+def _resolve_tic_labels() -> tuple[str, str]:
+    """Resolve TIC labels lazily so importing run_swarm helpers is portable."""
+    try:
+        _ensure_tic_on_path()
+        root = str(_get_tic_root())
+        return root, f"{root}/tic/tic.db"
+    except RuntimeError as exc:
+        unavailable = f"unavailable ({exc})"
+        return unavailable, unavailable
+
+
+TIC_PATH, TIC_DB_LABEL = _resolve_tic_labels()
 
 
 def banner(s: str) -> None:
@@ -124,7 +135,7 @@ def main() -> int:
     print(f"  map_llm_governor = {'off' if args.skip_market_map_llm_governor else args.market_map_llm_model}")
     print(f"  analyst_topk     = {args.analyst_topk}")
     print(f"  adversarial_topk = {args.adversarial_topk}")
-    print(f"  tic.db           = {TIC_PATH}/tic/tic.db")
+    print(f"  tic.db           = {TIC_DB_LABEL}")
 
     # ----- Pin desk store -------------------------------------------------
     from talis_desk.store import DeskStore
@@ -913,7 +924,7 @@ def main() -> int:
         "as_of": datetime.now(timezone.utc).isoformat(),
         "scope": args.scope,
         "desk_db": str(db_path),
-        "tic_db": f"{TIC_PATH}/tic/tic.db",
+        "tic_db": TIC_DB_LABEL,
         "n_seeds": len(seeds),
         "n_scouts_ok": n_scout_ok,
         "n_information_strings": n_info_strings,
@@ -1133,7 +1144,7 @@ def _write_scout_walkthrough_artifacts(
         "scope": scope,
         "run_mode": "scout_walkthrough",
         "desk_db": str(db_path),
-        "tic_db": f"{TIC_PATH}/tic/tic.db",
+        "tic_db": TIC_DB_LABEL,
         "n_seeds": len(seeds),
         "n_scouts_ok": len(ok_rows),
         "n_scouts_error": len(error_rows),

@@ -12,7 +12,9 @@ See wiki/REPO_BOUNDARY.md for the full contract.
 """
 from __future__ import annotations
 
+import os
 import sqlite3
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -72,13 +74,29 @@ class DeskStore:
         `VACUUM INTO` works while the source DB is open and produces a
         clean (defragmented, no WAL sidecar) copy.
         """
-        if self.dialect != "sqlite":
-            raise NotImplementedError(
-                "backup() is sqlite-only; use pg_dump for postgres."
-            )
         dest_dir = Path(backup_dir) if backup_dir else DEFAULT_BACKUP_DIR
         dest_dir.mkdir(parents=True, exist_ok=True)
         ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        if self.dialect != "sqlite":
+            database_url = (
+                os.environ.get("TALIS_DESK_DATABASE_URL")
+                or os.environ.get("DATABASE_URL")
+                or os.environ.get("PGDATABASE")
+            )
+            if not database_url:
+                raise RuntimeError(
+                    "postgres_backup_requires_TALIS_DESK_DATABASE_URL_or_DATABASE_URL"
+                )
+            dest_sql = dest_dir / f"desk-{ts}.sql"
+            cmd = ["pg_dump", "--file", str(dest_sql), database_url]
+            try:
+                subprocess.run(cmd, check=True, capture_output=True, text=True)
+            except FileNotFoundError as exc:
+                raise RuntimeError("postgres_backup_requires_pg_dump_on_PATH") from exc
+            except subprocess.CalledProcessError as exc:
+                detail = (exc.stderr or exc.stdout or "").strip()[:400]
+                raise RuntimeError(f"postgres_backup_failed:{detail}") from exc
+            return dest_sql
         dest = dest_dir / f"desk-{ts}.db"
         # `VACUUM INTO` requires a literal-style path argument; sqlite3
         # `?` placeholders don't bind here. Quote-escape just in case.

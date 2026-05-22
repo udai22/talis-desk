@@ -75,6 +75,7 @@ from talis_desk.monitor.server import (
 from talis_desk.market_map.universe import build_market_universe
 from talis_desk.market_map.self_healing import (
     build_market_map_self_healing_plan,
+    post_market_map_self_healing_work_orders,
     render_market_map_self_healing_markdown,
 )
 from talis_desk.market_map.coverage_audit import build_coverage_gap_manifest
@@ -1412,9 +1413,43 @@ def main() -> int:
     _write_json(system_trace_json_path, system_trace)
     _write_text(system_trace_md_path, render_system_trace_markdown(system_trace))
     self_healing = build_market_map_self_healing_plan(system_trace)
+    self_healing_dispatch = post_market_map_self_healing_work_orders(
+        self_healing,
+        cycle_id=CYCLE_ID,
+        conn=store.conn,
+        limit=8,
+    )
+    repeated_self_healing_dispatch = post_market_map_self_healing_work_orders(
+        self_healing,
+        cycle_id=CYCLE_ID,
+        conn=store.conn,
+        limit=8,
+    )
+    if self_healing.get("work_orders"):
+        _assert(
+            self_healing_dispatch.get("posted_count", 0) >= 1,
+            "self-healing work orders did not become task contracts",
+        )
+        _assert(
+            repeated_self_healing_dispatch.get("existing_count", 0)
+            == self_healing_dispatch.get("posted_count", 0),
+            "self-healing task dispatch is not idempotent",
+        )
+        _assert(
+            self_healing_dispatch.get("proof", {}).get("all_tasks_have_success_gates") is True,
+            "self-healing task contracts missing success gates",
+        )
     self_healing_json_path = prompt_output_dir / "market_map_self_healing.json"
     self_healing_md_path = prompt_output_dir / "market_map_self_healing.md"
+    self_healing_dispatch_path = prompt_output_dir / "market_map_self_healing_dispatch.json"
     _write_json(self_healing_json_path, self_healing)
+    _write_json(
+        self_healing_dispatch_path,
+        {
+            "dispatch": self_healing_dispatch,
+            "repeat_dispatch": repeated_self_healing_dispatch,
+        },
+    )
     _write_text(self_healing_md_path, render_market_map_self_healing_markdown(self_healing))
     report["system_trace"] = {
         "json": str(system_trace_json_path),
@@ -1427,6 +1462,12 @@ def main() -> int:
         "markdown": str(self_healing_md_path),
         "status": self_healing.get("status"),
         "work_orders": len(self_healing.get("work_orders") or []),
+        "dispatch_artifact": str(self_healing_dispatch_path),
+        "posted_tasks": self_healing_dispatch.get("posted_count"),
+        "repeat_existing_tasks": repeated_self_healing_dispatch.get("existing_count"),
+        "orders_became_task_contracts": (
+            self_healing_dispatch.get("proof", {}).get("orders_became_task_contracts")
+        ),
     }
     _write_prompt_output_index(prompt_output_dir)
 

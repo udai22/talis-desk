@@ -1,4 +1,4 @@
-"""Configuration helper for locating the sibling talis-tic checkout.
+"""Configuration helper for locating the talis-tic data substrate.
 
 Codex review finding #16: scattered hardcoded `/Users/udaikhattar/...`
 paths inserted into `sys.path` make the desk unrunnable on any host
@@ -8,26 +8,23 @@ environment variable.
 
 Resolution order:
   1. `TALIS_TIC_ROOT` env var (preferred, prod path).
-  2. Legacy hardcoded path (dev fallback, emits a DeprecationWarning).
+  2. Standalone repo-local `talis_tic/` directory.
   3. Raise `RuntimeError` if neither resolves.
 
-Every consumer that needs the sibling `tic` package importable must call
-`ensure_tic_on_path()` (or use `get_tic_root()` directly). The legacy
-fallback is intentionally narrow (one path, dev-only) and is gated on the
-expected `tic/tic.db` file existing inside it; we never silently fall
-through to placeholder behavior.
+Every consumer that needs the `tic` package importable must call
+`ensure_tic_on_path()` (or use `get_tic_root()` directly). The repo-local
+fallback is intentionally narrow and is gated on the expected `tic/tic.db`
+file existing inside it; we never silently fall through to placeholder
+behavior.
 """
 from __future__ import annotations
 
 import os
 import sys
-import warnings
 from pathlib import Path
 
 
-_LEGACY_TIC_ROOT = Path(
-    "/Users/udaikhattar/jarvis-ios/docs/research/brief_experiments"
-)
+_REPO_LOCAL_TIC_ROOT = Path(__file__).resolve().parents[1] / "talis_tic"
 
 
 def get_tic_root() -> Path:
@@ -41,7 +38,7 @@ def get_tic_root() -> Path:
     Resolution:
       - If ``TALIS_TIC_ROOT`` is set, use it. Raises if it doesn't
         contain ``tic/tic.db``.
-      - Else fall back to the legacy hardcoded dev path (warns).
+      - Else fall back to repo-local ``talis_tic/``.
       - Else raise.
     """
     env = os.environ.get("TALIS_TIC_ROOT")
@@ -54,20 +51,12 @@ def get_tic_root() -> Path:
                 f"package (parent of tic/tic.db)."
             )
         return p
-    # Dev fallback (only when no env var). Emit a one-shot deprecation
-    # warning so prod operators see the message.
-    if (_LEGACY_TIC_ROOT / "tic" / "tic.db").exists():
-        warnings.warn(
-            "Using legacy hardcoded TALIS_TIC_ROOT path "
-            f"({_LEGACY_TIC_ROOT}). Set the TALIS_TIC_ROOT env var "
-            "for prod.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return _LEGACY_TIC_ROOT
+    if (_REPO_LOCAL_TIC_ROOT / "tic" / "tic.db").exists():
+        return _REPO_LOCAL_TIC_ROOT
     raise RuntimeError(
         "Cannot locate talis-tic. Set TALIS_TIC_ROOT env var to the "
-        "directory containing `tic/tic.db`."
+        "directory containing `tic/tic.db`, or run from the standalone "
+        "talis-desk repo with `talis_tic/` present."
     )
 
 
@@ -76,8 +65,18 @@ def ensure_tic_on_path() -> None:
 
     Safe to call repeatedly — only inserts when the resolved root is not
     already present. Raises ``RuntimeError`` if neither the env var nor
-    the legacy dev path resolves.
+    repo-local `talis_tic/` resolves.
     """
+    # Unit tests and worker harnesses often install a fake tic.desk.models
+    # module directly into sys.modules. In that case there is no filesystem
+    # root to resolve, and adding one would make the harness less portable.
+    if "tic.desk.models" in sys.modules:
+        return
+    try:
+        from tic.desk import models as _models  # type: ignore  # noqa: F401
+        return
+    except Exception:
+        pass
     root = str(get_tic_root())
     if root not in sys.path:
         sys.path.insert(0, root)

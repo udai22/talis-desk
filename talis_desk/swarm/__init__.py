@@ -20,6 +20,8 @@ If a tier can't get a real verifier, the scout output is dropped with
 """
 from .seed_generator import (
     SeedCell,
+    generate_alpha_geometry_route_seeds,
+    generate_market_map_governor_seeds,
     generate_seeds,
 )
 from .scout_runner import (
@@ -46,6 +48,8 @@ from .market import (
 
 __all__ = [
     "SeedCell",
+    "generate_alpha_geometry_route_seeds",
+    "generate_market_map_governor_seeds",
     "generate_seeds",
     "ScoutOutput",
     "run_scouts",
