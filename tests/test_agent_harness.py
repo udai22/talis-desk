@@ -475,3 +475,133 @@ def test_cortex_task_worker_blocks_followups_when_shape_read_fails(tmp_path, mon
 
     metrics = collect_market_evolve_metrics(cycle_id="cycle_cortex_followup_block", conn=store.conn)
     assert metrics["cortex_shape_blocked_followup_rate"] == 1.0
+
+
+def test_cortex_task_worker_applies_task_level_market_evolve_cortex_policy(tmp_path, monkeypatch):
+    import talis_desk.store as store_mod
+    import talis_desk.tool_atlas as tool_atlas
+
+    store = DeskStore(db_path=tmp_path / "desk.db")
+    store_mod._STORE = store
+    calls: list[str] = []
+
+    def fake_dispatch(uri, args, context):
+        calls.append(uri)
+        return SimpleNamespace(
+            ok=True,
+            result={"schema_version": "fake_tool_v1", "uri": uri},
+            error=None,
+            tool_call_log_id=f"tc_task_policy_{len(calls)}",
+            cost_usd=0.0,
+        )
+
+    monkeypatch.setattr(tool_atlas, "dispatch_uri", fake_dispatch)
+    common_schema = {
+        "required_first_tool": "tic://tool/talis_native/plan_alpha_geometry_actions@v1",
+        "tool_sequence": [
+            "tic://tool/talis_native/review_alpha_geometry_cortex@v1",
+            "tic://tool/builtin/query_events_recent@v1",
+            "tic://tool/builtin/query_timeseries@v1",
+        ],
+    }
+    allowed_tools = [
+        "tic://tool/talis_native/plan_alpha_geometry_actions@v1",
+        "tic://tool/talis_native/review_alpha_geometry_cortex@v1",
+        "tic://tool/builtin/query_events_recent@v1",
+        "tic://tool/builtin/query_timeseries@v1",
+    ]
+    control_id = post_task(
+        topic="alpha_geometry.route",
+        title="Control cortex task",
+        cycle_id="cycle_cortex_policy_ab",
+        priority=10.0,
+        input_schema=common_schema,
+        allowed_tools=allowed_tools,
+        payload={
+            "route_task_id": "shape_task_policy_control",
+            "market_evolve_program_id": "mprog_control",
+            "market_evolve_experiment_id": "mexp_policy",
+            "market_evolve_experiment_arm": "control",
+            "market_evolve_cortex_policy": {
+                "max_tools_per_task": 2,
+                "execute_bounded_followup_tools": False,
+            },
+        },
+        conn=store.conn,
+    )
+    candidate_id = post_task(
+        topic="alpha_geometry.route",
+        title="Candidate cortex task",
+        cycle_id="cycle_cortex_policy_ab",
+        priority=9.0,
+        input_schema=common_schema,
+        allowed_tools=allowed_tools,
+        payload={
+            "route_task_id": "shape_task_policy_candidate",
+            "market_evolve_program_id": "mprog_candidate",
+            "market_evolve_experiment_id": "mexp_policy",
+            "market_evolve_experiment_arm": "candidate",
+            "market_evolve_cortex_policy": {
+                "max_tools_per_task": 4,
+                "execute_bounded_followup_tools": True,
+            },
+        },
+        conn=store.conn,
+    )
+
+    batch = execute_cortex_task_queue(
+        cycle_id="cycle_cortex_policy_ab",
+        conn=store.conn,
+        policy=HarnessPolicy(evidence_hard_cap=2, max_retries=0),
+        execute_followup_tools=False,
+        limit=2,
+    )
+
+    assert batch["completed_count"] == 2
+    assert calls == [
+        "tic://tool/talis_native/plan_alpha_geometry_actions@v1",
+        "tic://tool/talis_native/review_alpha_geometry_cortex@v1",
+        "tic://tool/talis_native/plan_alpha_geometry_actions@v1",
+        "tic://tool/talis_native/review_alpha_geometry_cortex@v1",
+        "tic://tool/builtin/query_events_recent@v1",
+        "tic://tool/builtin/query_timeseries@v1",
+    ]
+    rows = store.conn.execute(
+        """
+        SELECT task_id, payload
+        FROM blackboard_events
+        WHERE cycle_id = ? AND event_type = 'task.completed'
+        ORDER BY occurred_at ASC
+        """,
+        ("cycle_cortex_policy_ab",),
+    ).fetchall()
+    by_task = {row["task_id"]: json.loads(row["payload"]) for row in rows}
+    assert by_task[control_id]["effective_cortex_policy"]["evidence_hard_cap"] == 2
+    assert by_task[control_id]["proof"]["followup_observations_logged"] == 0
+    assert by_task[control_id]["proof"]["deferred_tool_count"] == 2
+    assert by_task[candidate_id]["effective_cortex_policy"]["evidence_hard_cap"] == 4
+    assert by_task[candidate_id]["proof"]["followup_observations_logged"] == 2
+    assert by_task[candidate_id]["proof"]["task_level_cortex_policy_applied"] is True
+
+    from talis_desk.information_map import collect_market_evolve_metrics
+
+    control_metrics = collect_market_evolve_metrics(
+        cycle_id="cycle_cortex_policy_ab",
+        program_id="mprog_control",
+        experiment_id="mexp_policy",
+        experiment_arm="control",
+        conn=store.conn,
+    )
+    candidate_metrics = collect_market_evolve_metrics(
+        cycle_id="cycle_cortex_policy_ab",
+        program_id="mprog_candidate",
+        experiment_id="mexp_policy",
+        experiment_arm="candidate",
+        conn=store.conn,
+    )
+    assert control_metrics["cortex_task_count"] == 1.0
+    assert control_metrics["cortex_followup_execution_rate"] == 0.0
+    assert control_metrics["cortex_deferred_followup_rate"] == 1.0
+    assert candidate_metrics["cortex_task_count"] == 1.0
+    assert candidate_metrics["cortex_followup_execution_rate"] == 1.0
+    assert candidate_metrics["cortex_followup_observations_per_task"] == 1.0

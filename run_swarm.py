@@ -1189,7 +1189,7 @@ def _run_cortex_task_worker_feedback(
     cycle_id: str,
     active_program: Any = None,
     conn: Any = None,
-    limit: int = 8,
+    limit: int = 12,
 ) -> dict[str, Any]:
     """Execute bounded cortex work orders and expose evaluator-ready feedback."""
     from talis_desk.agent_harness import HarnessPolicy, execute_cortex_task_queue

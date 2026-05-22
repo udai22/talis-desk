@@ -1905,6 +1905,8 @@ def _render_cohesive_story(
     route = str(top_cell.get("route_directive") or "observe").replace("_", " ")
     strings = model.get("information_strings") or persisted.get("information_strings") or []
     first_string = strings[0] if strings and isinstance(strings[0], dict) else {}
+    system_map_html = _render_system_map(layers)
+    system_part_details_html = _render_system_part_details()
     geometry_evolution_html = _render_geometry_evolution_chapter(data)
     layer_pass = sum(1 for row in layers if row.get("status") == "pass")
     layer_total = len(layers)
@@ -2117,6 +2119,18 @@ def _render_cohesive_story(
             <div class="moment"><span>What it saw</span><strong>A timestamped cell, selected atlas tools, four receipts, and prior map context.</strong></div>
             <div class="moment"><span>What happened</span><strong>{layer_pass}/{layer_total} layers passed. {len(touched_surfaces)}/{data_substrate.total_surfaces} data surfaces touched. Geometry said: {html.escape(route)}.</strong></div>
           </aside>
+        </section>
+
+        <section class="chapter">
+          <div class="chapter-head">
+            <div class="chapter-label">00a / whole system map</div>
+            <h2>Before the scout, here is the machine it belongs to.</h2>
+            <p>The run is one packet moving through a broader intelligence system: intake, tools, prompt lab, scout swarm, graph memory, attention gate, geometry, verifier/tool builders, and the user surface. Green-edged cards were touched by this smoke; the rest are production surfaces the same architecture is designed to route into.</p>
+          </div>
+          <div class="system-board">
+            <div class="system-strip">{system_map_html}</div>
+          </div>
+          <div class="part-grid">{system_part_details_html}</div>
         </section>
 
         {neural_architecture_html}
@@ -3852,6 +3866,14 @@ def _render_geometry_evolution_chapter(data: dict[str, Any]) -> str:
                 "topic": row.get("topic"),
                 "title": row.get("title"),
                 "allowed_tools": row.get("allowed_tools"),
+                "market_evolve_program_id": (row.get("payload") or {}).get("market_evolve_program_id")
+                if isinstance(row.get("payload"), dict) else None,
+                "market_evolve_experiment_id": (row.get("payload") or {}).get("market_evolve_experiment_id")
+                if isinstance(row.get("payload"), dict) else None,
+                "market_evolve_experiment_arm": (row.get("payload") or {}).get("market_evolve_experiment_arm")
+                if isinstance(row.get("payload"), dict) else None,
+                "market_evolve_cortex_policy": (row.get("payload") or {}).get("market_evolve_cortex_policy")
+                if isinstance(row.get("payload"), dict) else None,
                 "success_gate": (row.get("promotion_criteria") or {}).get("success_gate")
                 if isinstance(row.get("promotion_criteria"), dict) else None,
                 "stop_condition": (row.get("kill_criteria") or {}).get("stop_condition")
@@ -3924,6 +3946,21 @@ def _render_geometry_evolution_chapter(data: dict[str, Any]) -> str:
         ][:10],
     }
     feedback_metrics = task_feedback.get("metrics") if isinstance(task_feedback.get("metrics"), dict) else {}
+    arm_metrics = (
+        task_feedback.get("experiment_arm_metrics")
+        if isinstance(task_feedback.get("experiment_arm_metrics"), dict)
+        else {}
+    )
+    control_arm_metrics = (
+        arm_metrics.get("control")
+        if isinstance(arm_metrics.get("control"), dict)
+        else {}
+    )
+    candidate_arm_metrics = (
+        arm_metrics.get("candidate")
+        if isinstance(arm_metrics.get("candidate"), dict)
+        else {}
+    )
     feedback_payload = {
         "schema_version": task_feedback.get("schema_version"),
         "score": task_feedback.get("score"),
@@ -3943,7 +3980,24 @@ def _render_geometry_evolution_chapter(data: dict[str, Any]) -> str:
                 "cortex_shape_blocked_followup_rate",
             ]
         },
+        "experiment_arm_metrics": arm_metrics,
     }
+    ab_proof_cards = "".join(
+        '<div><span>{label}</span><strong>{value}</strong></div>'.format(
+            label=html.escape(label),
+            value=html.escape(value),
+        )
+        for label, value in [
+            ("experiment", str(arm_metrics.get("experiment_id") or "not selected")),
+            ("control program", _compact_value(arm_metrics.get("control_program_id"), limit=36)),
+            ("candidate program", _compact_value(arm_metrics.get("candidate_program_id"), limit=36)),
+            ("control tasks", _compact_value(control_arm_metrics.get("cortex_task_count"))),
+            ("candidate tasks", _compact_value(candidate_arm_metrics.get("cortex_task_count"))),
+            ("control follow-up rate", _pct(control_arm_metrics.get("cortex_followup_execution_rate"))),
+            ("candidate follow-up rate", _pct(candidate_arm_metrics.get("cortex_followup_execution_rate"))),
+            ("candidate observations/task", _compact_value(candidate_arm_metrics.get("cortex_followup_observations_per_task"))),
+        ]
+    )
     proof_target = mutation_proof.get("target_metrics") if isinstance(mutation_proof.get("target_metrics"), dict) else {}
     proof_changed = mutation_proof.get("changed_paths") if isinstance(mutation_proof.get("changed_paths"), list) else []
     proof_gates = mutation_proof.get("falsification_gates") if isinstance(mutation_proof.get("falsification_gates"), list) else []
@@ -4185,6 +4239,11 @@ def _render_geometry_evolution_chapter(data: dict[str, Any]) -> str:
             <h3>Evaluator feedback from worker outcomes</h3>
             <p>The worker loop now feeds MarketEvolve directly. Completion rate, task failures, pending work, shape-observation rate, bounded follow-up execution, follow-up observation yield, and shape-blocked follow-up penalties become objective terms, so the system can evolve the harness instead of merely logging that it ran.</p>
             <pre class="prompt-slice">{html.escape(json.dumps(feedback_payload, indent=2, sort_keys=True, ensure_ascii=True, default=str))}</pre>
+          </article>
+          <article class="workbench-panel" style="margin-top:10px">
+            <h3>Cortex A/B proof</h3>
+            <p>The latest proof pass does not score cortex policy from one global soup. The dispatch layer creates control and candidate task clones, the worker applies each task-level cortex policy, and the evaluator reads each arm separately before MarketEvolve can promote a harness change.</p>
+            <div class="workbench-grid">{ab_proof_cards}</div>
           </article>
           <article class="workbench-panel" style="margin-top:10px">
             <h3>Cortex work order</h3>

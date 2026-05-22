@@ -1125,6 +1125,7 @@ def main() -> int:
         execution = execute_cortex_task_queue(
             cycle_id=CYCLE_ID,
             conn=store.conn,
+            limit=16,
             policy=HarnessPolicy(evidence_hard_cap=4, max_retries=0, retry_backoff_s=0.0),
             execute_followup_tools=True,
         )
@@ -1207,6 +1208,52 @@ def main() -> int:
         program = load_active_market_evolve_program(cycle_id=CYCLE_ID, conn=store.conn)
         metrics = collect_market_evolve_metrics(cycle_id=CYCLE_ID, conn=store.conn)
         score = score_market_evolve_metrics(metrics, program=program)
+        experiments = load_market_evolve_experiments(status="", limit=8, conn=store.conn)
+        dispatched_arm_payloads: dict[str, dict[str, dict[str, Any]]] = {}
+        for row in store.conn.execute(
+            "SELECT payload FROM task_contracts WHERE cycle_id = ?",
+            (CYCLE_ID,),
+        ).fetchall():
+            try:
+                payload = json.loads(row["payload"] or "{}")
+            except Exception:
+                continue
+            exp_id = str(payload.get("market_evolve_experiment_id") or "")
+            arm = str(payload.get("market_evolve_experiment_arm") or "")
+            program_id = str(payload.get("market_evolve_program_id") or "")
+            if exp_id and arm in {"control", "candidate"} and program_id:
+                dispatched_arm_payloads.setdefault(exp_id, {})[arm] = payload
+        selected_experiment_id = ""
+        selected_arms: dict[str, dict[str, Any]] = {}
+        for exp_id, arms in dispatched_arm_payloads.items():
+            if "control" in arms and "candidate" in arms:
+                selected_experiment_id = exp_id
+                selected_arms = arms
+                break
+        experiment = next(
+            (
+                row for row in experiments
+                if str(row.get("id") or "") == selected_experiment_id
+            ),
+            {},
+        )
+        control_metrics: dict[str, float] = {}
+        candidate_metrics: dict[str, float] = {}
+        if selected_experiment_id and selected_arms:
+            control_metrics = collect_market_evolve_metrics(
+                cycle_id=CYCLE_ID,
+                program_id=str(selected_arms["control"].get("market_evolve_program_id") or ""),
+                experiment_id=selected_experiment_id,
+                experiment_arm="control",
+                conn=store.conn,
+            )
+            candidate_metrics = collect_market_evolve_metrics(
+                cycle_id=CYCLE_ID,
+                program_id=str(selected_arms["candidate"].get("market_evolve_program_id") or ""),
+                experiment_id=selected_experiment_id,
+                experiment_arm="candidate",
+                conn=store.conn,
+            )
         _assert(metrics.get("cortex_task_count", 0.0) >= 1.0, "evaluator did not see cortex tasks")
         _assert(
             metrics.get("cortex_task_completion_rate", 0.0) >= 1.0,
@@ -1220,12 +1267,30 @@ def main() -> int:
             "cortex_followup_execution_rate" in metrics,
             f"evaluator did not expose follow-up execution metrics: {metrics}",
         )
+        _assert(
+            not selected_experiment_id or (
+                control_metrics.get("cortex_task_count", 0.0) >= 1.0
+                and candidate_metrics.get("cortex_task_count", 0.0) >= 1.0
+            ),
+            "evaluator did not expose separate control/candidate cortex task metrics",
+        )
         artifact = {
             "schema_version": "cortex_task_feedback_evaluator_v1",
             "cycle_id": CYCLE_ID,
             "program_id": program.program_id,
             "score": score,
             "metrics": metrics,
+            "experiment_arm_metrics": {
+                "experiment_id": selected_experiment_id,
+                "control_program_id": (
+                    selected_arms.get("control", {}).get("market_evolve_program_id")
+                ),
+                "candidate_program_id": (
+                    selected_arms.get("candidate", {}).get("market_evolve_program_id")
+                ),
+                "control": control_metrics,
+                "candidate": candidate_metrics,
+            },
             "metric_names": [
                 "cortex_task_count",
                 "cortex_task_completion_rate",
@@ -1243,6 +1308,13 @@ def main() -> int:
                 "worker_completion_is_rewarded": metrics.get("cortex_task_completion_rate", 0.0) >= 1.0,
                 "shape_observation_is_rewarded": metrics.get("cortex_shape_observation_rate", 0.0) >= 1.0,
                 "followup_execution_is_measured": "cortex_followup_execution_rate" in metrics,
+                "experiment_arm_cortex_metrics_are_scoped": (
+                    not selected_experiment_id
+                    or (
+                        control_metrics.get("cortex_task_count", 0.0) >= 1.0
+                        and candidate_metrics.get("cortex_task_count", 0.0) >= 1.0
+                    )
+                ),
                 "worker_failures_are_penalizable": "cortex_task_failure_rate" in metrics,
             },
         }
@@ -1255,6 +1327,13 @@ def main() -> int:
             "completion_rate": metrics.get("cortex_task_completion_rate"),
             "shape_observation_rate": metrics.get("cortex_shape_observation_rate"),
             "followup_execution_rate": metrics.get("cortex_followup_execution_rate"),
+            "experiment_arm_metrics_scoped": (
+                not selected_experiment_id
+                or (
+                    control_metrics.get("cortex_task_count", 0.0) >= 1.0
+                    and candidate_metrics.get("cortex_task_count", 0.0) >= 1.0
+                )
+            ),
             "failure_rate": metrics.get("cortex_task_failure_rate"),
         }
 

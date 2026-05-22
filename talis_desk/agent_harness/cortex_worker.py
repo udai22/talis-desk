@@ -152,6 +152,11 @@ def execute_cortex_task(
     allowed_tools = _json_value(row.get("allowed_tools_json"), [])
     promotion_criteria = _json_value(row.get("promotion_criteria_json"), {})
     kill_criteria = _json_value(row.get("kill_criteria_json"), {})
+    policy, execute_followup_tools, policy_proof = _effective_task_policy(
+        base_policy=policy,
+        base_execute_followups=execute_followup_tools,
+        payload=payload,
+    )
     tool_plan = _execution_tool_plan(
         allowed_tools=allowed_tools,
         input_schema=input_schema,
@@ -176,6 +181,7 @@ def execute_cortex_task(
                 promotion_criteria=promotion_criteria,
                 kill_criteria=kill_criteria,
                 quality_flags=["no_executable_shape_tools"],
+                policy_proof=policy_proof,
             ),
             conn=db,
         )
@@ -253,6 +259,7 @@ def execute_cortex_task(
         promotion_criteria=promotion_criteria,
         kill_criteria=kill_criteria,
         quality_flags=quality_flags,
+        policy_proof=policy_proof,
     )
     if shape_observed:
         execution.status = "completed"
@@ -405,13 +412,20 @@ def _completion_payload(
     promotion_criteria: dict[str, Any],
     kill_criteria: dict[str, Any],
     quality_flags: list[str],
+    policy_proof: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
         "schema_version": "cortex_task_execution_v1",
         "task_id": row.get("id"),
         "topic": row.get("topic"),
         "cycle_id": row.get("cycle_id"),
+        "market_evolve_program_id": payload.get("market_evolve_program_id"),
+        "market_evolve_program_name": payload.get("market_evolve_program_name"),
+        "market_evolve_generation": payload.get("market_evolve_generation"),
+        "market_evolve_experiment_id": payload.get("market_evolve_experiment_id"),
+        "market_evolve_experiment_arm": payload.get("market_evolve_experiment_arm"),
         "route_task_id": payload.get("route_task_id"),
+        "base_route_task_id": payload.get("base_route_task_id"),
         "source_cell_key": payload.get("source_cell_key") or payload.get("cell_key"),
         "owner": payload.get("owner"),
         "action": payload.get("action"),
@@ -434,8 +448,56 @@ def _completion_payload(
                 bool(deferred_tool_sequence)
                 and not _has_successful_shape_observation(observations)
             ),
+            "task_level_cortex_policy_applied": bool(
+                policy_proof
+                and policy_proof.get("source") == "task_market_evolve_cortex_policy"
+            ),
         },
+        "effective_cortex_policy": policy_proof or {},
         "quality_flags": quality_flags,
+    }
+
+
+def _effective_task_policy(
+    *,
+    base_policy: HarnessPolicy,
+    base_execute_followups: bool,
+    payload: dict[str, Any],
+) -> tuple[HarnessPolicy, bool, dict[str, Any]]:
+    raw = payload.get("market_evolve_cortex_policy")
+    cortex_policy = raw if isinstance(raw, dict) else {}
+    if not cortex_policy:
+        return base_policy, base_execute_followups, {
+            "source": "worker_default_cortex_policy",
+            "evidence_hard_cap": int(base_policy.evidence_hard_cap),
+            "execute_bounded_followup_tools": bool(base_execute_followups),
+        }
+    evidence_hard_cap = _bounded_int(
+        cortex_policy.get("max_tools_per_task"),
+        default=int(base_policy.evidence_hard_cap or 4),
+        low=1,
+        high=8,
+    )
+    execute_followups = bool(
+        cortex_policy.get("execute_bounded_followup_tools", base_execute_followups)
+    )
+    effective = HarnessPolicy(
+        evidence_hard_cap=evidence_hard_cap,
+        max_tool_iterations=base_policy.max_tool_iterations,
+        max_followup_tools_per_iteration=base_policy.max_followup_tools_per_iteration,
+        max_retries=base_policy.max_retries,
+        retry_backoff_s=base_policy.retry_backoff_s,
+        allowed_uri_prefixes=base_policy.allowed_uri_prefixes,
+        allow_mutating_tools=base_policy.allow_mutating_tools,
+    )
+    return effective, execute_followups, {
+        "source": "task_market_evolve_cortex_policy",
+        "market_evolve_program_id": payload.get("market_evolve_program_id"),
+        "market_evolve_experiment_id": payload.get("market_evolve_experiment_id"),
+        "market_evolve_experiment_arm": payload.get("market_evolve_experiment_arm"),
+        "evidence_hard_cap": evidence_hard_cap,
+        "execute_bounded_followup_tools": execute_followups,
+        "raw_cortex_policy": cortex_policy,
     }
 
 

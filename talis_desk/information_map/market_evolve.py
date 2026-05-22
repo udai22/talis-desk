@@ -1054,7 +1054,14 @@ def collect_market_evolve_metrics(
         geometry_weights=geometry_weights,
         routing_thresholds=routing_thresholds,
     )
-    cortex_task_stats = _cortex_task_execution_stats(db, cycle_id)
+    cortex_task_stats = _cortex_task_execution_stats(
+        db,
+        cycle_id,
+        program_id=program_id,
+        experiment_id=experiment_id,
+        experiment_arm=experiment_arm,
+        seed_scoped=bool(scoped_seed_ids),
+    )
 
     denominator_scouts = max(1.0, float(scout_count or string_count or 1))
     metrics = {
@@ -1238,6 +1245,9 @@ def evaluate_market_evolve_experiments(
         control_metrics = collect_market_evolve_metrics(
             cycle_id=cycle_id,
             seed_ids=control_seeds,
+            program_id=parent.program_id,
+            experiment_id=experiment_id,
+            experiment_arm="control",
             geometry_weights=(parent.genome or {}).get("geometry_weights"),
             routing_thresholds=(parent.genome or {}).get("routing_thresholds"),
             conn=db,
@@ -1245,6 +1255,9 @@ def evaluate_market_evolve_experiments(
         candidate_metrics = collect_market_evolve_metrics(
             cycle_id=cycle_id,
             seed_ids=candidate_seeds,
+            program_id=candidate.program_id,
+            experiment_id=experiment_id,
+            experiment_arm="candidate",
             geometry_weights=(candidate.genome or {}).get("geometry_weights"),
             routing_thresholds=(candidate.genome or {}).get("routing_thresholds"),
             conn=db,
@@ -3842,7 +3855,15 @@ def _learned_tool_call_stats(conn: sqlite3.Connection, cycle_id: str) -> dict[st
     return {"calls": calls, "successes": successes}
 
 
-def _cortex_task_execution_stats(conn: sqlite3.Connection, cycle_id: str) -> dict[str, float]:
+def _cortex_task_execution_stats(
+    conn: sqlite3.Connection,
+    cycle_id: str,
+    *,
+    program_id: str = "",
+    experiment_id: str = "",
+    experiment_arm: str = "",
+    seed_scoped: bool = False,
+) -> dict[str, float]:
     zero = {
         "cortex_task_count": 0.0,
         "cortex_task_completed_count": 0.0,
@@ -3860,11 +3881,18 @@ def _cortex_task_execution_stats(conn: sqlite3.Connection, cycle_id: str) -> dic
     }
     if not _table_exists(conn, "task_contracts"):
         return zero
-    topics = ("alpha_geometry.route", "market_evolve.frontier")
+    if seed_scoped and not (program_id or experiment_id or experiment_arm):
+        return zero
+    topics = (
+        "alpha_geometry.route",
+        "alpha_geometry.verify",
+        "alpha_geometry.cortex",
+        "market_evolve.frontier",
+    )
     placeholders = ",".join("?" for _ in topics)
     rows = conn.execute(
         f"""
-        SELECT id, topic, status
+        SELECT id, topic, status, payload
         FROM task_contracts
         WHERE cycle_id = ?
           AND topic IN ({placeholders})
@@ -3872,6 +3900,15 @@ def _cortex_task_execution_stats(conn: sqlite3.Connection, cycle_id: str) -> dic
         """,
         (cycle_id, *topics),
     ).fetchall()
+    rows = [
+        row for row in rows
+        if _cortex_task_matches_market_scope(
+            _json_load(row["payload"], {}),
+            program_id=program_id,
+            experiment_id=experiment_id,
+            experiment_arm=experiment_arm,
+        )
+    ]
     task_count = len(rows)
     if task_count <= 0:
         return zero
@@ -3890,16 +3927,19 @@ def _cortex_task_execution_stats(conn: sqlite3.Connection, cycle_id: str) -> dic
     followup_executed_tasks = 0
     shape_blocked_followup_tasks = 0
     if _table_exists(conn, "blackboard_events"):
+        task_ids = [str(row["id"]) for row in rows if row["id"]]
+        task_placeholders = ",".join("?" for _ in task_ids)
         event_rows = conn.execute(
             f"""
             SELECT event_type, payload
             FROM blackboard_events
             WHERE cycle_id = ?
               AND topic IN ({placeholders})
+              AND task_id IN ({task_placeholders})
               AND event_type IN ('task.completed', 'task.failed')
             ORDER BY occurred_at ASC
             """,
-            (cycle_id, *topics),
+            (cycle_id, *topics, *task_ids),
         ).fetchall()
         completion_payloads = [
             _json_load(row["payload"], {})
@@ -3943,6 +3983,22 @@ def _cortex_task_execution_stats(conn: sqlite3.Connection, cycle_id: str) -> dic
         "cortex_followup_observations_per_task": _clamp01(float(followup_observation_count) / denominator),
         "cortex_shape_blocked_followup_rate": float(shape_blocked_followup_tasks) / denominator,
     }
+
+
+def _cortex_task_matches_market_scope(
+    payload: dict[str, Any],
+    *,
+    program_id: str = "",
+    experiment_id: str = "",
+    experiment_arm: str = "",
+) -> bool:
+    if program_id and str(payload.get("market_evolve_program_id") or "") != str(program_id):
+        return False
+    if experiment_id and str(payload.get("market_evolve_experiment_id") or "") != str(experiment_id):
+        return False
+    if experiment_arm and str(payload.get("market_evolve_experiment_arm") or "") != str(experiment_arm):
+        return False
+    return True
 
 
 def _count_table(
