@@ -260,10 +260,12 @@ def execute_cadence_plan(
         if stop_on_failure and proc.returncode != 0:
             break
     scoreboard = _read_json_file(Path(plan.artifact_dir) / "market-evolve" / "market_evolve_scoreboard.json", {})
+    information_price_loop = _price_loop_report_summary(Path(plan.artifact_dir))
     control_decision = build_cadence_control_decision(
         scoreboard=scoreboard,
         mode=plan.mode,
         allow_live_spend=plan.allow_live_spend,
+        information_price_loop=information_price_loop,
     )
     report = {
         "schema_version": "talis_intelligence_cadence_run_report_v1",
@@ -272,6 +274,7 @@ def execute_cadence_plan(
         "elapsed_s": round(time.perf_counter() - started, 3),
         "results": results,
         "market_evolve_scoreboard": _scoreboard_report_summary(scoreboard),
+        "information_price_loop": information_price_loop,
         "control_decision": control_decision,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -408,9 +411,11 @@ def build_cadence_control_decision(
     scoreboard: dict[str, Any],
     mode: str,
     allow_live_spend: bool,
+    information_price_loop: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Convert the MarketEvolve scoreboard into an executable cadence decision."""
     normalized_mode = _normalize_mode(mode)
+    price_loop = information_price_loop if isinstance(information_price_loop, dict) else {}
     if not isinstance(scoreboard, dict) or not scoreboard:
         return {
             "schema_version": "talis_cadence_control_decision_v1",
@@ -421,6 +426,7 @@ def build_cadence_control_decision(
             "blocks_wider_spend": True,
             "why": "No MarketEvolve scoreboard artifact was available to read.",
             "source_scoreboard_id": "",
+            "information_price_loop": _control_price_loop_payload(price_loop),
             "quality_flags": ["missing_market_evolve_scoreboard"],
         }
 
@@ -495,6 +501,48 @@ def build_cadence_control_decision(
         recommended_scouts = max(16, min(96, candidate_count * 16 or 24))
         why = "Candidate programs exist but need matched control/candidate evidence."
 
+    price_eval_count = _floatish(price_loop.get("outcome_eval_count"), default=0.0)
+    price_observed_rate = _floatish(price_loop.get("outcome_observed_rate"), default=0.0)
+    price_direction_hit_rate = _floatish(price_loop.get("outcome_direction_hit_rate"), default=0.0)
+    price_avg_edge = _floatish(price_loop.get("avg_realized_edge_score"), default=0.0)
+    price_threshold_hit_rate = _floatish(price_loop.get("outcome_threshold_hit_rate"), default=0.0)
+    price_loop_status = str(price_loop.get("status") or "missing")
+    if price_loop_status in {"missing", "not_found"}:
+        flags.append("information_price_loop_missing")
+    elif price_eval_count <= 0:
+        flags.append("information_price_loop_no_outcomes_yet")
+
+    can_price_loop_steer = decision in {
+        "continue_sentinel_memory",
+        "mutate_active_policy",
+        "assign_candidate_experiment",
+    }
+    if can_price_loop_steer and price_eval_count >= 1 and price_observed_rate > 0:
+        if price_direction_hit_rate >= 0.60 and price_avg_edge >= 0.65:
+            decision = "price_loop_confirms_signal"
+            allowed_next_step = "paired_evolution_sentinel"
+            recommended_mode = "sentinel_tick"
+            recommended_scouts = max(recommended_scouts, 32)
+            blocks_wider_spend = False
+            why = (
+                "Information strings are scoring against realized price movement. "
+                "Run matched scouts so MarketEvolve can separate repeatable policy skill from luck."
+            )
+            flags.append("information_price_loop_positive_edge")
+        elif price_eval_count >= 5 and price_direction_hit_rate <= 0.40 and price_avg_edge < 0.50:
+            decision = "price_loop_repair_before_scale"
+            allowed_next_step = "prompt_route_price_feedback_repair"
+            recommended_mode = "sentinel_tick"
+            recommended_scouts = 8
+            blocks_wider_spend = True
+            why = (
+                "Information strings are maturing against price without directional skill. "
+                "Repair prompts, routing, and source selection before widening spend."
+            )
+            flags.append("information_price_loop_negative_edge_blocks_scale")
+    if price_threshold_hit_rate >= 0.50 and price_eval_count >= 1:
+        flags.append("information_price_loop_threshold_hits_present")
+
     requires_live_spend = _control_decision_requires_live_spend(
         decision=decision,
         recommended_mode=recommended_mode,
@@ -524,6 +572,7 @@ def build_cadence_control_decision(
         "candidate_program_count": candidate_count,
         "result_window_count": result_window,
         "best_score_delta_recent": memory.get("best_score_delta_recent"),
+        "information_price_loop": _control_price_loop_payload(price_loop),
         "quality_flags": sorted(set(flags)),
     }
 
@@ -577,6 +626,7 @@ def _control_decision_requires_live_spend(
     return decision in {
         "collect_experiment_evidence",
         "continue_candidate_experiment",
+        "price_loop_confirms_signal",
         "widen_shadow_evaluation",
         "request_shadow_schedule_review",
     }
@@ -618,6 +668,127 @@ def _scoreboard_report_summary(scoreboard: dict[str, Any]) -> dict[str, Any]:
         "next_actions": (scoreboard.get("next_actions") or [])[:4],
         "quality_flags": scoreboard.get("quality_flags") or [],
     }
+
+
+def _price_loop_report_summary(root: Path) -> dict[str, Any]:
+    outcome_payload = _read_first_json(root, "information_price_outcomes.json")
+    start_payload = _read_first_json(root, "live_price_observations_start.json")
+    final_payload = _read_first_json(root, "live_price_observations_final.json")
+    if not outcome_payload and not start_payload and not final_payload:
+        return {
+            "schema_version": "talis_information_price_loop_summary_v1",
+            "status": "missing",
+            "outcome_eval_count": 0.0,
+            "quality_flags": ["information_price_loop_artifacts_missing"],
+        }
+    summary = outcome_payload.get("summary") if isinstance(outcome_payload.get("summary"), dict) else {}
+    outcomes = outcome_payload.get("outcomes") if isinstance(outcome_payload.get("outcomes"), list) else []
+    quality_flags = []
+    for payload in (outcome_payload, start_payload, final_payload):
+        if isinstance(payload, dict):
+            quality_flags.extend(_string_list(payload.get("quality_flags")))
+    return {
+        "schema_version": "talis_information_price_loop_summary_v1",
+        "status": (
+            "scored"
+            if _floatish(summary.get("outcome_eval_count") or outcome_payload.get("evaluated_count"), default=0.0) > 0
+            else "observed"
+            if start_payload or final_payload
+            else "missing"
+        ),
+        "cycle_id": outcome_payload.get("cycle_id") or "",
+        "start_observations": _price_observation_stage_summary(start_payload),
+        "final_observations": _price_observation_stage_summary(final_payload),
+        "outcome_eval_count": _floatish(summary.get("outcome_eval_count") or outcome_payload.get("evaluated_count"), default=0.0),
+        "outcome_observed_count": _floatish(summary.get("outcome_observed_count"), default=0.0),
+        "outcome_observed_rate": _floatish(summary.get("outcome_observed_rate"), default=0.0),
+        "outcome_direction_hit_rate": _floatish(summary.get("outcome_direction_hit_rate"), default=0.0),
+        "outcome_threshold_hit_rate": _floatish(summary.get("outcome_threshold_hit_rate"), default=0.0),
+        "avg_realized_edge_score": _floatish(summary.get("avg_realized_edge_score"), default=0.0),
+        "avg_abs_price_return_pct": _floatish(summary.get("avg_abs_price_return_pct"), default=0.0),
+        "avg_signed_return_pct": _floatish(summary.get("avg_signed_return_pct"), default=0.0),
+        "early_repricing_hit_rate": _floatish(summary.get("early_repricing_hit_rate"), default=0.0),
+        "top_outcomes": _top_information_price_outcomes(outcomes),
+        "quality_flags": sorted(set(quality_flags)),
+    }
+
+
+def _read_first_json(root: Path, filename: str) -> dict[str, Any]:
+    for path in _artifact_candidates(root, filename):
+        payload = _read_json_file(path, {})
+        if isinstance(payload, dict) and payload:
+            return payload
+    return {}
+
+
+def _artifact_candidates(root: Path, filename: str) -> list[Path]:
+    return [
+        root / "live_canary" / "prompt_outputs" / filename,
+        root / "launch-gate" / "raw" / filename,
+        root / "deterministic_100" / "prompt_outputs" / filename,
+        root / "agent-graph" / "raw" / filename,
+        root / filename,
+    ]
+
+
+def _price_observation_stage_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(payload, dict) or not payload:
+        return {"status": "missing", "observed_count": 0, "persisted_count": 0}
+    observations = payload.get("observations") if isinstance(payload.get("observations"), list) else []
+    return {
+        "status": payload.get("status") or ("collected" if observations else "empty"),
+        "source": payload.get("source") or "",
+        "observed_count": int(payload.get("observed_count") or len(observations)),
+        "persisted_count": int(payload.get("persisted_count") or 0),
+        "missing_entities": _string_list(payload.get("missing_entities")),
+        "quality_flags": _string_list(payload.get("quality_flags")),
+    }
+
+
+def _top_information_price_outcomes(outcomes: list[Any], *, limit: int = 5) -> list[dict[str, Any]]:
+    rows = [row for row in outcomes if isinstance(row, dict)]
+    rows.sort(key=lambda row: _floatish(row.get("realized_edge_score"), default=0.0), reverse=True)
+    return [
+        {
+            "id": row.get("id"),
+            "string_id": row.get("string_id"),
+            "entity": row.get("entity"),
+            "expected_direction": row.get("expected_direction"),
+            "direction_hit": bool(row.get("direction_hit")),
+            "threshold_hit": bool(row.get("threshold_hit")),
+            "realized_edge_score": _floatish(row.get("realized_edge_score"), default=0.0),
+            "signed_return_pct": _floatish(row.get("signed_return_pct"), default=0.0),
+            "quality_flags": _string_list(row.get("quality_flags")),
+        }
+        for row in rows[:limit]
+    ]
+
+
+def _control_price_loop_payload(price_loop: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(price_loop, dict) or not price_loop:
+        return {"status": "missing", "outcome_eval_count": 0.0}
+    return {
+        "status": price_loop.get("status") or "missing",
+        "outcome_eval_count": _floatish(price_loop.get("outcome_eval_count"), default=0.0),
+        "outcome_observed_rate": _floatish(price_loop.get("outcome_observed_rate"), default=0.0),
+        "outcome_direction_hit_rate": _floatish(price_loop.get("outcome_direction_hit_rate"), default=0.0),
+        "outcome_threshold_hit_rate": _floatish(price_loop.get("outcome_threshold_hit_rate"), default=0.0),
+        "avg_realized_edge_score": _floatish(price_loop.get("avg_realized_edge_score"), default=0.0),
+        "early_repricing_hit_rate": _floatish(price_loop.get("early_repricing_hit_rate"), default=0.0),
+    }
+
+
+def _floatish(raw: Any, *, default: float) -> float:
+    try:
+        return float(raw)
+    except Exception:
+        return default
+
+
+def _string_list(raw: Any) -> list[str]:
+    if not isinstance(raw, list):
+        return []
+    return [str(item) for item in raw if item not in (None, "")]
 
 
 def _sentinel_commands(
@@ -839,6 +1010,11 @@ def _cadence_gates(mode: str, *, allow_live_spend: bool) -> list[dict[str, Any]]
             "id": "map_memory",
             "status": "required",
             "requirement": "Persist scout strings, geometry, tool proposals, and learning policy into the desk state.",
+        },
+        {
+            "id": "information_price_loop",
+            "status": "required",
+            "requirement": "Capture price observations and evaluate information strings against realized movement before the next routing decision.",
         },
     ]
     if mode == "full_pipeline":

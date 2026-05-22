@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 from talis_desk.cadence import (
+    CadenceCommand,
+    CadenceRunPlan,
     build_cadence_control_decision,
     build_followup_plan_from_report,
     build_followup_plan_from_scoreboard,
     build_intelligence_cadence_plan,
+    execute_cadence_plan,
     write_cadence_plan,
 )
 
@@ -36,6 +40,7 @@ def test_sentinel_plan_is_always_on_flash_without_live_spend_by_default(tmp_path
     assert _arg_after(scoreboard_cmd, "--db").endswith("live_canary/desk-live-canary.db")
     assert _arg_after(scoreboard_cmd, "--cadence-mode") == "sentinel_tick"
     assert any(gate["id"] == "no_direct_trade_publication" for gate in plan.gates)
+    assert any(gate["id"] == "information_price_loop" for gate in plan.gates)
 
 
 def test_sentinel_plan_can_open_explicit_live_spend_gate(tmp_path: Path) -> None:
@@ -166,6 +171,107 @@ def test_cadence_control_decision_recommends_shadow_for_promoted_policy() -> Non
     assert decision["recommended_next_run"]["scouts"] == 1000
     assert decision["recommended_next_run"]["requires_allow_live_spend"] is True
     assert "explicit_live_spend_gate_required_for_recommended_run" in decision["quality_flags"]
+
+
+def test_cadence_control_decision_uses_price_loop_hits_as_evolution_signal() -> None:
+    decision = build_cadence_control_decision(
+        mode="sentinel_tick",
+        allow_live_spend=False,
+        scoreboard={
+            "id": "score_price_loop",
+            "status": "baseline_active",
+            "counts": {"open_experiments": 0, "candidate_programs": 0, "result_window": 3},
+            "hard_experiment_gate_summary": {"triggered": 0},
+            "evolution_memory": {"evolves": True, "best_score_delta_recent": 0.0},
+        },
+        information_price_loop={
+            "status": "scored",
+            "outcome_eval_count": 3,
+            "outcome_observed_rate": 1.0,
+            "outcome_direction_hit_rate": 0.67,
+            "outcome_threshold_hit_rate": 0.67,
+            "avg_realized_edge_score": 0.82,
+            "early_repricing_hit_rate": 0.67,
+        },
+    )
+
+    assert decision["decision"] == "price_loop_confirms_signal"
+    assert decision["allowed_next_step"] == "paired_evolution_sentinel"
+    assert decision["recommended_next_run"]["scouts"] == 32
+    assert decision["recommended_next_run"]["requires_allow_live_spend"] is True
+    assert decision["information_price_loop"]["avg_realized_edge_score"] == 0.82
+    assert "information_price_loop_positive_edge" in decision["quality_flags"]
+
+
+def test_execute_cadence_report_summarizes_information_price_loop(tmp_path: Path) -> None:
+    prompt = tmp_path / "live_canary" / "prompt_outputs"
+    prompt.mkdir(parents=True)
+    (prompt / "live_price_observations_start.json").write_text(json.dumps({
+        "status": "collected",
+        "source": "fixture",
+        "observed_count": 1,
+        "persisted_count": 1,
+        "observations": [{"entity": "VVV", "price": 5.0}],
+    }))
+    (prompt / "live_price_observations_final.json").write_text(json.dumps({
+        "status": "collected",
+        "source": "fixture",
+        "observed_count": 1,
+        "persisted_count": 1,
+        "observations": [{"entity": "VVV", "price": 5.4}],
+    }))
+    (prompt / "information_price_outcomes.json").write_text(json.dumps({
+        "schema_version": "information_price_outcome_report_v1",
+        "cycle_id": "cycle_price",
+        "evaluated_count": 1,
+        "summary": {
+            "outcome_eval_count": 1.0,
+            "outcome_observed_count": 1.0,
+            "outcome_observed_rate": 1.0,
+            "outcome_direction_hit_rate": 1.0,
+            "outcome_threshold_hit_rate": 1.0,
+            "avg_realized_edge_score": 0.95,
+            "early_repricing_hit_rate": 1.0,
+        },
+        "outcomes": [
+            {
+                "id": "iout_vvv",
+                "string_id": "istr_vvv",
+                "entity": "VVV",
+                "expected_direction": "up",
+                "direction_hit": True,
+                "threshold_hit": True,
+                "realized_edge_score": 0.95,
+                "signed_return_pct": 0.08,
+            }
+        ],
+    }))
+    plan = CadenceRunPlan(
+        plan_id="icp_price",
+        mode="sentinel_tick",
+        cycle_id="cycle_price",
+        artifact_dir=str(tmp_path),
+        generated_at="2026-05-22T00:00:00+00:00",
+        allow_live_spend=False,
+        cadence_policy={},
+        commands=[
+            CadenceCommand(
+                name="noop",
+                command=[sys.executable, "-c", "print('ok')"],
+                purpose="test command",
+            )
+        ],
+        gates=[],
+    )
+
+    report = execute_cadence_plan(plan, repo_root=tmp_path)
+
+    assert report["status"] == "pass"
+    assert report["information_price_loop"]["status"] == "scored"
+    assert report["information_price_loop"]["outcome_eval_count"] == 1.0
+    assert report["information_price_loop"]["start_observations"]["observed_count"] == 1
+    assert report["information_price_loop"]["top_outcomes"][0]["entity"] == "VVV"
+    assert report["control_decision"]["information_price_loop"]["avg_realized_edge_score"] == 0.95
 
 
 def test_followup_plan_compiles_prior_report_control_decision_without_opening_spend_gate(tmp_path: Path) -> None:
