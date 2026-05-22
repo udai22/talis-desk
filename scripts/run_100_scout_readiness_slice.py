@@ -257,7 +257,7 @@ def _preferred_tools(seed: SeedCell) -> list[str]:
         base = [
             "tic://tool/hydromancer/get_hl_pnl_leaderboard@v1",
             "tic://tool/hydromancer/get_builder_fills@v1",
-            "tic://tool/builtin/hl_reject_corpus@v1",
+            "tic://source/hl/hl_reject_corpus",
             *base,
         ]
     if lens in {"sentiment", "catalyst", "filing", "polymarket"}:

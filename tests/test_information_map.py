@@ -651,7 +651,7 @@ def test_node_intelligence_persists_hydromancer_and_node_evidence(tmp_path):
             },
         },
         {
-            "uri": "tic://tool/builtin/hl_reject_corpus@v1",
+            "uri": "tic://source/hl/hl_reject_corpus",
             "ok": True,
             "tool_call_log_id": "tc_node_rejects",
             "result": {
@@ -707,7 +707,7 @@ def test_data_substrate_summarizes_touched_surfaces_and_expansion_plan():
             "result": {"leaders": [{"wallet": "0xabc", "realized_pnl_usd": 1000}]},
         },
         {
-            "uri": "tic://tool/builtin/hl_reject_corpus@v1",
+            "uri": "tic://source/hl/hl_reject_corpus",
             "ok": True,
             "tool_call_log_id": "tc_node",
             "result": {"source": "our_hl_node", "reject_rate_pct": 1.7},
@@ -2267,7 +2267,7 @@ def test_market_evolve_scores_governor_routed_gap_seeds_and_mutates(tmp_path):
                 "market_map_valid_cell_count": 132048,
                 "tool_candidates": [
                     "tic://tool/builtin/query_timeseries@v1",
-                    "tic://tool/builtin/hl_reject_corpus@v1",
+                    "tic://source/hl/hl_reject_corpus",
                     "tic://tool/hydromancer/get_hl_pnl_leaderboard@v1",
                 ],
             },
@@ -3970,7 +3970,7 @@ def test_scout_node_intelligence_wiring_and_hydromancer_args():
                 "result": {"leaders": [{"rank": 1, "wallet": "0xabc", "realized_pnl_usd": 1000, "volume_usd": 100000}]},
             },
             {
-                "uri": "tic://tool/builtin/hl_reject_corpus@v1",
+                "uri": "tic://source/hl/hl_reject_corpus",
                 "ok": True,
                 "tool_call_log_id": "tc_node",
                 "result": {"wallet": "0xabc", "reject_rate_pct": 2.0, "status_counts": {"filled": 10}},
@@ -4718,7 +4718,7 @@ def test_live_scout_smoke_persists_and_monitor_attaches_by_id(monkeypatch, tmp_p
             "tool_candidates": [
                 "tic://tool/builtin/query_events_recent@v1",
                 "tic://tool/hydromancer/get_hl_pnl_leaderboard@v1",
-                "tic://tool/builtin/hl_reject_corpus@v1",
+                "tic://source/hl/hl_reject_corpus",
                 "tic://tool/builtin/query_timeseries@v1",
             ],
         },

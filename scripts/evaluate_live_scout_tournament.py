@@ -12,6 +12,7 @@ import argparse
 import json
 import math
 import re
+import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -29,19 +30,28 @@ DEFAULT_THRESHOLDS = {
     "max_structural_flag_rate": 0.20,
     "min_avg_prompt_quality": 0.70,
     "max_low_prompt_quality_rate": 0.20,
+    "max_tool_error_rate": 0.02,
     "distribution_min_scouts": 100,
     "distribution_min_success_rate": 0.90,
     "distribution_max_provider_error_rate": 0.02,
     "distribution_max_duplicate_rate": 0.20,
     "distribution_max_structural_flag_rate": 0.10,
+    "distribution_max_tool_error_rate": 0.02,
     "distribution_min_geometry_cells": 50,
     "scale_min_scouts": 1000,
     "scale_min_success_rate": 0.90,
     "scale_max_provider_error_rate": 0.02,
     "scale_max_duplicate_rate": 0.20,
     "scale_max_structural_flag_rate": 0.10,
+    "scale_max_tool_error_rate": 0.02,
     "scale_min_geometry_cells": 500,
     "scale_min_information_strings": 1000,
+    "production_min_shadow_runs": 2,
+    "production_max_success_rate_delta": 0.05,
+    "production_max_duplicate_rate_delta": 0.08,
+    "production_max_structural_flag_rate_delta": 0.04,
+    "production_min_geometry_cell_ratio": 0.80,
+    "production_min_information_string_ratio": 0.80,
 }
 
 
@@ -58,19 +68,28 @@ def main() -> int:
         "max_structural_flag_rate": args.max_structural_flag_rate,
         "min_avg_prompt_quality": args.min_avg_prompt_quality,
         "max_low_prompt_quality_rate": args.max_low_prompt_quality_rate,
+        "max_tool_error_rate": args.max_tool_error_rate,
         "distribution_min_scouts": args.distribution_min_scouts,
         "distribution_min_success_rate": args.distribution_min_success_rate,
         "distribution_max_provider_error_rate": args.distribution_max_provider_error_rate,
         "distribution_max_duplicate_rate": args.distribution_max_duplicate_rate,
         "distribution_max_structural_flag_rate": args.distribution_max_structural_flag_rate,
+        "distribution_max_tool_error_rate": args.distribution_max_tool_error_rate,
         "distribution_min_geometry_cells": args.distribution_min_geometry_cells,
         "scale_min_scouts": args.scale_min_scouts,
         "scale_min_success_rate": args.scale_min_success_rate,
         "scale_max_provider_error_rate": args.scale_max_provider_error_rate,
         "scale_max_duplicate_rate": args.scale_max_duplicate_rate,
         "scale_max_structural_flag_rate": args.scale_max_structural_flag_rate,
+        "scale_max_tool_error_rate": args.scale_max_tool_error_rate,
         "scale_min_geometry_cells": args.scale_min_geometry_cells,
         "scale_min_information_strings": args.scale_min_information_strings,
+        "production_min_shadow_runs": args.production_min_shadow_runs,
+        "production_max_success_rate_delta": args.production_max_success_rate_delta,
+        "production_max_duplicate_rate_delta": args.production_max_duplicate_rate_delta,
+        "production_max_structural_flag_rate_delta": args.production_max_structural_flag_rate_delta,
+        "production_min_geometry_cell_ratio": args.production_min_geometry_cell_ratio,
+        "production_min_information_string_ratio": args.production_min_information_string_ratio,
     }
     report_paths = [Path(p).expanduser().resolve() for p in args.reports]
     tournament = evaluate_live_scout_tournament(report_paths, thresholds=thresholds)
@@ -104,19 +123,28 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--max-structural-flag-rate", type=float, default=DEFAULT_THRESHOLDS["max_structural_flag_rate"])
     parser.add_argument("--min-avg-prompt-quality", type=float, default=DEFAULT_THRESHOLDS["min_avg_prompt_quality"])
     parser.add_argument("--max-low-prompt-quality-rate", type=float, default=DEFAULT_THRESHOLDS["max_low_prompt_quality_rate"])
+    parser.add_argument("--max-tool-error-rate", type=float, default=DEFAULT_THRESHOLDS["max_tool_error_rate"])
     parser.add_argument("--distribution-min-scouts", type=int, default=DEFAULT_THRESHOLDS["distribution_min_scouts"])
     parser.add_argument("--distribution-min-success-rate", type=float, default=DEFAULT_THRESHOLDS["distribution_min_success_rate"])
     parser.add_argument("--distribution-max-provider-error-rate", type=float, default=DEFAULT_THRESHOLDS["distribution_max_provider_error_rate"])
     parser.add_argument("--distribution-max-duplicate-rate", type=float, default=DEFAULT_THRESHOLDS["distribution_max_duplicate_rate"])
     parser.add_argument("--distribution-max-structural-flag-rate", type=float, default=DEFAULT_THRESHOLDS["distribution_max_structural_flag_rate"])
+    parser.add_argument("--distribution-max-tool-error-rate", type=float, default=DEFAULT_THRESHOLDS["distribution_max_tool_error_rate"])
     parser.add_argument("--distribution-min-geometry-cells", type=int, default=DEFAULT_THRESHOLDS["distribution_min_geometry_cells"])
     parser.add_argument("--scale-min-scouts", type=int, default=DEFAULT_THRESHOLDS["scale_min_scouts"])
     parser.add_argument("--scale-min-success-rate", type=float, default=DEFAULT_THRESHOLDS["scale_min_success_rate"])
     parser.add_argument("--scale-max-provider-error-rate", type=float, default=DEFAULT_THRESHOLDS["scale_max_provider_error_rate"])
     parser.add_argument("--scale-max-duplicate-rate", type=float, default=DEFAULT_THRESHOLDS["scale_max_duplicate_rate"])
     parser.add_argument("--scale-max-structural-flag-rate", type=float, default=DEFAULT_THRESHOLDS["scale_max_structural_flag_rate"])
+    parser.add_argument("--scale-max-tool-error-rate", type=float, default=DEFAULT_THRESHOLDS["scale_max_tool_error_rate"])
     parser.add_argument("--scale-min-geometry-cells", type=int, default=DEFAULT_THRESHOLDS["scale_min_geometry_cells"])
     parser.add_argument("--scale-min-information-strings", type=int, default=DEFAULT_THRESHOLDS["scale_min_information_strings"])
+    parser.add_argument("--production-min-shadow-runs", type=int, default=DEFAULT_THRESHOLDS["production_min_shadow_runs"])
+    parser.add_argument("--production-max-success-rate-delta", type=float, default=DEFAULT_THRESHOLDS["production_max_success_rate_delta"])
+    parser.add_argument("--production-max-duplicate-rate-delta", type=float, default=DEFAULT_THRESHOLDS["production_max_duplicate_rate_delta"])
+    parser.add_argument("--production-max-structural-flag-rate-delta", type=float, default=DEFAULT_THRESHOLDS["production_max_structural_flag_rate_delta"])
+    parser.add_argument("--production-min-geometry-cell-ratio", type=float, default=DEFAULT_THRESHOLDS["production_min_geometry_cell_ratio"])
+    parser.add_argument("--production-min-information-string-ratio", type=float, default=DEFAULT_THRESHOLDS["production_min_information_string_ratio"])
     return parser.parse_args()
 
 
@@ -151,7 +179,13 @@ def evaluate_live_scout_tournament(
             and int(c.get("input_order") or 0) > top_stage_latest_order
         ]
     winner = promoted[0] if promoted else (candidates[0] if candidates else None)
-    decision = _promotion_decision(winner=winner, promoted=promoted, thresholds=thresholds)
+    repeatability = _shadow_repeatability_evidence(candidates, thresholds=thresholds)
+    decision = _promotion_decision(
+        winner=winner,
+        promoted=promoted,
+        thresholds=thresholds,
+        repeatability=repeatability,
+    )
     report = {
         "schema_version": "talis_live_scout_tournament_v1",
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -162,10 +196,22 @@ def evaluate_live_scout_tournament(
         "thresholds": thresholds,
         "input_reports": [str(p) for p in report_paths],
         "promotion_decision": decision,
+        "shadow_repeatability": repeatability,
         "winner": winner,
         "candidates": candidates,
-        "system_performance": _system_performance(candidates, winner=winner),
-        "next_experiment_plan": _next_experiment_plan(winner=winner, candidates=candidates, thresholds=thresholds),
+        "system_performance": _system_performance(
+            candidates,
+            winner=winner,
+            repeatability=repeatability,
+            decision=decision,
+        ),
+        "next_experiment_plan": _next_experiment_plan(
+            winner=winner,
+            candidates=candidates,
+            thresholds=thresholds,
+            repeatability=repeatability,
+            decision=decision,
+        ),
     }
     return report
 
@@ -180,6 +226,8 @@ def evaluate_live_scout_candidate(path: Path, *, thresholds: dict[str, float | i
     self_healing = metrics.get("self_healing") if isinstance(metrics.get("self_healing"), dict) else {}
     transcript = _load_transcript(path)
     transcript_summary = report.get("transcript_summary") if isinstance(report.get("transcript_summary"), dict) else {}
+    original_verdict = report.get("verdict") if isinstance(report.get("verdict"), dict) else {}
+    original_status = str(original_verdict.get("status") or "").lower()
     outputs = _read_sibling_json(path, "live_scout_canary_outputs.json")
     output_rows = outputs if isinstance(outputs, list) else []
 
@@ -201,6 +249,10 @@ def evaluate_live_scout_candidate(path: Path, *, thresholds: dict[str, float | i
     structural_flag_count = _structural_quality_flags(scouts)
     structural_flag_rate = structural_flag_count / max(n_requested, 1)
     prompt_quality = _prompt_quality_metrics(scouts, n_requested=n_requested)
+    tool_errors = _tool_call_error_metrics(report)
+    tool_call_count = int(tool_errors.get("tool_call_count") or 0)
+    tool_error_count = int(tool_errors.get("tool_error_count") or 0)
+    tool_error_rate = _to_float(tool_errors.get("tool_error_rate"))
     provider_error_rate = max(
         len(transcript_errors) / max(call_count, 1),
         quality_provider_errors / max(n_requested, 1),
@@ -234,6 +286,8 @@ def evaluate_live_scout_candidate(path: Path, *, thresholds: dict[str, float | i
         "structural_flag_rate_le_max": structural_flag_rate <= float(thresholds["max_structural_flag_rate"]),
         "avg_prompt_quality_ge_min": prompt_quality["avg_prompt_quality"] >= float(thresholds["min_avg_prompt_quality"]),
         "low_prompt_quality_rate_le_max": prompt_quality["low_prompt_quality_rate"] <= float(thresholds["max_low_prompt_quality_rate"]),
+        "tool_error_rate_le_max": tool_error_rate <= float(thresholds["max_tool_error_rate"]),
+        "original_canary_status_pass": original_status in {"", "pass"},
         "information_strings_created": string_count > 0,
         "synthesis_promoted": int(info.get("promoted_hypotheses") or 0) > 0,
         "geometry_cells_created": int(geometry.get("cell_count") or 0) > 0,
@@ -246,6 +300,7 @@ def evaluate_live_scout_candidate(path: Path, *, thresholds: dict[str, float | i
             "distribution_provider_error_rate_le_0_02": provider_error_rate <= float(thresholds["distribution_max_provider_error_rate"]),
             "distribution_duplicate_rate_le_0_20": duplicate_rate <= float(thresholds["distribution_max_duplicate_rate"]),
             "distribution_structural_flag_rate_le_0_10": structural_flag_rate <= float(thresholds["distribution_max_structural_flag_rate"]),
+            "distribution_tool_error_rate_le_0_02": tool_error_rate <= float(thresholds["distribution_max_tool_error_rate"]),
             "distribution_geometry_cells_ge_50": int(geometry.get("cell_count") or 0) >= int(thresholds["distribution_min_geometry_cells"]),
         })
     if n_requested >= int(thresholds["scale_min_scouts"]):
@@ -255,6 +310,7 @@ def evaluate_live_scout_candidate(path: Path, *, thresholds: dict[str, float | i
             "scale_provider_error_rate_le_0_02": provider_error_rate <= float(thresholds["scale_max_provider_error_rate"]),
             "scale_duplicate_rate_le_0_20": duplicate_rate <= float(thresholds["scale_max_duplicate_rate"]),
             "scale_structural_flag_rate_le_0_10": structural_flag_rate <= float(thresholds["scale_max_structural_flag_rate"]),
+            "scale_tool_error_rate_le_0_02": tool_error_rate <= float(thresholds["scale_max_tool_error_rate"]),
             "scale_geometry_cells_ge_500": int(geometry.get("cell_count") or 0) >= int(thresholds["scale_min_geometry_cells"]),
             "scale_information_strings_ge_1000": string_count >= int(thresholds["scale_min_information_strings"]),
         })
@@ -285,6 +341,9 @@ def evaluate_live_scout_candidate(path: Path, *, thresholds: dict[str, float | i
             "provider_error_rate": round(provider_error_rate, 4),
             "transcript_error_count": len(transcript_errors),
             "quality_provider_error_count": quality_provider_errors,
+            "tool_call_count": tool_call_count,
+            "tool_error_count": tool_error_count,
+            "tool_error_rate": round(tool_error_rate, 4),
             "structural_flag_count": structural_flag_count,
             "structural_flag_rate": round(structural_flag_rate, 4),
             **prompt_quality,
@@ -314,7 +373,7 @@ def evaluate_live_scout_candidate(path: Path, *, thresholds: dict[str, float | i
             "self_healing_failed": int(self_healing.get("failed_tasks") or 0),
             "tool_proposals": int(self_healing.get("tool_proposals") or 0),
         },
-        "original_canary_verdict": report.get("verdict") if isinstance(report.get("verdict"), dict) else {},
+        "original_canary_verdict": original_verdict,
         "gates": gates,
         "failed_gates": failed_gates,
         "score": 0.0,
@@ -329,6 +388,7 @@ def evaluate_live_scout_candidate(path: Path, *, thresholds: dict[str, float | i
 
 def render_tournament_markdown(report: dict[str, Any]) -> str:
     decision = report.get("promotion_decision") if isinstance(report.get("promotion_decision"), dict) else {}
+    repeatability = report.get("shadow_repeatability") if isinstance(report.get("shadow_repeatability"), dict) else {}
     lines = [
         "# Live Scout Tournament",
         "",
@@ -337,6 +397,8 @@ def render_tournament_markdown(report: dict[str, Any]) -> str:
         f"- ready_for_live_1000: `{decision.get('ready_for_live_1000')}`",
         f"- ready_for_scheduled_production: `{decision.get('ready_for_scheduled_production')}`",
         f"- reason: {decision.get('reason')}",
+        f"- repeatability_ready: `{repeatability.get('ready_for_scheduled_production')}`",
+        f"- repeatability_runs: `{repeatability.get('shadow_run_count')}/{repeatability.get('required_shadow_runs')}`",
         "",
         "## Candidates",
         "",
@@ -352,6 +414,7 @@ def render_tournament_markdown(report: dict[str, Any]) -> str:
             f"- scouts: `{sample.get('completed')}/{sample.get('requested')}`",
             f"- success_rate: `{q.get('success_rate')}`",
             f"- provider_error_rate: `{q.get('provider_error_rate')}`",
+            f"- tool_error_rate: `{q.get('tool_error_rate')}`",
             f"- strings_per_scout: `{q.get('strings_per_scout')}`",
             f"- duplicate_rate: `{q.get('duplicate_hypothesis_rate')}`",
             f"- avg_latency_s: `{q.get('avg_latency_s')}`",
@@ -381,6 +444,7 @@ def _score_candidate(candidate: dict[str, Any]) -> float:
     geometry = 1.0 if m.get("geometry_cells") else 0.0
     self_healing = 1.0 if not m.get("self_healing_failed") else 0.0
     provider_error = _to_float(q.get("provider_error_rate"))
+    tool_error = _to_float(q.get("tool_error_rate"))
     duplicate = _to_float(q.get("duplicate_hypothesis_rate"), default=1.0)
     cost_per = _to_float(q.get("cost_per_scout_usd"))
     cost_eff = max(0.0, 1.0 - min(1.0, cost_per / DEFAULT_THRESHOLDS["max_cost_per_scout_usd"]))
@@ -398,6 +462,7 @@ def _score_candidate(candidate: dict[str, Any]) -> float:
         + 0.10 * latency
         + 0.02 * sample_bonus
         - 0.22 * provider_error
+        - 0.18 * tool_error
         - 0.10 * duplicate
     )
     return round(max(0.0, min(1.0, score)), 4)
@@ -415,12 +480,170 @@ def _stage_level(candidate: dict[str, Any]) -> int:
     return 0
 
 
+def _shadow_repeatability_evidence(
+    candidates: list[dict[str, Any]],
+    *,
+    thresholds: dict[str, float | int],
+) -> dict[str, Any]:
+    clean_scale = [
+        c for c in candidates
+        if c.get("promotion_eligible") and _stage_level(c) >= 3
+    ]
+    if not clean_scale:
+        return {
+            "schema_version": "live_scout_shadow_repeatability_v1",
+            "ready_for_scheduled_production": False,
+            "reason": "No clean 1,000-scout shadow runs are available yet.",
+            "shadow_run_count": 0,
+            "required_shadow_runs": int(thresholds["production_min_shadow_runs"]),
+            "stability_gates": {},
+            "failed_gates": ["production_min_shadow_runs"],
+        }
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for candidate in clean_scale:
+        groups.setdefault(_production_policy_signature(candidate), []).append(candidate)
+    scored_groups = [
+        _repeatability_for_group(signature, rows, thresholds=thresholds)
+        for signature, rows in groups.items()
+    ]
+    ready = [row for row in scored_groups if row.get("ready_for_scheduled_production")]
+    if ready:
+        return sorted(
+            ready,
+            key=lambda row: (row.get("avg_score", 0.0), row.get("shadow_run_count", 0)),
+            reverse=True,
+        )[0]
+    return sorted(
+        scored_groups,
+        key=lambda row: (row.get("shadow_run_count", 0), row.get("avg_score", 0.0)),
+        reverse=True,
+    )[0]
+
+
+def _production_policy_signature(candidate: dict[str, Any]) -> str:
+    cfg = candidate.get("configuration") if isinstance(candidate.get("configuration"), dict) else {}
+    variants = "|".join(str(x) for x in (cfg.get("prompt_variants") or []) if str(x).strip())
+    parts = [
+        str(cfg.get("model") or ""),
+        str(cfg.get("fallback") or ""),
+        variants,
+        str(cfg.get("max_tool_iterations") if cfg.get("max_tool_iterations") is not None else ""),
+        str(cfg.get("provider_timeout_s") or ""),
+    ]
+    return "::".join(parts)
+
+
+def _repeatability_for_group(
+    signature: str,
+    rows: list[dict[str, Any]],
+    *,
+    thresholds: dict[str, float | int],
+) -> dict[str, Any]:
+    ordered = sorted(
+        rows,
+        key=lambda c: int(c.get("input_order") or 0),
+        reverse=True,
+    )
+    n_required = int(thresholds["production_min_shadow_runs"])
+    selected = ordered[:max(n_required, 2)]
+    shadow_count = len(selected)
+    unique_cycles = {
+        str(c.get("cycle_id") or "")
+        for c in selected
+        if str(c.get("cycle_id") or "").strip()
+    }
+    unique_seed_rng = {
+        str(((c.get("configuration") or {}).get("seed_rng")))
+        for c in selected
+        if ((c.get("configuration") or {}).get("seed_rng")) is not None
+    }
+    success_values = [_q(c, "success_rate") for c in selected]
+    duplicate_values = [_q(c, "duplicate_hypothesis_rate") for c in selected]
+    structural_values = [_q(c, "structural_flag_rate") for c in selected]
+    geometry_values = [float((c.get("map_effect") or {}).get("geometry_cells") or 0) for c in selected]
+    string_values = [float((c.get("map_effect") or {}).get("information_strings") or 0) for c in selected]
+    score_values = [float(c.get("score") or 0.0) for c in selected]
+    geometry_ratio = _min_max_ratio(geometry_values)
+    string_ratio = _min_max_ratio(string_values)
+    success_delta = _delta(success_values)
+    duplicate_delta = _delta(duplicate_values)
+    structural_delta = _delta(structural_values)
+    gates = {
+        "production_shadow_runs_ge_required": shadow_count >= n_required,
+        "production_independent_cycles": len(unique_cycles) >= n_required,
+        "production_independent_seed_rng": len(unique_seed_rng) >= n_required,
+        "production_success_rate_delta_le_max": success_delta <= float(thresholds["production_max_success_rate_delta"]),
+        "production_duplicate_rate_delta_le_max": duplicate_delta <= float(thresholds["production_max_duplicate_rate_delta"]),
+        "production_structural_flag_delta_le_max": structural_delta <= float(thresholds["production_max_structural_flag_rate_delta"]),
+        "production_geometry_cell_ratio_ge_min": geometry_ratio >= float(thresholds["production_min_geometry_cell_ratio"]),
+        "production_information_string_ratio_ge_min": string_ratio >= float(thresholds["production_min_information_string_ratio"]),
+    }
+    failed = [name for name, ok in gates.items() if not ok]
+    return {
+        "schema_version": "live_scout_shadow_repeatability_v1",
+        "ready_for_scheduled_production": not failed,
+        "policy_signature": signature,
+        "shadow_run_count": shadow_count,
+        "required_shadow_runs": n_required,
+        "candidate_ids": [str(c.get("candidate_id") or "") for c in selected],
+        "source_reports": [str(c.get("source_report") or "") for c in selected],
+        "cycle_ids": sorted(unique_cycles),
+        "seed_rngs": sorted(unique_seed_rng),
+        "avg_score": round(sum(score_values) / max(len(score_values), 1), 4),
+        "metrics": {
+            "success_rate_min": round(min(success_values or [0.0]), 4),
+            "success_rate_max": round(max(success_values or [0.0]), 4),
+            "success_rate_delta": round(success_delta, 4),
+            "duplicate_rate_min": round(min(duplicate_values or [0.0]), 4),
+            "duplicate_rate_max": round(max(duplicate_values or [0.0]), 4),
+            "duplicate_rate_delta": round(duplicate_delta, 4),
+            "structural_flag_rate_min": round(min(structural_values or [0.0]), 4),
+            "structural_flag_rate_max": round(max(structural_values or [0.0]), 4),
+            "structural_flag_rate_delta": round(structural_delta, 4),
+            "geometry_cell_min": int(min(geometry_values or [0])),
+            "geometry_cell_max": int(max(geometry_values or [0])),
+            "geometry_cell_ratio": round(geometry_ratio, 4),
+            "information_string_min": int(min(string_values or [0])),
+            "information_string_max": int(max(string_values or [0])),
+            "information_string_ratio": round(string_ratio, 4),
+        },
+        "stability_gates": gates,
+        "failed_gates": failed,
+        "reason": (
+            "The shadow policy repeated cleanly across independent 1,000-scout runs."
+            if not failed else
+            "Repeat shadow evidence exists, but scheduled production is still blocked by: "
+            + ", ".join(failed)
+        ),
+    }
+
+
+def _q(candidate: dict[str, Any], key: str) -> float:
+    quality = candidate.get("quality") if isinstance(candidate.get("quality"), dict) else {}
+    return _to_float(quality.get(key), default=0.0)
+
+
+def _delta(values: list[float]) -> float:
+    if not values:
+        return 1.0
+    return max(values) - min(values)
+
+
+def _min_max_ratio(values: list[float]) -> float:
+    positives = [v for v in values if v > 0]
+    if not positives:
+        return 0.0
+    return min(positives) / max(positives)
+
+
 def _promotion_decision(
     *,
     winner: dict[str, Any] | None,
     promoted: list[dict[str, Any]],
     thresholds: dict[str, float | int],
+    repeatability: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    repeatability = repeatability if isinstance(repeatability, dict) else {}
     if not winner:
         return {
             "decision": "no_candidates",
@@ -429,6 +652,27 @@ def _promotion_decision(
             "ready_for_live_1000": False,
             "ready_for_scheduled_production": False,
             "reason": "No readable canary reports were provided.",
+        }
+    if repeatability.get("ready_for_scheduled_production"):
+        promoted_ids = [
+            str(candidate_id)
+            for candidate_id in (repeatability.get("candidate_ids") or [])
+            if str(candidate_id).strip()
+        ] or [winner["candidate_id"]]
+        return {
+            "decision": "promote_to_scheduled_production_candidate",
+            "promoted_candidate_id": promoted_ids[0],
+            "promoted_candidate_ids": promoted_ids,
+            "ready_for_live_100": True,
+            "ready_for_live_1000": True,
+            "ready_for_scheduled_production": True,
+            "reason": (
+                "Two independent 1,000-scout shadow runs passed scale gates under the same "
+                "prompt/provider policy, and their repeatability metrics stayed inside the "
+                "production stability band. The system may move to a scheduled shadow-production "
+                "candidate posture with hard caps, audit capture, and no trade execution."
+            ),
+            "repeatability": repeatability,
         }
     if promoted:
         sample = winner.get("sample") if isinstance(winner.get("sample"), dict) else {}
@@ -493,7 +737,11 @@ def _next_experiment_plan(
     winner: dict[str, Any] | None,
     candidates: list[dict[str, Any]],
     thresholds: dict[str, float | int],
+    repeatability: dict[str, Any] | None = None,
+    decision: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
+    repeatability = repeatability if isinstance(repeatability, dict) else {}
+    decision = decision if isinstance(decision, dict) else {}
     if not winner:
         return [
             {
@@ -507,18 +755,49 @@ def _next_experiment_plan(
                 "promotion_rule": "Only promote if every tournament hard gate passes.",
             }
         ]
+    if decision.get("ready_for_scheduled_production"):
+        variant = (winner.get("configuration") or {}).get("prompt_variants") or ["flash_temporal_v4"]
+        prompt_variant = str(variant[0] or "flash_temporal_v4")
+        max_tool_iterations = int((winner.get("configuration") or {}).get("max_tool_iterations") or 0)
+        return [
+            {
+                "id": "schedule_guarded_shadow_production",
+                "purpose": (
+                    "Move from one-off canaries to a scheduled shadow-production job while keeping "
+                    "hard spend caps, full artifact capture, and no trade execution."
+                ),
+                "command": (
+                    "PYTHONPATH=.:talis_tic python scripts/run_live_scout_canary.py --n-scouts 1000 "
+                    "--concurrency 8 --cost-cap-usd 5.00 --provider-timeout-s 45 "
+                    f"--prompt-variant {prompt_variant} --max-tool-iterations {max_tool_iterations} "
+                    "--allow-live-spend"
+                ),
+                "promotion_rule": (
+                    "A scheduled job remains shadow-only unless daily tournament reports keep "
+                    "provider errors, duplicate rate, structural flags, geometry cells, and "
+                    "information-string yield inside the proven repeatability envelope."
+                ),
+                "repeatability_evidence": {
+                    "shadow_run_count": repeatability.get("shadow_run_count"),
+                    "policy_signature": repeatability.get("policy_signature"),
+                    "candidate_ids": repeatability.get("candidate_ids"),
+                    "stability_gates": repeatability.get("stability_gates"),
+                },
+            }
+        ]
     if winner.get("promotion_eligible"):
         sample = winner.get("sample") if isinstance(winner.get("sample"), dict) else {}
+        max_tool_iterations = int((winner.get("configuration") or {}).get("max_tool_iterations") or 0)
         if int(sample.get("requested") or 0) >= int(thresholds["scale_min_scouts"]):
             return [
                 {
                     "id": "repeat_1000_shadow_trial",
                     "purpose": "Prove the 1,000-scout policy is repeatable before any scheduled production posture.",
                     "command": (
-                        "PYTHONPATH=. python scripts/run_live_scout_canary.py --n-scouts 1000 "
+                        "PYTHONPATH=.:talis_tic python scripts/run_live_scout_canary.py --n-scouts 1000 "
                         "--concurrency 8 --cost-cap-usd 5.00 --provider-timeout-s 45 "
                         f"--prompt-variant {winner['configuration']['prompt_variants'][0]} "
-                        "--max-tool-iterations 0 --seed-rng 20260523 --allow-live-spend"
+                        f"--max-tool-iterations {max_tool_iterations} --seed-rng 20260523 --allow-live-spend"
                     ),
                     "promotion_rule": (
                         "Scheduled production requires two independent 1,000-scout shadow runs with provider errors <= "
@@ -534,10 +813,10 @@ def _next_experiment_plan(
                     "id": "live_1000_ramp",
                     "purpose": "Validate the winning policy at broad market-sensing scale under a hard cap.",
                     "command": (
-                        "PYTHONPATH=. python scripts/run_live_scout_canary.py --n-scouts 1000 "
+                        "PYTHONPATH=.:talis_tic python scripts/run_live_scout_canary.py --n-scouts 1000 "
                         "--concurrency 8 --cost-cap-usd 5.00 --provider-timeout-s 45 "
                         f"--prompt-variant {winner['configuration']['prompt_variants'][0]} "
-                        "--max-tool-iterations 0 --allow-live-spend"
+                        f"--max-tool-iterations {max_tool_iterations} --allow-live-spend"
                     ),
                     "promotion_rule": (
                         "Promote to a repeat 1,000-scout shadow trial only if the 1,000-scout run keeps provider errors <= "
@@ -553,10 +832,10 @@ def _next_experiment_plan(
                 "id": "live_100_ramp",
                 "purpose": "Validate the winning policy at distributional scale.",
                 "command": (
-                    "PYTHONPATH=. python scripts/run_live_scout_canary.py --n-scouts 100 "
+                    "PYTHONPATH=.:talis_tic python scripts/run_live_scout_canary.py --n-scouts 100 "
                     "--concurrency 4 --cost-cap-usd 1.00 --provider-timeout-s 45 "
                     f"--prompt-variant {winner['configuration']['prompt_variants'][0]} "
-                    "--max-tool-iterations 0 --allow-live-spend"
+                    f"--max-tool-iterations {max_tool_iterations} --allow-live-spend"
                 ),
                 "promotion_rule": (
                     "Promote to 1,000 only if the 100-scout run keeps provider errors <= "
@@ -672,18 +951,33 @@ def _next_experiment_plan(
     return plan[:4]
 
 
-def _system_performance(candidates: list[dict[str, Any]], *, winner: dict[str, Any] | None) -> dict[str, Any]:
+def _system_performance(
+    candidates: list[dict[str, Any]],
+    *,
+    winner: dict[str, Any] | None,
+    repeatability: dict[str, Any] | None = None,
+    decision: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     if not candidates:
         return {
             "summary": "No canary evidence was available.",
             "ready_for_full_run": False,
         }
+    repeatability = repeatability if isinstance(repeatability, dict) else {}
+    decision = decision if isinstance(decision, dict) else {}
     best = winner or candidates[0]
     q = best["quality"]
     m = best["map_effect"]
     sample = best.get("sample") if isinstance(best.get("sample"), dict) else {}
     requested = int(sample.get("requested") or 0)
-    if best.get("promotion_eligible"):
+    if decision.get("ready_for_scheduled_production"):
+        summary = (
+            "The live policy has now passed two independent 1,000-scout shadow runs "
+            "with stable quality, geometry, prompt structure, duplicate rate, and "
+            "information-string yield. It is ready for a guarded scheduled shadow "
+            "production job, with trade execution still disabled."
+        )
+    elif best.get("promotion_eligible"):
         if requested >= int(DEFAULT_THRESHOLDS["scale_min_scouts"]):
             summary = (
                 "The live 1,000-scout distribution is clean enough for a repeated "
@@ -722,7 +1016,7 @@ def _system_performance(candidates: list[dict[str, Any]], *, winner: dict[str, A
             )
     return {
         "summary": summary,
-        "ready_for_full_run": False,
+        "ready_for_full_run": bool(decision.get("ready_for_scheduled_production")),
         "best_candidate_id": best["candidate_id"],
         "best_score": best["score"],
         "best_success_rate": q["success_rate"],
@@ -731,7 +1025,10 @@ def _system_performance(candidates: list[dict[str, Any]], *, winner: dict[str, A
         "best_duplicate_rate": q["duplicate_hypothesis_rate"],
         "best_geometry_cells": m["geometry_cells"],
         "best_coverage_ratio": m["coverage_ratio"],
+        "shadow_repeatability": repeatability,
         "full_run_boundary": (
+            "A guarded scheduled shadow-production job is allowed; live trading remains out of scope until verifier/trade-execution gates are separately proven."
+            if decision.get("ready_for_scheduled_production") else
             "Scheduled production remains blocked until a repeat 1,000-scout shadow trial passes with stable provider reliability, duplicate rate, prompt structure, geometry, and coverage deltas."
             if best.get("promotion_eligible") and requested >= int(DEFAULT_THRESHOLDS["scale_min_scouts"]) else
             (
@@ -759,6 +1056,14 @@ def _interpret_candidate(candidate: dict[str, Any]) -> str:
     fragments = []
     if "provider_error_rate_le_max" in failed:
         fragments.append("provider reliability is not stable enough")
+    if (
+        "tool_error_rate_le_max" in failed
+        or "distribution_tool_error_rate_le_0_02" in failed
+        or "scale_tool_error_rate_le_0_02" in failed
+    ):
+        fragments.append("tool/source execution has unresolved errors")
+    if "original_canary_status_pass" in failed:
+        fragments.append("the source canary verdict was not a clean pass")
     if "structural_flag_rate_le_max" in failed:
         fragments.append("the output contract is missing required temporal/structural fields")
     if "distribution_structural_flag_rate_le_0_10" in failed or "scale_structural_flag_rate_le_0_10" in failed:
@@ -854,6 +1159,36 @@ def _provider_quality_errors(scouts: dict[str, Any]) -> int:
             except Exception:
                 total += 1
     return total
+
+
+def _tool_call_error_metrics(report: dict[str, Any]) -> dict[str, Any]:
+    db_path = Path(str(report.get("db_path") or ""))
+    if not str(db_path) or not db_path.exists():
+        return {
+            "tool_call_count": 0,
+            "tool_error_count": 0,
+            "tool_error_rate": 0.0,
+            "tool_error_gate_observed": False,
+        }
+    try:
+        with sqlite3.connect(str(db_path)) as conn:
+            total = int(conn.execute("SELECT count(*) FROM tool_call_log").fetchone()[0] or 0)
+            errors = int(conn.execute(
+                "SELECT count(*) FROM tool_call_log WHERE error IS NOT NULL AND error != ''"
+            ).fetchone()[0] or 0)
+    except Exception:
+        return {
+            "tool_call_count": 0,
+            "tool_error_count": 1,
+            "tool_error_rate": 1.0,
+            "tool_error_gate_observed": False,
+        }
+    return {
+        "tool_call_count": total,
+        "tool_error_count": errors,
+        "tool_error_rate": round(errors / max(total, 1), 6),
+        "tool_error_gate_observed": True,
+    }
 
 
 def _structural_quality_flags(scouts: dict[str, Any]) -> int:

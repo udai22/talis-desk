@@ -440,7 +440,7 @@ def _fixtures_for_runtime(runtime: str) -> dict[str, Any]:
             "tool_logs": [
                 {
                     "id": "tc_eval_node",
-                    "tool_uri": "tic://tool/builtin/hl_reject_corpus@v1",
+                    "tool_uri": "tic://source/hl/hl_reject_corpus",
                     "args_json": {"coin": "HYPE", "wallets": ["0xabc"]},
                     "result_summary": {
                         "wallet": "0xabc",

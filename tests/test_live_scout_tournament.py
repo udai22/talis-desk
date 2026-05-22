@@ -1,4 +1,5 @@
 import json
+import sqlite3
 from pathlib import Path
 
 from scripts.evaluate_live_scout_tournament import evaluate_live_scout_tournament
@@ -84,6 +85,90 @@ def test_live_scout_tournament_promotes_clean_thousand_scout_distribution_to_sha
     assert tournament["next_experiment_plan"][0]["id"] == "repeat_1000_shadow_trial"
 
 
+def test_live_scout_tournament_promotes_two_stable_thousand_runs_to_scheduled_candidate(tmp_path):
+    first = _write_canary(
+        tmp_path / "first",
+        n_requested=1000,
+        success_rate=0.983,
+        transcript_errors=0,
+        duplicate_rate=0.016,
+        completed=983,
+        structural_flags=52,
+        geometry_cells=983,
+        string_count=2949,
+        prompt_variant="flash_temporal_v4",
+        cycle_id="cycle_shadow_first",
+        seed_rng=20260525,
+    )
+    second = _write_canary(
+        tmp_path / "second",
+        n_requested=1000,
+        success_rate=0.971,
+        transcript_errors=0,
+        duplicate_rate=0.019,
+        completed=971,
+        structural_flags=61,
+        geometry_cells=960,
+        string_count=2875,
+        prompt_variant="flash_temporal_v4",
+        cycle_id="cycle_shadow_second",
+        seed_rng=20260523,
+    )
+
+    tournament = evaluate_live_scout_tournament([first, second])
+
+    decision = tournament["promotion_decision"]
+    assert decision["decision"] == "promote_to_scheduled_production_candidate"
+    assert decision["ready_for_scheduled_production"] is True
+    repeatability = tournament["shadow_repeatability"]
+    assert repeatability["ready_for_scheduled_production"] is True
+    assert repeatability["shadow_run_count"] == 2
+    assert repeatability["stability_gates"]["production_independent_seed_rng"] is True
+    assert tournament["system_performance"]["ready_for_full_run"] is True
+    assert tournament["next_experiment_plan"][0]["id"] == "schedule_guarded_shadow_production"
+
+
+def test_live_scout_tournament_blocks_scheduled_candidate_when_repeat_is_unstable(tmp_path):
+    first = _write_canary(
+        tmp_path / "first",
+        n_requested=1000,
+        success_rate=0.98,
+        transcript_errors=0,
+        duplicate_rate=0.02,
+        completed=980,
+        structural_flags=40,
+        geometry_cells=1000,
+        string_count=3000,
+        prompt_variant="flash_temporal_v4",
+        cycle_id="cycle_shadow_first",
+        seed_rng=20260525,
+    )
+    unstable = _write_canary(
+        tmp_path / "unstable",
+        n_requested=1000,
+        success_rate=0.91,
+        transcript_errors=0,
+        duplicate_rate=0.18,
+        completed=910,
+        structural_flags=95,
+        geometry_cells=610,
+        string_count=1200,
+        prompt_variant="flash_temporal_v4",
+        cycle_id="cycle_shadow_unstable",
+        seed_rng=20260523,
+    )
+
+    tournament = evaluate_live_scout_tournament([first, unstable])
+
+    assert tournament["promotion_decision"]["decision"] == "promote_to_shadow_production_trial"
+    assert tournament["promotion_decision"]["ready_for_scheduled_production"] is False
+    repeatability = tournament["shadow_repeatability"]
+    assert repeatability["ready_for_scheduled_production"] is False
+    assert "production_success_rate_delta_le_max" in repeatability["failed_gates"]
+    assert "production_information_string_ratio_ge_min" in repeatability["failed_gates"]
+    assert tournament["next_experiment_plan"][0]["id"] == "repeat_1000_shadow_trial"
+
+
 def test_live_scout_tournament_routes_failed_thousand_to_repair_arm(tmp_path):
     report_path = _write_canary(
         tmp_path,
@@ -104,6 +189,47 @@ def test_live_scout_tournament_routes_failed_thousand_to_repair_arm(tmp_path):
     assert "Do not promote the 1,000-scout stage yet" in tournament["promotion_decision"]["reason"]
     assert "scale_success_rate_ge_0_90" in tournament["winner"]["failed_gates"]
     assert tournament["next_experiment_plan"][0]["id"] == "flash_temporal_v4_repair_200"
+
+
+def test_live_scout_tournament_blocks_tool_source_errors_even_when_model_output_is_clean(tmp_path):
+    report_path = _write_canary(
+        tmp_path,
+        n_requested=1000,
+        success_rate=0.98,
+        transcript_errors=0,
+        duplicate_rate=0.01,
+        completed=980,
+        geometry_cells=980,
+        string_count=2940,
+        tool_call_count=3000,
+        tool_error_count=167,
+    )
+
+    tournament = evaluate_live_scout_tournament([report_path])
+
+    assert tournament["promotion_decision"]["decision"] == "no_promotion"
+    assert tournament["winner"]["promotion_eligible"] is False
+    assert "scale_tool_error_rate_le_0_02" in tournament["winner"]["failed_gates"]
+    assert tournament["winner"]["quality"]["tool_error_count"] == 167
+
+
+def test_live_scout_tournament_blocks_non_passing_canary_verdict(tmp_path):
+    report_path = _write_canary(
+        tmp_path,
+        n_requested=100,
+        success_rate=0.97,
+        transcript_errors=0,
+        duplicate_rate=0.02,
+        completed=97,
+        geometry_cells=98,
+        string_count=290,
+        verdict_status="warn",
+    )
+
+    tournament = evaluate_live_scout_tournament([report_path])
+
+    assert tournament["promotion_decision"]["decision"] == "no_promotion"
+    assert "original_canary_status_pass" in tournament["winner"]["failed_gates"]
 
 
 def test_live_scout_tournament_uses_later_repair_arm_after_failed_thousand(tmp_path):
@@ -171,18 +297,26 @@ def _write_canary(
     geometry_cells: int = 6,
     string_count: int | None = None,
     prompt_variant: str = "flash_compact_v2",
+    cycle_id: str = "cycle_test_live_canary",
+    seed_rng: int = 1,
+    tool_call_count: int = 10,
+    tool_error_count: int = 0,
+    verdict_status: str | None = None,
 ) -> Path:
     tmp_path.mkdir(parents=True, exist_ok=True)
     report_path = tmp_path / "live_scout_canary_report.json"
+    db_path = tmp_path / "desk-live-canary.db"
+    _write_tool_log_db(db_path, tool_call_count=tool_call_count, tool_error_count=tool_error_count)
     report = {
         "schema_version": "talis_live_scout_canary_v1",
-        "cycle_id": "cycle_test_live_canary",
+        "cycle_id": cycle_id,
         "model": "deepseek:v4-flash",
         "fallback": "anthropic:claude-haiku-4-5",
         "n_scouts_requested": n_requested,
         "provider_timeout_s": 45,
         "concurrency": 1,
-        "seed_rng": 1,
+        "seed_rng": seed_rng,
+        "db_path": str(db_path),
         "prompt_variant_override": prompt_variant,
         "max_tool_iterations": 0,
         "metrics": {
@@ -228,7 +362,7 @@ def _write_canary(
             "prompt_chars": 60000,
             "response_chars": 12000,
         },
-        "verdict": {"status": "pass" if transcript_errors == 0 else "fail"},
+        "verdict": {"status": verdict_status or ("pass" if transcript_errors == 0 else "fail")},
     }
     report_path.write_text(json.dumps(report), encoding="utf-8")
     calls = []
@@ -244,3 +378,14 @@ def _write_canary(
     ]
     (tmp_path / "live_scout_canary_outputs.json").write_text(json.dumps(outputs), encoding="utf-8")
     return report_path
+
+
+def _write_tool_log_db(path: Path, *, tool_call_count: int, tool_error_count: int) -> None:
+    with sqlite3.connect(str(path)) as conn:
+        conn.execute("CREATE TABLE tool_call_log (error TEXT)")
+        for i in range(tool_call_count):
+            conn.execute(
+                "INSERT INTO tool_call_log (error) VALUES (?)",
+                ("resolve_error" if i < tool_error_count else "",),
+            )
+        conn.commit()

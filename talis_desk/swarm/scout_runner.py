@@ -1009,11 +1009,11 @@ def _infer_tool_args_for_candidate(
     seed: SeedCell,
     row: Optional[dict[str, Any]] = None,
 ) -> Optional[dict[str, Any]]:
+    if uri.startswith("tic://source/"):
+        return _infer_source_args(uri, seed, row)
     args = _infer_tool_args(uri, seed)
     if args is not None:
         return args
-    if uri.startswith("tic://source/"):
-        return _infer_source_args(uri, seed, row)
     if not row:
         return None
     schema = row.get("schema_json") or {}
@@ -1159,6 +1159,8 @@ def _infer_source_args(
         return {"min_spread_pct": 2.0, "lookback_hours": 6}
     if slug == "cross_asset_corr":
         return {"lookback_days": 60}
+    if slug == "hl_reject_corpus":
+        return {"lookback_hours": 24}
     return {}
 
 
@@ -1375,6 +1377,8 @@ def _infer_tool_args(uri: str, seed: SeedCell) -> Optional[dict[str, Any]]:
             "wallets": [wallet] if wallet else [],
             "limit": 500,
         }
+    if slug == "compute_rotation_velocity":
+        return {"lookback_days": 365}
     if slug == "get_econ_event_today":
         return {}
     if slug == "get_fomc_next_event":

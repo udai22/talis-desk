@@ -363,12 +363,28 @@ def _install_live_chat_recorder(
                 real_chat(model, system, user, max_tokens=max_tokens, fallback=fallback),
                 timeout=max(1.0, timeout_s),
             )
-        except Exception as exc:
-            call["elapsed_s"] = round(time.perf_counter() - t0, 3)
-            call["error"] = f"{type(exc).__name__}: {exc}"
-            transcript.setdefault("calls", []).append(call)
-            _safe_write_progress(progress_path, transcript)
-            raise
+        except Exception as primary_exc:
+            call["primary_error"] = f"{type(primary_exc).__name__}: {primary_exc}"
+            if fallback and fallback != model:
+                try:
+                    res = await asyncio.wait_for(
+                        real_chat(fallback, system, user, max_tokens=max_tokens, fallback=None),
+                        timeout=max(1.0, timeout_s),
+                    )
+                    call["fallback_after_primary_error"] = True
+                except Exception as fallback_exc:
+                    call["elapsed_s"] = round(time.perf_counter() - t0, 3)
+                    call["error"] = f"{type(fallback_exc).__name__}: {fallback_exc}"
+                    call["fallback_error"] = call["error"]
+                    transcript.setdefault("calls", []).append(call)
+                    _safe_write_progress(progress_path, transcript)
+                    raise
+            else:
+                call["elapsed_s"] = round(time.perf_counter() - t0, 3)
+                call["error"] = call["primary_error"]
+                transcript.setdefault("calls", []).append(call)
+                _safe_write_progress(progress_path, transcript)
+                raise
         call["elapsed_s"] = round(time.perf_counter() - t0, 3)
         call["response_envelope"] = {k: v for k, v in res.items() if k != "text"}
         call["text"] = str(res.get("text") or "")

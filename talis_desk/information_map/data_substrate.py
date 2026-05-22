@@ -107,7 +107,7 @@ DATA_SURFACES: tuple[DataSurface, ...] = (
         title="Our HL node",
         role="What our node knows",
         question="Do our own rejects, fills, and state deltas show healthy or stressed flow?",
-        example_tools=("tic://tool/builtin/hl_reject_corpus@v1",),
+        example_tools=("tic://source/hl/hl_reject_corpus",),
         edge_types=("wallet -> rejects", "order_state -> quality", "node -> source_ref"),
         source_family="our_hl_node",
     ),

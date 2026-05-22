@@ -504,7 +504,7 @@ def main() -> int:
                 "tool_candidates": [
                     "tic://tool/builtin/query_events_recent@v1",
                     "tic://tool/hydromancer/get_hl_pnl_leaderboard@v1",
-                    "tic://tool/builtin/hl_reject_corpus@v1",
+                    "tic://source/hl/hl_reject_corpus",
                     "tic://tool/builtin/query_timeseries@v1",
                 ]
             },
@@ -1601,7 +1601,7 @@ def _node_evidence() -> list[dict[str, Any]]:
             },
         },
         {
-            "uri": "tic://tool/builtin/hl_reject_corpus@v1",
+            "uri": "tic://source/hl/hl_reject_corpus",
             "ok": True,
             "tool_call_log_id": "tc_node_rejects",
             "result": {
