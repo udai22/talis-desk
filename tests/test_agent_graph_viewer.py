@@ -19,18 +19,29 @@ def test_agent_graph_state_normalizes_live_scout_artifacts(tmp_path: Path) -> No
     assert state["summary"]["allowed_next_step"] == "live_1000_scout_ramp"
     assert any(n["kind"] == "agent" for n in state["nodes"])
     assert any(n["kind"] == "string" for n in state["nodes"])
+    assert any(n["kind"] == "price" for n in state["nodes"])
+    assert any(n["kind"] == "outcome" for n in state["nodes"])
     assert any(n["kind"] == "situational" for n in state["nodes"])
     assert any(e["kind"] == "emitted" for e in state["edges"])
+    assert any(e["kind"] == "evaluated_against_price" for e in state["edges"])
+    assert any(e["kind"] == "priced_against" for e in state["edges"])
     assert any(e["kind"] == "directs_attention" for e in state["edges"])
     assert state["agents"][0]["source_families"] == ["our_node", "hydromancer"]
     assert state["agents"][0]["directional_pressure"]["direction"] == "up"
     assert state["summary"]["max_upward_pressure_score"] > 0
     assert state["summary"]["upward_pressure_candidates"]
     assert state["summary"]["situational_awareness_agents"]
+    assert state["summary"]["price_observation_count"] == 4
+    assert state["summary"]["outcome_eval_count"] == 1.0
+    assert state["summary"]["outcome_direction_hit_rate"] == 1.0
+    assert state["summary"]["early_repricing_hit_rate"] == 1.0
+    assert state["agents"][0]["price_feedback"]["outcome_count"] == 1
     assert state["cadence_policy"]["full_pipeline"]["cadence"] == "twice_daily"
     assert state["cadence_policy"]["always_on_flash"]["mode"] == "continuous_sentinel"
     assert any(trigger["id"] == "fresh_social_alpha" for trigger in state["cadence_policy"]["sentinel_triggers"])
     assert any(step["id"] == "cadence" for step in state["timeline"])
+    assert any(step["id"] == "price" for step in state["timeline"])
+    assert any(step["id"] == "outcomes" for step in state["timeline"])
     assert any(step["id"] == "cortex" for step in state["timeline"])
     assert state["reports"][0]["title"] == "Launch gate"
 
@@ -46,9 +57,19 @@ def test_agent_graph_static_export_copies_raw_artifacts_and_state(tmp_path: Path
     assert Path(result["index"]).exists()
     assert Path(result["state"]).exists()
     assert (out / "raw" / "live_scout_canary_outputs.json").exists()
+    assert (out / "raw" / "information_price_outcomes.json").exists()
     state = json.loads((out / "agent_graph_state.json").read_text())
     assert state["summary"]["agents_complete"] == 2
     assert state["reports"][1]["href"] == "raw/live_scout_canary_report.json"
+
+
+def test_agent_graph_html_explains_cadence_and_static_fallback() -> None:
+    html = Path("talis_desk/monitor/agent_graph.html").read_text(encoding="utf-8")
+
+    assert "'/api/agent-graph', 'agent_graph_state.json'" in html
+    assert "state.staticFallback = true" in html
+    assert "Twice-daily full pipeline" in html
+    assert "Always-on Flash sentinel" in html
 
 
 def test_agent_graph_handles_blocked_sentinel_preflight(tmp_path: Path) -> None:
@@ -195,6 +216,58 @@ def _write_run(tmp_path: Path) -> Path:
         "live_scout_tournament_report.json": tournament,
         "tool_creation_contract_repair.json": repair,
         "live_scout_learning_report.json": {"next_ramp_policy": {"allowed_next_step": "live_1000_scout_ramp"}},
+        "live_price_observations_start.json": {
+            "status": "collected",
+            "stage": "start",
+            "observed_at": "2026-05-22T10:00:00+00:00",
+            "source": "hyperliquid_public_api",
+            "observations": [
+                {"entity": "HYPE", "observed_at": "2026-05-22T10:00:00+00:00", "price": 33.0, "source": "hyperliquid_public_api"},
+                {"entity": "PURR", "observed_at": "2026-05-22T10:00:00+00:00", "price": 0.12, "source": "hyperliquid_public_api"},
+            ],
+        },
+        "live_price_observations_final.json": {
+            "status": "collected",
+            "stage": "final",
+            "observed_at": "2026-05-22T11:05:00+00:00",
+            "source": "hyperliquid_public_api",
+            "observations": [
+                {"entity": "HYPE", "observed_at": "2026-05-22T11:05:00+00:00", "price": 35.0, "source": "hyperliquid_public_api"},
+                {"entity": "PURR", "observed_at": "2026-05-22T11:05:00+00:00", "price": 0.119, "source": "hyperliquid_public_api"},
+            ],
+        },
+        "information_price_outcomes.json": {
+            "status": "evaluated",
+            "summary": {
+                "outcome_eval_count": 1.0,
+                "outcome_observed_count": 1.0,
+                "outcome_observed_rate": 1.0,
+                "outcome_direction_hit_rate": 1.0,
+                "outcome_threshold_hit_rate": 1.0,
+                "avg_realized_edge_score": 1.0,
+                "early_repricing_hit_rate": 1.0,
+            },
+            "outcomes": [
+                {
+                    "id": "iout_a",
+                    "string_id": "istr_a",
+                    "cycle_id": "cycle_test",
+                    "entity": "HYPE",
+                    "expected_direction": "up",
+                    "baseline_price": 33.0,
+                    "baseline_at": "2026-05-22T10:00:00+00:00",
+                    "outcome_price": 35.0,
+                    "outcome_at": "2026-05-22T11:05:00+00:00",
+                    "price_return_pct": 0.060606,
+                    "signed_return_pct": 0.060606,
+                    "direction_hit": True,
+                    "threshold_hit": True,
+                    "realized_edge_score": 1.0,
+                    "lead_time_minutes": 65,
+                    "quality_flags": ["direction_hit", "threshold_hit"],
+                }
+            ],
+        },
     }
     for name, payload in files.items():
         (raw / name).write_text(json.dumps(payload), encoding="utf-8")

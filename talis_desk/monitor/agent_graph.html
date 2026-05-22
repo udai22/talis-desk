@@ -132,7 +132,7 @@
   }
   .stats {
     display: grid;
-    grid-template-columns: repeat(7, minmax(0, 1fr));
+    grid-template-columns: repeat(8, minmax(0, 1fr));
     gap: 10px;
     margin-bottom: 14px;
   }
@@ -537,6 +537,8 @@
         <option value="source">Sources</option>
         <option value="tool">Tools</option>
         <option value="string">Strings</option>
+        <option value="price">Prices</option>
+        <option value="outcome">Outcomes</option>
         <option value="situational">Situational</option>
         <option value="proposal">Tool proposals</option>
         <option value="report">Reports</option>
@@ -587,6 +589,8 @@ const colors = {
   source: '#30d158',
   tool: '#ffd60a',
   string: '#bf5af2',
+  price: '#34c759',
+  outcome: '#ff375f',
   situational: '#0071e3',
   proposal: '#ff9f0a',
   report: '#ff453a'
@@ -603,6 +607,7 @@ const state = {
   svg: null,
   link: null,
   node: null,
+  staticFallback: false,
   width: 0,
   height: 0
 };
@@ -639,8 +644,8 @@ function isApiMode() {
 }
 
 async function load(force) {
-  const urls = isApiMode()
-    ? ['/api/agent-graph']
+  const urls = isApiMode() && !state.staticFallback
+    ? ['/api/agent-graph', 'agent_graph_state.json', './agent_graph_state.json']
     : ['agent_graph_state.json', './agent_graph_state.json'];
   let next = null;
   for (const url of urls) {
@@ -648,6 +653,7 @@ async function load(force) {
       const r = await fetch(url + (url.includes('?') ? '&' : '?') + 't=' + Date.now(), { cache: 'no-store' });
       if (r.ok) {
         next = await r.json();
+        if (url.includes('agent_graph_state.json')) state.staticFallback = true;
         break;
       }
     } catch (e) {}
@@ -685,6 +691,7 @@ function renderCortex() {
   const sentinel = cadence.always_on_flash || {};
   const watchers = state.data?.situational_agents || s.situational_awareness_agents || [];
   const upward = s.upward_pressure_candidates || [];
+  const outcomes = s.price_feedback_top_outcomes || [];
   $('cortexStrip').innerHTML = `
     <div class="cortex-card panel">
       <div class="label">Situational Cortex</div>
@@ -706,6 +713,7 @@ function renderCortex() {
     <div class="cortex-card panel">
       <div class="label">Pre-Price Pressure</div>
       <div class="inspector-title" style="font-size:21px;margin-top:6px">Signals that deserve attention before consensus</div>
+      <div class="detail">The loop is now explicit: scouts emit strings, the sentinel captures price, and outcomes tell MarketEvolve whether the string saw the move early.</div>
       <div class="cortex-grid">
         ${upward.slice(0, 4).map(c => `
           <button class="cortex-item" onclick="selectAgentById('${escAttr(c.agent_id)}')">
@@ -717,6 +725,18 @@ function renderCortex() {
             <div class="detail">${esc(c.why || 'Early upward repricing candidate.')}</div>
           </button>
         `).join('') || '<div class="detail">No upward-pressure candidates crossed the current threshold.</div>'}
+      </div>
+      <div class="cortex-grid">
+        ${outcomes.slice(0, 4).map(o => `
+          <button class="cortex-item" onclick="selectNodeById('outcome:${escAttr(o.outcome_id)}')">
+            <div class="agent-top">
+              <span class="dot ${o.threshold_hit ? 'complete' : o.direction_hit ? 'weak' : 'queued'}"></span>
+              <div class="agent-name">${esc(o.entity || 'UNKNOWN')} / ${esc(o.expected_direction || '?')}</div>
+              <div class="score">${pct(o.realized_edge_score)}</div>
+            </div>
+            <div class="detail">signed ${pct(o.signed_return_pct)} · ${o.threshold_hit ? 'threshold hit' : o.direction_hit ? 'direction hit' : 'not confirmed'}</div>
+          </button>
+        `).join('') || '<div class="detail">No price-scored strings loaded yet.</div>'}
       </div>
     </div>
     <div class="cortex-card panel">
@@ -730,7 +750,7 @@ function renderCortex() {
             <div class="agent-name">Full Pipeline</div>
             <div class="score">2x/day</div>
           </div>
-          <div class="detail">${esc(full.purpose || 'Brief-grade scout, synthesis, verifier, specialist, evolution, and composition pass.')}</div>
+          <div class="detail">Twice-daily full pipeline. ${esc(full.purpose || 'Brief-grade scout, synthesis, verifier, specialist, evolution, and composition pass.')}</div>
         </div>
         <div class="cortex-item">
           <div class="agent-top">
@@ -738,7 +758,7 @@ function renderCortex() {
             <div class="agent-name">Flash Sentinel</div>
             <div class="score">${esc(String(sentinel.interval_minutes || 5))}m</div>
           </div>
-          <div class="detail">${esc(sentinel.purpose || 'Cheap rolling scouts compare information against price and attention until a trigger deserves more budget.')}</div>
+          <div class="detail">Always-on Flash sentinel. ${esc(sentinel.purpose || 'Cheap rolling scouts compare information against price and attention until a trigger deserves more budget.')}</div>
         </div>
       </div>
     </div>
@@ -756,6 +776,7 @@ function renderStats() {
     ['Agents', `${s.agents_complete || 0}/${s.agents_requested || s.agents_seen || 0}`, `${s.agents_weak || 0} weak · ${s.agents_error || 0} error`],
     ['Upward', fmt(s.upward_pressure_count || 0), `max pressure ${pct(s.max_upward_pressure_score)}`],
     ['Early', fmt(s.early_signal_count || 0), `max attention ${pct(s.max_early_signal_score)}`],
+    ['Outcomes', fmt(s.outcome_eval_count || 0), `hit ${pct(s.outcome_direction_hit_rate)} · edge ${pct(s.avg_realized_edge_score)}`],
     ['Strings', fmt(s.strings), `${fmt2(s.avg_strings_per_scout)} per scout`],
     ['Graph', `${fmt(s.nodes)} / ${fmt(s.edges)}`, `${fmt(s.tool_count)} tools`],
     ['Quality', pct(s.success_rate), `${money(s.cost_usd)} · dup ${pct(s.duplicate_hypothesis_rate)}`],
@@ -806,7 +827,7 @@ function renderAgents() {
 }
 
 function renderLegend() {
-  const kinds = ['agent', 'cell', 'source', 'tool', 'string', 'situational', 'proposal', 'report'];
+  const kinds = ['agent', 'cell', 'source', 'tool', 'string', 'price', 'outcome', 'situational', 'proposal', 'report'];
   $('legend').innerHTML = kinds.map(k => `<span class="chip"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${colors[k]};margin-right:6px"></span>${esc(pretty(k))}</span>`).join('');
 }
 
@@ -958,6 +979,16 @@ function renderAgentInspector(a) {
     <div class="section">
       <h3>Directional Repricing Pressure</h3>
       <div class="inspector-text">${directionalPressureCopy(a)}</div>
+    </div>
+    <div class="section">
+      <h3>Information To Price Feedback</h3>
+      <div class="inspector-text">${priceFeedbackCopy(a)}</div>
+      ${(a.price_feedback?.outcomes || []).length ? (a.price_feedback.outcomes || []).map(o => `
+        <div class="report-link" style="margin-top:8px">
+          <div class="report-title">${esc(o.entity || a.entity)} ${esc(o.expected_direction || '?')} · edge ${pct(o.realized_edge_score)}</div>
+          <div class="report-desc">signed ${pct(o.signed_return_pct)} · baseline ${priceFmt(o.baseline_price)} → ${priceFmt(o.outcome_price)} · ${o.threshold_hit ? 'threshold hit' : o.direction_hit ? 'direction hit' : 'not confirmed'}</div>
+        </div>
+      `).join('') : '<div class="detail">No price-scored string is attached to this scout yet.</div>'}
     </div>
     <div class="section">
       <h3>Early Signal Lens</h3>
@@ -1116,6 +1147,8 @@ function nodeExplanation(n) {
     source: 'A data family made available to the scout. If this is sparse, the map is telling the cortex where coverage is thin.',
     tool: 'A concrete callable surface or proposed capability. Tool density and tool diversity are part of the intelligence substrate.',
     string: 'A stored information string: causal thesis, mechanism, expected outcome, kill signal, and scores.',
+    price: 'A market price observation captured by the sentinel. It anchors the string in the tape so learning is external, not self-referential.',
+    outcome: 'An evaluator row connecting one information string to later price movement: direction hit, threshold hit, realized edge score, and lead time.',
     situational: 'A whole-board overseer. It reads the geometry, pressure, blind spots, tool health, and budget gates, then points attention toward the next useful scouts.',
     proposal: 'An agent-created tool proposal. The repair harness grades whether it is evaluator-grade before scale.',
     report: 'A higher-order report that turns many scout events into a gate, policy, or next action.'
@@ -1152,6 +1185,21 @@ function directionalPressureCopy(a) {
   return `Direction ${direction}, pressure ${score}. This is the VVV lens: is information flow implying repricing before price has fully moved?${why}${terms}`;
 }
 
+function priceFeedbackCopy(a) {
+  const pf = a.price_feedback || {};
+  const start = pf.start_price == null ? 'no start price' : priceFmt(pf.start_price);
+  const final = pf.final_price == null ? 'no final price' : priceFmt(pf.final_price);
+  const delta = pf.price_delta_pct == null ? 'pending' : pct(pf.price_delta_pct);
+  const best = pf.best_outcome;
+  if (!pf.observation_count && !pf.outcome_count) {
+    return 'No price observations are linked to this scout yet. In sentinel mode, the run should collect Hyperliquid mids before and after scouts so this lane can score information against price.';
+  }
+  const outcome = best
+    ? ` Best attached outcome scored ${pct(best.realized_edge_score)} with signed return ${pct(best.signed_return_pct)}.`
+    : ' No persisted information string outcome has matured yet.';
+  return `Market context ${start} → ${final}, delta ${delta}. ${pf.outcome_count || 0} attached string outcomes.${outcome}`;
+}
+
 function upwardPressureScore(a) {
   const p = a.directional_pressure || {};
   return p.direction === 'up' ? p.score : 0;
@@ -1166,8 +1214,9 @@ function labelText(d, degree) {
 function showNodeLabel(d, degree) {
   if (isActiveNode(d)) return true;
   if (!state.selected && ['run', 'report', 'source', 'situational'].includes(d.kind)) return true;
-  if (state.selected && !shouldDimNode(d) && ['cell', 'source', 'tool', 'string', 'situational', 'report'].includes(d.kind)) return true;
+  if (state.selected && !shouldDimNode(d) && ['cell', 'source', 'tool', 'string', 'price', 'outcome', 'situational', 'report'].includes(d.kind)) return true;
   if (['run', 'report', 'situational'].includes(d.kind)) return true;
+  if (d.kind === 'outcome' && degree >= 2) return true;
   if (d.kind === 'source' && degree >= 10) return true;
   if (d.kind === 'tool' && degree >= 16) return true;
   if (d.kind === 'cell' && degree >= 5) return true;
@@ -1183,7 +1232,7 @@ function agentProgress(a) {
 }
 
 function radius(d, degree) {
-  const base = { run: 16, agent: 8, cell: 10, source: 9, tool: 7, string: 8, situational: 13, proposal: 6, report: 10 }[d.kind] || 7;
+  const base = { run: 16, agent: 8, cell: 10, source: 9, tool: 7, string: 8, price: 8, outcome: 10, situational: 13, proposal: 6, report: 10 }[d.kind] || 7;
   return Math.min(24, base + Math.sqrt(Math.max(0, degree)) * 1.7 + Math.sqrt(Math.max(0, d.weight || 0)) * .45);
 }
 
@@ -1196,12 +1245,12 @@ function linkDistance(d) {
 }
 
 function kindX(kind, width) {
-  const map = { run: .50, cell: .16, source: .20, agent: .44, situational: .54, tool: .68, string: .80, proposal: .74, report: .88 };
+  const map = { run: .50, cell: .16, source: .20, agent: .44, situational: .54, tool: .68, string: .76, price: .72, outcome: .86, proposal: .74, report: .90 };
   return width * (map[kind] || .50);
 }
 
 function kindY(kind, height) {
-  const map = { run: .50, cell: .24, source: .64, agent: .46, situational: .22, tool: .33, string: .64, proposal: .79, report: .18 };
+  const map = { run: .50, cell: .24, source: .64, agent: .46, situational: .22, tool: .33, string: .64, price: .50, outcome: .62, proposal: .79, report: .18 };
   return height * (map[kind] || .50);
 }
 
@@ -1242,6 +1291,14 @@ function pct(v) {
 function money(v) {
   if (v == null || Number.isNaN(Number(v))) return '-';
   return '$' + Number(v).toFixed(2);
+}
+
+function priceFmt(v) {
+  if (v == null || Number.isNaN(Number(v))) return '-';
+  const n = Number(v);
+  if (Math.abs(n) >= 100) return '$' + n.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  if (Math.abs(n) >= 1) return '$' + n.toLocaleString('en-US', { maximumFractionDigits: 4 });
+  return '$' + n.toLocaleString('en-US', { maximumSignificantDigits: 5 });
 }
 
 function clamp(v, lo, hi) {

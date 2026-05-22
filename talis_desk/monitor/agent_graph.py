@@ -32,6 +32,9 @@ RAW_ARTIFACTS = [
     "live_scout_ramp_policy.json",
     "live_scout_ramp_policy_rehearsal.json",
     "live_scout_slice_preview.json",
+    "live_price_observations_start.json",
+    "live_price_observations_final.json",
+    "information_price_outcomes.json",
     "live_scout_tournament_report.json",
     "live_scout_tournament_report.md",
     "live_scout_transcript.json",
@@ -93,6 +96,18 @@ def build_agent_graph_state(
     tournament_report = _read_json(raw_dir / "live_scout_tournament_report.json", {}) or _read_json(root / "tournament" / "live_scout_tournament_report.json", {})
     learning_report = _read_json(raw_dir / "live_scout_learning_report.json", {}) or _read_json(prompt_dir / "live_scout_learning_report.json", {})
     repair_report = _read_json(raw_dir / "tool_creation_contract_repair.json", {}) or _read_json(prompt_dir / "tool_creation_contract_repair.json", {})
+    price_observations_start = (
+        _read_json(raw_dir / "live_price_observations_start.json", {})
+        or _read_json(prompt_dir / "live_price_observations_start.json", {})
+    )
+    price_observations_final = (
+        _read_json(raw_dir / "live_price_observations_final.json", {})
+        or _read_json(prompt_dir / "live_price_observations_final.json", {})
+    )
+    information_price_outcomes = (
+        _read_json(raw_dir / "information_price_outcomes.json", {})
+        or _read_json(prompt_dir / "information_price_outcomes.json", {})
+    )
     launch_report = _read_json(root / "launch-gate" / "launch_gate_report.json", {}) or _read_json(root / "scout_system_launch_gate_report.json", {})
     market_evolve_scoreboard = (
         _read_json(raw_dir / "market_evolve_scoreboard.json", {})
@@ -106,12 +121,19 @@ def build_agent_graph_state(
         canary_report=canary_report,
         max_agents=max_agents,
     )
+    price_feedback = _price_feedback_context(
+        price_observations_start=price_observations_start,
+        price_observations_final=price_observations_final,
+        information_price_outcomes=information_price_outcomes,
+    )
+    _attach_price_feedback_to_agents(agents, price_feedback)
     situational_agents = _situational_awareness_agents(
         agents,
         canary_report=canary_report,
         tournament_report=tournament_report,
         learning_report=learning_report,
         repair_report=repair_report,
+        price_feedback=price_feedback,
     )
     nodes, edges = _graph_from_agents(
         agents,
@@ -121,6 +143,7 @@ def build_agent_graph_state(
         repair_report=repair_report,
         market_evolve_scoreboard=market_evolve_scoreboard,
         canary_report=canary_report,
+        price_feedback=price_feedback,
     )
     reports = _report_links(root=root, raw_dir=raw_dir, artifact_href_prefix=artifact_href_prefix)
     summary = _summary(
@@ -136,6 +159,7 @@ def build_agent_graph_state(
         market_evolve_scoreboard=market_evolve_scoreboard,
         launch_report=launch_report,
         slice_preview=slice_preview,
+        price_feedback=price_feedback,
     )
     return {
         "schema_version": "talis_agent_graph_state_v1",
@@ -150,7 +174,8 @@ def build_agent_graph_state(
         "nodes": nodes,
         "edges": edges,
         "reports": reports,
-        "timeline": _timeline(summary, canary_report, tournament_report, learning_report, repair_report, market_evolve_scoreboard),
+        "price_feedback": price_feedback,
+        "timeline": _timeline(summary, canary_report, tournament_report, learning_report, repair_report, market_evolve_scoreboard, price_feedback),
     }
 
 
@@ -337,6 +362,7 @@ def _graph_from_agents(
     repair_report: dict[str, Any],
     market_evolve_scoreboard: dict[str, Any],
     canary_report: dict[str, Any],
+    price_feedback: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     nodes: dict[str, dict[str, Any]] = {}
     edges: list[dict[str, Any]] = []
@@ -356,9 +382,18 @@ def _graph_from_agents(
             edges.append({"source": source, "target": target, "kind": kind, **extra})
 
     node("run", "run", "Scout run", status=canary_report.get("mode") or "live")
+    agent_ids_by_string: dict[str, list[str]] = defaultdict(list)
+    cell_ids_by_entity: dict[str, set[str]] = defaultdict(set)
+    price_node_ids_by_entity: dict[str, list[str]] = defaultdict(list)
     for agent in agents:
         aid = f"agent:{agent['id']}"
         cell_id = f"cell:{agent.get('cell_key') or '|'.join([agent.get('entity',''), agent.get('horizon',''), agent.get('lens',''), agent.get('bias_mode','')])}"
+        cell_ids_by_entity[str(agent.get("entity") or "").upper()].add(cell_id)
+        for sid in agent.get("information_string_ids") or []:
+            agent_ids_by_string[str(sid)].append(str(agent["id"]))
+        for s in agent.get("information_strings") or []:
+            if s.get("id"):
+                agent_ids_by_string[str(s.get("id"))].append(str(agent["id"]))
         node(cell_id, "cell", f"{agent.get('entity')} / {agent.get('horizon')} / {agent.get('lens')}", entity=agent.get("entity"), horizon=agent.get("horizon"), lens=agent.get("lens"), bias=agent.get("bias_mode"))
         node(
             aid,
@@ -397,6 +432,59 @@ def _graph_from_agents(
             pid = f"proposal:{prop}"
             node(pid, "proposal", prop, weight=0.6)
             edge(aid, pid, "created_tool_proposal")
+
+    for obs in (price_feedback.get("observations") or [])[:400]:
+        entity = str(obs.get("entity") or "")
+        stage = str(obs.get("stage") or "")
+        price_node_id = _price_node_id(obs)
+        price_node_ids_by_entity[entity.upper()].append(price_node_id)
+        node(
+            price_node_id,
+            "price",
+            _price_label(obs),
+            entity=entity,
+            price=obs.get("price"),
+            source=obs.get("source"),
+            observed_at=obs.get("observed_at"),
+            stage=stage,
+            status="observed",
+        )
+        edge("run", price_node_id, "observed_price")
+        if obs.get("source"):
+            sid = f"source:{obs.get('source')}"
+            node(sid, "source", str(obs.get("source")).replace("_", " "), weight=2)
+            edge(sid, price_node_id, "priced")
+        for cell_id in list(cell_ids_by_entity.get(entity.upper(), set()))[:8]:
+            edge(price_node_id, cell_id, "anchors_market")
+
+    for outcome in (price_feedback.get("outcomes") or [])[:400]:
+        string_id = str(outcome.get("string_id") or "")
+        entity = str(outcome.get("entity") or "")
+        outcome_id = _outcome_node_id(outcome)
+        if string_id:
+            sid = f"string:{string_id}"
+            node(sid, "string", f"String {string_id[-8:]}", entity=entity, weight=0.7)
+            edge(sid, outcome_id, "evaluated_against_price")
+        node(
+            outcome_id,
+            "outcome",
+            _outcome_label(outcome),
+            entity=entity,
+            status="hit" if outcome.get("threshold_hit") else "direction_hit" if outcome.get("direction_hit") else "miss",
+            direction=outcome.get("expected_direction"),
+            realized_edge_score=outcome.get("realized_edge_score"),
+            signed_return_pct=outcome.get("signed_return_pct"),
+            price_return_pct=outcome.get("price_return_pct"),
+            lead_time_minutes=outcome.get("lead_time_minutes"),
+            baseline_price=outcome.get("baseline_price"),
+            outcome_price=outcome.get("outcome_price"),
+            quality_flags=outcome.get("quality_flags") or [],
+        )
+        edge("run", outcome_id, "scored_outcome")
+        for agent_id in agent_ids_by_string.get(string_id, [])[:8]:
+            edge(f"agent:{agent_id}", outcome_id, "scored_by_price")
+        for price_node_id in price_node_ids_by_entity.get(entity.upper(), [])[:8]:
+            edge(outcome_id, price_node_id, "priced_against")
 
     for watcher in situational_agents:
         wid = f"situational:{watcher['id']}"
@@ -463,6 +551,7 @@ def _summary(
     market_evolve_scoreboard: dict[str, Any],
     launch_report: dict[str, Any],
     slice_preview: dict[str, Any],
+    price_feedback: dict[str, Any],
 ) -> dict[str, Any]:
     metrics = canary_report.get("metrics") if isinstance(canary_report.get("metrics"), dict) else {}
     scout_metrics = metrics.get("scouts") if isinstance(metrics.get("scouts"), dict) else {}
@@ -482,6 +571,8 @@ def _summary(
     allowed_next_step = decision.get("allowed_next_step") or next_policy.get("allowed_next_step") or ""
     evolve_memory = market_evolve_scoreboard.get("evolution_memory") if isinstance(market_evolve_scoreboard.get("evolution_memory"), dict) else {}
     cadence_control = market_evolve_scoreboard.get("cadence_control") if isinstance(market_evolve_scoreboard.get("cadence_control"), dict) else {}
+    price_summary = price_feedback.get("summary") if isinstance(price_feedback.get("summary"), dict) else {}
+    outcome_summary = price_feedback.get("outcome_summary") if isinstance(price_feedback.get("outcome_summary"), dict) else {}
     return {
         "run_name": root.name,
         "cycle_id": cycle_id,
@@ -533,6 +624,17 @@ def _summary(
         ),
         "situational_awareness_agents": situational_agents,
         "max_situational_score": max((float(a.get("score") or 0) for a in situational_agents), default=0.0),
+        "price_observation_count": price_summary.get("observation_count", 0),
+        "price_observation_sources": price_summary.get("sources", {}),
+        "price_observed_entities": price_summary.get("entities", []),
+        "outcome_eval_count": outcome_summary.get("outcome_eval_count", 0.0),
+        "outcome_observed_rate": outcome_summary.get("outcome_observed_rate", 0.0),
+        "outcome_direction_hit_rate": outcome_summary.get("outcome_direction_hit_rate", 0.0),
+        "outcome_threshold_hit_rate": outcome_summary.get("outcome_threshold_hit_rate", 0.0),
+        "avg_realized_edge_score": outcome_summary.get("avg_realized_edge_score", 0.0),
+        "early_repricing_hit_rate": outcome_summary.get("early_repricing_hit_rate", 0.0),
+        "price_feedback_status": price_summary.get("status", "missing"),
+        "price_feedback_top_outcomes": _top_price_outcomes(price_feedback),
         "market_evolve_status": market_evolve_scoreboard.get("status"),
         "market_evolve_summary": market_evolve_scoreboard.get("summary"),
         "market_evolve_best_delta": evolve_memory.get("best_score_delta_recent"),
@@ -552,6 +654,7 @@ def _timeline(
     learning: dict[str, Any],
     repair: dict[str, Any],
     market_evolve_scoreboard: dict[str, Any],
+    price_feedback: dict[str, Any],
 ) -> list[dict[str, Any]]:
     promotion = tournament.get("promotion_decision") if isinstance(tournament.get("promotion_decision"), dict) else {}
     success_rate = _safe_float(summary.get("success_rate"), 0.0)
@@ -561,12 +664,17 @@ def _timeline(
         f"{evolve_status} / {cadence_control.get('decision')}"
         if cadence_control.get("decision") else evolve_status
     )
+    price_summary = price_feedback.get("summary") if isinstance(price_feedback.get("summary"), dict) else {}
+    outcome_summary = price_feedback.get("outcome_summary") if isinstance(price_feedback.get("outcome_summary"), dict) else {}
+    outcome_n = int(float(outcome_summary.get("outcome_eval_count") or 0))
     return [
         {"id": "cadence", "label": "Cadence", "status": "pass", "detail": "2 full runs/day + always-on Flash sentinel"},
         {"id": "slice", "label": "Slice", "status": "pass", "detail": f"{summary.get('agents_requested', 0)} cells routed"},
         {"id": "scouts", "label": "Scouts", "status": "pass" if success_rate >= 0.9 else "watch", "detail": f"{summary.get('agents_complete', 0)} returned"},
         {"id": "strings", "label": "Strings", "status": "pass" if summary.get("strings", 0) else "watch", "detail": f"{summary.get('strings', 0)} strings"},
         {"id": "pressure", "label": "Pressure", "status": "pass" if summary.get("upward_pressure_count", 0) else "watch", "detail": f"{summary.get('upward_pressure_count', 0)} upward candidates"},
+        {"id": "price", "label": "Price Tape", "status": "pass" if price_summary.get("observation_count") else "watch", "detail": f"{price_summary.get('observation_count', 0)} observations"},
+        {"id": "outcomes", "label": "Outcomes", "status": "pass" if outcome_n else "watch", "detail": f"{outcome_n} strings scored"},
         {"id": "graph", "label": "Graph", "status": "pass" if summary.get("nodes", 0) else "watch", "detail": f"{summary.get('nodes', 0)} nodes"},
         {"id": "cortex", "label": "Cortex", "status": "pass" if summary.get("situational_awareness_agents") else "watch", "detail": f"{len(summary.get('situational_awareness_agents') or [])} overseers"},
         {"id": "evolve", "label": "Evolve", "status": "pass" if evolve_status.startswith("learning") or "promoted" in evolve_status else "watch", "detail": evolve_detail},
@@ -585,10 +693,215 @@ def _safe_float(raw: Any, default: float = 0.0) -> float:
         return default
 
 
+def _price_feedback_context(
+    *,
+    price_observations_start: dict[str, Any],
+    price_observations_final: dict[str, Any],
+    information_price_outcomes: dict[str, Any],
+) -> dict[str, Any]:
+    observations = [
+        *_price_observation_rows(price_observations_start, stage="start"),
+        *_price_observation_rows(price_observations_final, stage="final"),
+    ]
+    outcomes = _price_outcome_rows(information_price_outcomes)
+    source_counts = Counter(str(o.get("source") or "unknown") for o in observations)
+    entities = sorted({
+        str(o.get("entity") or "")
+        for o in observations
+        if o.get("entity")
+    })
+    outcome_summary = (
+        information_price_outcomes.get("summary")
+        if isinstance(information_price_outcomes.get("summary"), dict)
+        else {}
+    )
+    return {
+        "schema_version": "agent_graph_price_feedback_v1",
+        "status": (
+            "scored" if outcomes
+            else "observed" if observations
+            else "missing"
+        ),
+        "summary": {
+            "status": (
+                "scored" if outcomes
+                else "observed" if observations
+                else "missing"
+            ),
+            "observation_count": len(observations),
+            "outcome_count": len(outcomes),
+            "sources": dict(source_counts.most_common(8)),
+            "entities": entities[:80],
+            "start_status": price_observations_start.get("status") if isinstance(price_observations_start, dict) else "",
+            "final_status": price_observations_final.get("status") if isinstance(price_observations_final, dict) else "",
+        },
+        "outcome_summary": outcome_summary,
+        "observations": observations,
+        "outcomes": outcomes,
+        "quality_flags": sorted(set(
+            _str_list(price_observations_start.get("quality_flags") if isinstance(price_observations_start, dict) else [])
+            + _str_list(price_observations_final.get("quality_flags") if isinstance(price_observations_final, dict) else [])
+            + _str_list(information_price_outcomes.get("quality_flags") if isinstance(information_price_outcomes, dict) else [])
+        )),
+    }
+
+
+def _price_observation_rows(payload: dict[str, Any], *, stage: str) -> list[dict[str, Any]]:
+    if not isinstance(payload, dict):
+        return []
+    rows = payload.get("observations") if isinstance(payload.get("observations"), list) else []
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        entity = str(row.get("entity") or "")
+        price = _num(row.get("price"))
+        if not entity or price is None:
+            continue
+        out.append({
+            "id": str(row.get("observation_id") or row.get("id") or ""),
+            "entity": entity,
+            "observed_at": str(row.get("observed_at") or payload.get("observed_at") or ""),
+            "price": price,
+            "source": str(row.get("source") or payload.get("source") or ""),
+            "stage": stage,
+            "payload": row.get("payload") if isinstance(row.get("payload"), dict) else {},
+        })
+    return out
+
+
+def _price_outcome_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    if not isinstance(payload, dict):
+        return []
+    rows = payload.get("outcomes") if isinstance(payload.get("outcomes"), list) else []
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        out.append({
+            "id": str(row.get("id") or ""),
+            "string_id": str(row.get("string_id") or ""),
+            "cycle_id": str(row.get("cycle_id") or ""),
+            "entity": str(row.get("entity") or ""),
+            "expected_direction": str(row.get("expected_direction") or ""),
+            "baseline_price": _num(row.get("baseline_price")),
+            "baseline_at": str(row.get("baseline_at") or ""),
+            "outcome_price": _num(row.get("outcome_price")),
+            "outcome_at": str(row.get("outcome_at") or ""),
+            "price_return_pct": _num(row.get("price_return_pct")) or 0.0,
+            "signed_return_pct": _num(row.get("signed_return_pct")) or 0.0,
+            "direction_hit": bool(row.get("direction_hit")),
+            "threshold_hit": bool(row.get("threshold_hit")),
+            "realized_edge_score": _num(row.get("realized_edge_score")) or 0.0,
+            "lead_time_minutes": _num(row.get("lead_time_minutes")) or 0.0,
+            "quality_flags": _str_list(row.get("quality_flags")),
+        })
+    return out
+
+
+def _attach_price_feedback_to_agents(agents: list[dict[str, Any]], price_feedback: dict[str, Any]) -> None:
+    observations_by_entity: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for obs in price_feedback.get("observations") or []:
+        observations_by_entity[str(obs.get("entity") or "").upper()].append(obs)
+
+    outcomes_by_string: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    outcomes_by_entity: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for outcome in price_feedback.get("outcomes") or []:
+        if outcome.get("string_id"):
+            outcomes_by_string[str(outcome.get("string_id"))].append(outcome)
+        if outcome.get("entity"):
+            outcomes_by_entity[str(outcome.get("entity")).upper()].append(outcome)
+
+    for agent in agents:
+        string_ids = set(_str_list(agent.get("information_string_ids")))
+        string_ids.update(str(s.get("id")) for s in (agent.get("information_strings") or []) if s.get("id"))
+        matched: list[dict[str, Any]] = []
+        for sid in string_ids:
+            matched.extend(outcomes_by_string.get(sid, []))
+        if not matched and not string_ids:
+            matched.extend(outcomes_by_entity.get(str(agent.get("entity") or "").upper(), []))
+        for outcome in matched:
+            ids = outcome.setdefault("agent_ids", [])
+            if agent.get("id") and agent["id"] not in ids:
+                ids.append(agent["id"])
+        obs_rows = observations_by_entity.get(str(agent.get("entity") or "").upper(), [])
+        start = next((o for o in obs_rows if o.get("stage") == "start"), None)
+        final = next((o for o in reversed(obs_rows) if o.get("stage") == "final"), None)
+        delta = None
+        if start and final and start.get("price") and final.get("price"):
+            delta = (float(final["price"]) - float(start["price"])) / max(1e-12, float(start["price"]))
+        best = max(matched, key=lambda o: float(o.get("realized_edge_score") or 0), default=None)
+        agent["price_feedback"] = {
+            "observation_count": len(obs_rows),
+            "start_price": start.get("price") if start else None,
+            "final_price": final.get("price") if final else None,
+            "price_delta_pct": round(delta, 6) if delta is not None else None,
+            "outcome_count": len(matched),
+            "best_outcome": best,
+            "outcomes": matched[:8],
+        }
+
+
+def _top_price_outcomes(price_feedback: dict[str, Any], *, limit: int = 8) -> list[dict[str, Any]]:
+    outcomes = sorted(
+        [o for o in (price_feedback.get("outcomes") or []) if isinstance(o, dict)],
+        key=lambda o: (
+            float(o.get("realized_edge_score") or 0),
+            1.0 if o.get("threshold_hit") else 0.0,
+            abs(float(o.get("signed_return_pct") or 0)),
+        ),
+        reverse=True,
+    )
+    out: list[dict[str, Any]] = []
+    for o in outcomes[:limit]:
+        agent_ids = o.get("agent_ids") if isinstance(o.get("agent_ids"), list) else []
+        out.append({
+            "outcome_id": o.get("id"),
+            "string_id": o.get("string_id"),
+            "agent_id": agent_ids[0] if agent_ids else "",
+            "entity": o.get("entity"),
+            "expected_direction": o.get("expected_direction"),
+            "realized_edge_score": o.get("realized_edge_score"),
+            "signed_return_pct": o.get("signed_return_pct"),
+            "direction_hit": o.get("direction_hit"),
+            "threshold_hit": o.get("threshold_hit"),
+        })
+    return out
+
+
+def _price_node_id(obs: dict[str, Any]) -> str:
+    raw = "|".join([
+        str(obs.get("stage") or ""),
+        str(obs.get("entity") or ""),
+        str(obs.get("observed_at") or ""),
+        str(obs.get("source") or ""),
+    ])
+    return "price:" + raw.replace(" ", "_")
+
+
+def _outcome_node_id(outcome: dict[str, Any]) -> str:
+    return "outcome:" + (str(outcome.get("id") or outcome.get("string_id") or outcome.get("entity") or "unknown"))
+
+
+def _price_label(obs: dict[str, Any]) -> str:
+    price = obs.get("price")
+    return f"{obs.get('entity') or 'UNKNOWN'} {obs.get('stage') or ''} ${float(price):.6g}" if isinstance(price, (int, float)) else str(obs.get("entity") or "price")
+
+
+def _outcome_label(outcome: dict[str, Any]) -> str:
+    direction = str(outcome.get("expected_direction") or "?")
+    status = "hit" if outcome.get("threshold_hit") else "direction" if outcome.get("direction_hit") else "miss"
+    ret = float(outcome.get("signed_return_pct") or 0)
+    return f"{outcome.get('entity') or 'UNKNOWN'} {direction} {status} {ret:+.2%}"
+
+
 def _report_links(*, root: Path, raw_dir: Path, artifact_href_prefix: str) -> list[dict[str, Any]]:
     names = [
         ("live_scout_canary_report.json", "Canary report", "Run metrics, gates, coverage, scale decision"),
         ("live_scout_canary_outputs.json", "Scout outputs", "Every returned scout object and strings"),
+        ("live_price_observations_start.json", "Price observations start", "Market prices captured before the scout layer runs"),
+        ("live_price_observations_final.json", "Price observations final", "Market prices captured after scout output is persisted"),
+        ("information_price_outcomes.json", "Information price outcomes", "Which strings saw pressure before price moved or failed to move"),
         ("live_scout_transcript.json", "Prompt transcript", "System/user prompts and raw model text"),
         ("live_scout_slice_preview.json", "Slice preview", "Seed cells, source families, tool menus"),
         ("live_scout_tournament_report.json", "Tournament report", "Promotion authority for 100/1000"),
@@ -800,6 +1113,7 @@ def _situational_awareness_agents(
     tournament_report: dict[str, Any],
     learning_report: dict[str, Any],
     repair_report: dict[str, Any],
+    price_feedback: dict[str, Any],
 ) -> list[dict[str, Any]]:
     """Deterministic situational-awareness overlays.
 
@@ -821,6 +1135,8 @@ def _situational_awareness_agents(
     promotion = tournament_report.get("promotion_decision") if isinstance(tournament_report.get("promotion_decision"), dict) else {}
     repair_status = str(repair_report.get("status") or "missing")
     success = (((canary_report.get("metrics") or {}).get("scouts") or {}).get("success_rate") or 0)
+    outcome_summary = price_feedback.get("outcome_summary") if isinstance(price_feedback.get("outcome_summary"), dict) else {}
+    price_top = _top_price_outcomes(price_feedback, limit=6)
     return [
         {
             "id": "situational_overwatch",
@@ -863,6 +1179,18 @@ def _situational_awareness_agents(
                 str(a.get("id")) for a in agents
                 if any("node_intelligence_not_promoted" in f for f in (a.get("quality_flags") or []))
             ][:6],
+        },
+        {
+            "id": "information_price_loop",
+            "label": "Information -> Price Loop",
+            "status": "active" if outcome_summary.get("outcome_eval_count") else "watch",
+            "score": round(float(outcome_summary.get("avg_realized_edge_score") or 0), 3),
+            "directive": "score whether strings saw pressure before price confirmed or denied it",
+            "summary": (
+                f"{int(float(outcome_summary.get('outcome_eval_count') or 0))} strings scored; "
+                f"direction hit {float(outcome_summary.get('outcome_direction_hit_rate') or 0):.0%}."
+            ),
+            "related_agent_ids": [str(x.get("agent_id")) for x in price_top if x.get("agent_id")],
         },
         {
             "id": "tool_budget_governor",
