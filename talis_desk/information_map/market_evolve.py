@@ -990,6 +990,7 @@ def build_market_evolve_scoreboard(
         "continuation_candidates": continuation_candidates,
         "blocked_candidates": blocked_candidates,
         "hard_experiment_gate_summary": hard_gate_summary,
+        "hard_experiment_attribution": build_market_evolve_experiment_attribution(result_window),
         "evolution_memory": _scoreboard_evolution_memory(
             result_window=result_window,
             recent_results=recent_results,
@@ -5096,6 +5097,297 @@ def _scoreboard_hard_gate_summary(results: list[dict[str, Any]]) -> dict[str, An
     }
 
 
+def build_market_evolve_experiment_attribution(
+    results: list[dict[str, Any]],
+    *,
+    limit: int = 8,
+) -> dict[str, Any]:
+    """Explain why candidate policies won, lost, or need more proof.
+
+    A hard experiment should not be just a verdict. This is the operator/cortex
+    read model that turns the matched A/B result into learnable pressure:
+    which measured surfaces improved, which regressed, and which proof gates
+    still need observation before the system spends wider.
+    """
+    rows = []
+    for result in results[:limit]:
+        if not isinstance(result, dict):
+            continue
+        control_metrics = result.get("control_metrics") if isinstance(result.get("control_metrics"), dict) else {}
+        candidate_metrics = result.get("candidate_metrics") if isinstance(result.get("candidate_metrics"), dict) else {}
+        gates = [
+            gate for gate in (result.get("falsification_gate_results") or [])
+            if isinstance(gate, dict)
+        ]
+        deltas = _experiment_metric_delta_rows(
+            control_metrics=control_metrics,
+            candidate_metrics=candidate_metrics,
+            gates=gates,
+        )
+        positive = [row for row in deltas if float(row.get("improvement") or 0.0) > 0.0]
+        negative = [row for row in deltas if float(row.get("improvement") or 0.0) < 0.0]
+        proof_deltas = _experiment_proof_metric_delta_rows(
+            control_metrics=control_metrics,
+            candidate_metrics=candidate_metrics,
+            gates=gates,
+        )
+        rows.append({
+            "result_id": result.get("id"),
+            "experiment_id": result.get("experiment_id"),
+            "cycle_id": result.get("cycle_id"),
+            "decision": result.get("decision"),
+            "score_delta": result.get("score_delta"),
+            "control_score": result.get("control_score"),
+            "candidate_score": result.get("candidate_score"),
+            "learning_signal": _experiment_learning_signal(result, proof_deltas),
+            "top_positive_metric_deltas": positive[:8],
+            "top_negative_metric_deltas": negative[:8],
+            "proof_metric_deltas": proof_deltas,
+            "missing_proof_metrics": [
+                str(row.get("gate_metric") or row.get("metric") or "")
+                for row in proof_deltas
+                if row.get("status") == "not_observed"
+            ],
+            "triggered_proof_metrics": [
+                str(row.get("gate_metric") or row.get("metric") or "")
+                for row in proof_deltas
+                if row.get("triggered") is True
+            ],
+        })
+    missing = sorted({
+        metric
+        for row in rows
+        for metric in (row.get("missing_proof_metrics") or [])
+        if str(metric).strip()
+    })
+    triggered = sorted({
+        metric
+        for row in rows
+        for metric in (row.get("triggered_proof_metrics") or [])
+        if str(metric).strip()
+    })
+    return {
+        "schema_version": "market_evolve_experiment_attribution_v1",
+        "result_count": len([r for r in results if isinstance(r, dict)]),
+        "latest": rows,
+        "missing_proof_metrics": missing,
+        "triggered_proof_metrics": triggered,
+        "quality_flags": ["hard_experiment_metric_attribution"],
+    }
+
+
+_ATTRIBUTION_METRICS = (
+    "valid_string_rate",
+    "string_yield_per_scout",
+    "avg_prompt_quality",
+    "prompt_pass_rate",
+    "prompt_contract_failure_rate",
+    "route_contract_success_rate",
+    "route_contract_failure_rate",
+    "avg_source_independence",
+    "avg_verifier_readiness",
+    "avg_fragility",
+    "avg_trade_scream_score",
+    "frontier_candidate_rate",
+    "fragile_verify_rate",
+    "high_signal_observe_rate",
+    "low_ev_tool_rate",
+    "tool_eval_failed_rate",
+    "runtime_adapter_backlog_rate",
+    "learned_tool_success_rate",
+    "learned_tool_usage_per_scout",
+    "governor_valid_string_rate",
+    "governor_gap_repair_rate",
+    "governor_avg_source_independence",
+    "cortex_task_completion_rate",
+    "cortex_task_failure_rate",
+    "outcome_observed_rate",
+    "outcome_direction_hit_rate",
+    "avg_realized_edge_score",
+    "perfusion_routed_cell_rate",
+    "perfusion_avg_pressure_gradient",
+    "perfusion_avg_source_oxygenation",
+    "perfusion_max_dilation_score",
+    "perfusion_high_resistance_rate",
+    "perfusion_price_sensor_gap_rate",
+    "verifier_pass_rate",
+    "verifier_abstain_rate",
+    "accepted_unique_high_quality_coverage_per_dollar",
+    "policy_cost_usd",
+)
+
+
+def _experiment_metric_delta_rows(
+    *,
+    control_metrics: dict[str, Any],
+    candidate_metrics: dict[str, Any],
+    gates: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    gate_keys = {
+        _metric_base_key(str(gate.get("metric") or ""))
+        for gate in gates
+        if str(gate.get("metric") or "").strip()
+    }
+    keys = sorted({
+        *_ATTRIBUTION_METRICS,
+        *gate_keys,
+        *[str(key) for key in control_metrics.keys()],
+        *[str(key) for key in candidate_metrics.keys()],
+    })
+    rows = []
+    for key in keys:
+        if key in {"score_delta", "candidate_score", "control_score"}:
+            continue
+        if key not in control_metrics and key not in candidate_metrics and key not in gate_keys:
+            continue
+        row = _metric_delta_row(
+            metric=key,
+            control_metrics=control_metrics,
+            candidate_metrics=candidate_metrics,
+            role="proof_gate" if key in gate_keys else "objective_metric",
+        )
+        if row is None:
+            continue
+        if (
+            abs(float(row.get("delta") or 0.0)) < 0.0001
+            and row["role"] != "proof_gate"
+        ):
+            continue
+        rows.append(row)
+    return sorted(
+        rows,
+        key=lambda row: (
+            abs(float(row.get("improvement") or 0.0)),
+            abs(float(row.get("delta") or 0.0)),
+            str(row.get("metric") or ""),
+        ),
+        reverse=True,
+    )
+
+
+def _experiment_proof_metric_delta_rows(
+    *,
+    control_metrics: dict[str, Any],
+    candidate_metrics: dict[str, Any],
+    gates: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    rows = []
+    for gate in gates:
+        gate_metric = str(gate.get("metric") or "").strip()
+        if not gate_metric:
+            continue
+        base_metric = _metric_base_key(gate_metric)
+        row = _metric_delta_row(
+            metric=base_metric,
+            control_metrics=control_metrics,
+            candidate_metrics=candidate_metrics,
+            role="proof_gate",
+        ) or {
+            "metric": base_metric,
+            "role": "proof_gate",
+            "control": None,
+            "candidate": None,
+            "delta": None,
+            "direction": _metric_direction_label(base_metric),
+            "improvement": None,
+            "winner": "unknown",
+        }
+        row.update({
+            "gate_metric": gate_metric,
+            "operator": gate.get("operator"),
+            "threshold": gate.get("threshold"),
+            "observed": gate.get("observed"),
+            "triggered": gate.get("triggered"),
+            "decision": gate.get("decision"),
+            "status": gate.get("status"),
+        })
+        rows.append(row)
+    return rows
+
+
+def _metric_delta_row(
+    *,
+    metric: str,
+    control_metrics: dict[str, Any],
+    candidate_metrics: dict[str, Any],
+    role: str,
+) -> Optional[dict[str, Any]]:
+    control_value = _optional_float(control_metrics.get(metric))
+    candidate_value = _optional_float(candidate_metrics.get(metric))
+    if control_value is None and candidate_value is None:
+        return None
+    control = float(control_value or 0.0)
+    candidate = float(candidate_value or 0.0)
+    delta = candidate - control
+    direction = _metric_desirable_direction(metric)
+    improvement = delta * direction
+    return {
+        "metric": metric,
+        "role": role,
+        "control": round(control, 4),
+        "candidate": round(candidate, 4),
+        "delta": round(delta, 4),
+        "direction": _metric_direction_label(metric),
+        "improvement": round(improvement, 4),
+        "winner": (
+            "candidate" if improvement > 0.0001
+            else "control" if improvement < -0.0001
+            else "flat"
+        ),
+    }
+
+
+def _metric_base_key(metric: str) -> str:
+    return metric.removeprefix("candidate_").removeprefix("control_")
+
+
+def _metric_direction_label(metric: str) -> str:
+    return "higher_is_better" if _metric_desirable_direction(metric) > 0 else "lower_is_better"
+
+
+def _metric_desirable_direction(metric: str) -> int:
+    key = metric.lower()
+    bad_tokens = (
+        "fragility",
+        "fragile_verify",
+        "high_signal_observe",
+        "failure",
+        "failed",
+        "abstain",
+        "low_ev",
+        "backlog",
+        "cost",
+        "unobserved",
+        "missing",
+        "invented",
+        "waste",
+        "resistance",
+        "contract_failure",
+        "gap_rate",
+    )
+    return -1 if any(token in key for token in bad_tokens) else 1
+
+
+def _experiment_learning_signal(
+    result: dict[str, Any],
+    proof_deltas: list[dict[str, Any]],
+) -> str:
+    decision = str(result.get("decision") or "")
+    if any(row.get("status") == "not_observed" for row in proof_deltas):
+        return "candidate_needs_more_observed_proof"
+    if any(row.get("triggered") is True for row in proof_deltas):
+        return "candidate_failed_hard_proof_gate"
+    if decision == "promote_candidate":
+        return "candidate_policy_promoted_by_observed_edge"
+    if decision == "continue_candidate":
+        return "candidate_edge_observed_continue_matched_test"
+    if decision == "reject_candidate":
+        return "candidate_underperformed_or_regressed"
+    if decision == "insufficient_sample":
+        return "sample_size_too_small"
+    return "experiment_pending_or_unclassified"
+
+
 def _scoreboard_status(
     *,
     active: list[dict[str, Any]],
@@ -6054,6 +6346,7 @@ __all__ = [
     "MarketEvolveProgram",
     "MarketEvolveStep",
     "apply_market_evolve_policy_to_seeds",
+    "build_market_evolve_experiment_attribution",
     "choose_market_evolve_prompt_variant",
     "collect_market_evolve_metrics",
     "build_market_evolve_lineage",

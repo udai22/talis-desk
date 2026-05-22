@@ -10,6 +10,7 @@ from talis_desk.information_map import (
     persist_information_strings,
     run_market_evolve_step,
 )
+from talis_desk.information_map.market_evolve import build_market_evolve_experiment_attribution
 from talis_desk.store import reset_desk_store_for_test
 from talis_desk.swarm.seed_generator import SeedCell
 
@@ -102,5 +103,62 @@ def test_market_evolve_scoreboard_surfaces_candidate_experiment_evidence(tmp_pat
     assert scoreboard["decision_counts"]["continue_candidate"] == 1
     assert scoreboard["continuation_candidates"]
     assert scoreboard["hard_experiment_gate_summary"]["evaluated"] > 0
+    attribution = scoreboard["hard_experiment_attribution"]
+    assert attribution["schema_version"] == "market_evolve_experiment_attribution_v1"
+    assert attribution["latest"]
+    latest = attribution["latest"][0]
+    assert latest["learning_signal"] == "candidate_edge_observed_continue_matched_test"
+    assert latest["top_positive_metric_deltas"]
+    assert any(
+        row["metric"] in {"valid_string_rate", "avg_source_independence"}
+        and row["winner"] == "candidate"
+        for row in latest["top_positive_metric_deltas"]
+    )
+    assert latest["proof_metric_deltas"]
     assert scoreboard["evolution_memory"]["best_score_delta_window"] > 0
     assert any(a["action"] == "continue_matched_experiment" for a in scoreboard["next_actions"])
+
+
+def test_market_evolve_experiment_attribution_respects_metric_direction() -> None:
+    attribution = build_market_evolve_experiment_attribution([
+        {
+            "id": "mres_direction",
+            "experiment_id": "mexp_direction",
+            "cycle_id": "cycle_direction",
+            "decision": "continue_candidate",
+            "score_delta": 0.14,
+            "control_score": 0.51,
+            "candidate_score": 0.65,
+            "control_metrics": {
+                "valid_string_rate": 0.62,
+                "avg_fragility": 0.44,
+                "tool_eval_failed_rate": 0.20,
+            },
+            "candidate_metrics": {
+                "valid_string_rate": 0.78,
+                "avg_fragility": 0.31,
+                "tool_eval_failed_rate": 0.06,
+            },
+            "falsification_gate_results": [
+                {
+                    "metric": "candidate_avg_fragility",
+                    "operator": "<=",
+                    "threshold": 0.40,
+                    "observed": 0.31,
+                    "triggered": False,
+                    "decision": "reject_candidate",
+                    "status": "passed",
+                }
+            ],
+        }
+    ])
+
+    latest = attribution["latest"][0]
+    fragility = next(
+        row for row in latest["proof_metric_deltas"]
+        if row["gate_metric"] == "candidate_avg_fragility"
+    )
+    assert fragility["direction"] == "lower_is_better"
+    assert fragility["delta"] == -0.13
+    assert fragility["improvement"] == 0.13
+    assert fragility["winner"] == "candidate"

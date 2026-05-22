@@ -39,6 +39,7 @@ from talis_desk.information_map import (
     run_information_synthesis,
     run_market_evolve_step,
 )
+from talis_desk.information_map.market_evolve import build_market_evolve_experiment_attribution
 from talis_desk.market_map.coverage_audit import build_coverage_gap_manifest
 from talis_desk.market_map.governor import build_market_map_governor_plan
 from talis_desk.market_map.self_healing import (
@@ -733,6 +734,7 @@ def _market_evolve_hard_experiment_episode(
         "experiment_ids": experiment_ids,
         "plans": plans,
         "results": results,
+        "attribution": build_market_evolve_experiment_attribution(results),
         "final_decision": result.get("decision") or "pending",
         "final_score_delta": result.get("score_delta"),
         "proof": {
