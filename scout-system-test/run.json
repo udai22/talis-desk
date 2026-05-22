@@ -1,5 +1,5 @@
 {
-  "cycle_id": "cycle_readiness_market_evolve2_20260522",
+  "cycle_id": "cycle_readiness_market_evolve3_20260522",
   "failed_gates": [],
   "gates": {
     "avg_strings_ge_1_5": true,
@@ -18,14 +18,14 @@
     "synthesis_promoted": true,
     "unique_or_experiment_cell_ratio_ge_0_92": true
   },
-  "generated_at": "2026-05-22T14:52:57.736253+00:00",
+  "generated_at": "2026-05-22T15:07:11.463641+00:00",
   "geometry": {
     "cortex_status": "ready",
     "cortex_work_orders": [
       {
         "action": "send_to_verifier_council",
         "cell_key": "XPL|1q|polymarket|",
-        "cycle_id": "cycle_readiness_market_evolve2_20260522",
+        "cycle_id": "cycle_readiness_market_evolve3_20260522",
         "map_update_rule": "Attach verifier votes and independent source receipts to the source cell, then recompute readiness and fragility.",
         "must_call_first": "tic://tool/talis_native/plan_alpha_geometry_actions@v1",
         "order_id": "gcx_execute_shape_task_a5f778dcd766",
@@ -56,7 +56,7 @@
             "prefer_missing_source_family": true
           }
         },
-        "cycle_id": "cycle_readiness_market_evolve2_20260522",
+        "cycle_id": "cycle_readiness_market_evolve3_20260522",
         "diagnostic_codes": [
           "frontier_without_source_breadth"
         ],
@@ -368,8 +368,8 @@
         "verifier_fail_rate": 0.0,
         "verifier_pass_rate": 0.0
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
-      "evaluation_id": "meval_19eb3b9ce7fc4799",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
+      "evaluation_id": "meval_f680e155a1b24749",
       "evaluator_version": "market_evolve_v1",
       "metrics": {
         "accepted_unique_high_quality_coverage_per_dollar": 0.8346,
@@ -488,7 +488,7 @@
       ]
     },
     "experiment_result_count": 1,
-    "experiment_score_delta": -0.0003,
+    "experiment_score_delta": 0.0001,
     "experiment_status": "evaluated",
     "final_passed": true,
     "final_score": 0.5777,
@@ -521,11 +521,11 @@
       {
         "diversity_signature": "a780915307b2",
         "falsification_gate_count": 3,
-        "frontier_priority_score": 0.4245,
+        "frontier_priority_score": 0.4246,
         "generation": 1,
         "kill_signal": "Candidate fails hard gates, loses to control out of sample, or creates cost/quality regressions.",
         "latest_decision": "reject_candidate",
-        "latest_score_delta": -0.0003,
+        "latest_score_delta": 0.0001,
         "mutation_kind": "widen_source_families",
         "mutation_source": "market_evolve_metric_heuristic",
         "name": "rosewood_research_policy_v1__widen_source_families",
@@ -550,7 +550,7 @@
             "score_delta"
           ]
         },
-        "score": 0.8107,
+        "score": 0.8109,
         "source_candidate_rank": 1,
         "status": "rejected"
       },
@@ -600,8 +600,8 @@
   },
   "ready_for_live_1000": true,
   "schema_version": "talis_100_scout_system_viewer_v1",
-  "source_prompt_output_dir": "/private/var/folders/rq/2m7m487n3nl33jy9q_r7lzn00000gn/T/talis-100-scout-readiness-20260522T144527Z/prompt_outputs",
-  "source_report_json": "/private/var/folders/rq/2m7m487n3nl33jy9q_r7lzn00000gn/T/talis-100-scout-readiness-20260522T144527Z/prompt_outputs/100_scout_readiness_report.json",
+  "source_prompt_output_dir": "/private/var/folders/rq/2m7m487n3nl33jy9q_r7lzn00000gn/T/talis-100-scout-readiness-20260522T150328Z/prompt_outputs",
+  "source_report_json": "/private/var/folders/rq/2m7m487n3nl33jy9q_r7lzn00000gn/T/talis-100-scout-readiness-20260522T150328Z/prompt_outputs/100_scout_readiness_report.json",
   "status": "pass",
   "summary": {
     "completed": 100,
