@@ -1,12 +1,12 @@
 {
   "artifacts": {
-    "live_report": "/tmp/talis-live100-20260522/live_canary/prompt_outputs/live_scout_canary_report.json",
-    "outputs": "/tmp/talis-live100-20260522/live_canary/prompt_outputs/live_scout_canary_outputs.json",
-    "ramp_policy": "/tmp/talis-live100-20260522/live_canary/prompt_outputs/live_scout_ramp_policy.json",
-    "slice_preview": "/tmp/talis-live100-20260522/live_canary/prompt_outputs/live_scout_slice_preview.json",
-    "transcript": "/tmp/talis-live100-20260522/live_canary/prompt_outputs/live_scout_transcript.json"
+    "live_report": "/private/var/folders/rq/2m7m487n3nl33jy9q_r7lzn00000gn/T/talis-scout-system-launch-20260522T174209Z/live_canary/prompt_outputs/live_scout_canary_report.json",
+    "outputs": "/private/var/folders/rq/2m7m487n3nl33jy9q_r7lzn00000gn/T/talis-scout-system-launch-20260522T174209Z/live_canary/prompt_outputs/live_scout_canary_outputs.json",
+    "ramp_policy": "/private/var/folders/rq/2m7m487n3nl33jy9q_r7lzn00000gn/T/talis-scout-system-launch-20260522T174209Z/live_canary/prompt_outputs/live_scout_ramp_policy.json",
+    "slice_preview": "/private/var/folders/rq/2m7m487n3nl33jy9q_r7lzn00000gn/T/talis-scout-system-launch-20260522T174209Z/live_canary/prompt_outputs/live_scout_slice_preview.json",
+    "transcript": "/private/var/folders/rq/2m7m487n3nl33jy9q_r7lzn00000gn/T/talis-scout-system-launch-20260522T174209Z/live_canary/prompt_outputs/live_scout_transcript.json"
   },
-  "cycle_id": "cycle_live100_20260522_live_100",
+  "cycle_id": "cycle_live_scout_canary_20260522T174212Z",
   "evolution_arms": [
     {
       "changes": [
@@ -50,29 +50,29 @@
       "success_gate": "top geometry cells receive independent scout confirmation, contradiction, or kill signal",
       "top_cells": [
         {
-          "cell_key": "NTRN|structural|catalyst|",
+          "cell_key": "TST|structural|microstructure|",
           "route_directive": "widen_scouts",
-          "trade_scream_score": 0.6474
+          "trade_scream_score": 0.6798
         },
         {
-          "cell_key": "TRX|1q|microstructure|",
+          "cell_key": "NIL|intraday|polymarket|",
           "route_directive": "widen_scouts",
-          "trade_scream_score": 0.6254
+          "trade_scream_score": 0.6441
+        },
+        {
+          "cell_key": "MEME|1w|factor|",
+          "route_directive": "widen_scouts",
+          "trade_scream_score": 0.6415
         },
         {
           "cell_key": "ILV|intraday|sentiment|",
           "route_directive": "widen_scouts",
-          "trade_scream_score": 0.6034
+          "trade_scream_score": 0.6436
         },
         {
-          "cell_key": "KAS|1d|macro|",
-          "route_directive": "widen_scouts",
-          "trade_scream_score": 0.5795
-        },
-        {
-          "cell_key": "IMX|intraday|rotation|",
-          "route_directive": "widen_scouts",
-          "trade_scream_score": 0.5653
+          "cell_key": "BCH|1m|on_chain|source_health_gap",
+          "route_directive": "verify_now",
+          "trade_scream_score": 0.6346
         }
       ],
       "type": "routing"
@@ -91,15 +91,15 @@
   ],
   "failure_modes": [
     {
-      "count": 52,
+      "count": 57,
       "examples": [
         {
-          "entity": "kFLOKI",
-          "horizon": "1d",
+          "entity": "BRK-B",
+          "horizon": "structural",
           "hypothesis_text": "",
-          "lens": "factor",
-          "prompt_quality": 0.25,
-          "seed_id": "seed_cycle_live100_20260522_live_100_T_0000__mexp_pair_8b7c3a1c1615_candidate",
+          "lens": "options_flow",
+          "prompt_quality": 0.17,
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_S_0037",
           "weak_flags": [
             "empty_hypothesis_text",
             "prompt_missing_hypothesis",
@@ -112,47 +112,51 @@
           "horizon": "1d",
           "hypothesis_text": "",
           "lens": "factor",
-          "prompt_quality": 0.6,
-          "seed_id": "seed_cycle_live100_20260522_live_100_T_0000__mexp_pair_8b7c3a1c1615_control",
+          "prompt_quality": 0.25,
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0000__mexp_pair_31cbf9b730ae_control",
           "weak_flags": [
             "empty_hypothesis_text",
             "prompt_missing_hypothesis",
-            "prompt_string_obvious_and_crowded",
+            "prompt_missing_information_strings",
+            "scout_empty_hypothesis"
+          ]
+        },
+        {
+          "entity": "kFLOKI",
+          "horizon": "1d",
+          "hypothesis_text": "",
+          "lens": "factor",
+          "prompt_quality": 0.65,
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0000__mexp_pair_31cbf9b730ae_candidate",
+          "weak_flags": [
+            "empty_hypothesis_text",
+            "prompt_missing_hypothesis",
+            "scout_empty_hypothesis"
+          ]
+        },
+        {
+          "entity": "NIL",
+          "horizon": "1d",
+          "hypothesis_text": "",
+          "lens": "rotation",
+          "prompt_quality": 0.65,
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0015__mexp_pair_c67927e40c55_candidate",
+          "weak_flags": [
+            "empty_hypothesis_text",
+            "prompt_missing_hypothesis",
             "scout_empty_hypothesis"
           ]
         },
         {
           "entity": "WLD",
           "horizon": "intraday",
-          "hypothesis_text": "WLD money velocity compressed as on-chain signal stale, low-conviction no-trade zone with no fresh catalyst available.",
+          "hypothesis_text": "WLD intraday money velocity is suppressed by stale funding data and a lack of fresh on-chain flow evidence, requiring a source-health repair before directional conviction can be formed.",
           "lens": "money_velocity",
           "prompt_quality": 0.74,
-          "seed_id": "seed_cycle_live100_20260522_live_100_S_0001__mexp_pair_7464f91e637c_control",
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_S_0001__mexp_pair_50008f9698e5_control",
           "weak_flags": [
             "adversarial_review:quarantine",
             "prompt_string_missing_evidence_refs"
-          ]
-        },
-        {
-          "entity": "ETHFI",
-          "horizon": "intraday",
-          "hypothesis_text": "ETHFI funding rate data is stale by ~2.5 days while Hydromancer reveals high reject-rate noob wallets scanning BTC, indicating a regime shift risk that on-chain ETHFI liquidity may be mispriced intraday.",
-          "lens": "on_chain",
-          "prompt_quality": 0.9,
-          "seed_id": "seed_cycle_live100_20260522_live_100_T_0002__mexp_pair_55c3b108a00b_candidate",
-          "weak_flags": [
-            "prompt_string_stale_date_reference"
-          ]
-        },
-        {
-          "entity": "ATOM",
-          "horizon": "1w",
-          "hypothesis_text": "ATOM vol surface is unobservable due to stale/failing sources, preventing 1w trading edge.",
-          "lens": "vol_surface",
-          "prompt_quality": 0.9,
-          "seed_id": "seed_cycle_live100_20260522_live_100_S_0041",
-          "weak_flags": [
-            "prompt_invented_tool"
           ]
         }
       ],
@@ -162,43 +166,15 @@
       "severity": "yellow"
     },
     {
-      "count": 19,
+      "count": 21,
       "examples": [
         {
-          "entity": "kFLOKI",
-          "horizon": "1d",
+          "entity": "BRK-B",
+          "horizon": "structural",
           "hypothesis_text": "",
-          "lens": "factor",
-          "prompt_quality": 0.25,
-          "seed_id": "seed_cycle_live100_20260522_live_100_T_0000__mexp_pair_8b7c3a1c1615_candidate",
-          "weak_flags": [
-            "empty_hypothesis_text",
-            "prompt_missing_hypothesis",
-            "prompt_missing_information_strings",
-            "scout_empty_hypothesis"
-          ]
-        },
-        {
-          "entity": "NFLX",
-          "horizon": "1w",
-          "hypothesis_text": "",
-          "lens": "factor",
-          "prompt_quality": 0.25,
-          "seed_id": "seed_cycle_live100_20260522_live_100_S_0018",
-          "weak_flags": [
-            "empty_hypothesis_text",
-            "prompt_missing_hypothesis",
-            "prompt_missing_information_strings",
-            "scout_empty_hypothesis"
-          ]
-        },
-        {
-          "entity": "COIN",
-          "horizon": "1m",
-          "hypothesis_text": "",
-          "lens": "structural",
-          "prompt_quality": 0.25,
-          "seed_id": "seed_cycle_live100_20260522_live_100_S_0046",
+          "lens": "options_flow",
+          "prompt_quality": 0.17,
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_S_0037",
           "weak_flags": [
             "empty_hypothesis_text",
             "prompt_missing_hypothesis",
@@ -211,12 +187,12 @@
           "horizon": "1d",
           "hypothesis_text": "",
           "lens": "factor",
-          "prompt_quality": 0.6,
-          "seed_id": "seed_cycle_live100_20260522_live_100_T_0000__mexp_pair_8b7c3a1c1615_control",
+          "prompt_quality": 0.25,
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0000__mexp_pair_31cbf9b730ae_control",
           "weak_flags": [
             "empty_hypothesis_text",
             "prompt_missing_hypothesis",
-            "prompt_string_obvious_and_crowded",
+            "prompt_missing_information_strings",
             "scout_empty_hypothesis"
           ]
         },
@@ -225,8 +201,36 @@
           "horizon": "1q",
           "hypothesis_text": "",
           "lens": "catalyst",
+          "prompt_quality": 0.25,
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0001__mexp_pair_025cca9ce0d5_control",
+          "weak_flags": [
+            "empty_hypothesis_text",
+            "prompt_missing_hypothesis",
+            "prompt_missing_information_strings",
+            "scout_empty_hypothesis"
+          ]
+        },
+        {
+          "entity": "VINE",
+          "horizon": "1m",
+          "hypothesis_text": "",
+          "lens": "catalyst",
+          "prompt_quality": 0.25,
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0012__mexp_pair_65a56743380f_candidate",
+          "weak_flags": [
+            "empty_hypothesis_text",
+            "prompt_missing_hypothesis",
+            "prompt_missing_information_strings",
+            "scout_empty_hypothesis"
+          ]
+        },
+        {
+          "entity": "kFLOKI",
+          "horizon": "1d",
+          "hypothesis_text": "",
+          "lens": "factor",
           "prompt_quality": 0.65,
-          "seed_id": "seed_cycle_live100_20260522_live_100_T_0001__mexp_pair_be54f2b49127_control",
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0000__mexp_pair_31cbf9b730ae_candidate",
           "weak_flags": [
             "empty_hypothesis_text",
             "prompt_missing_hypothesis",
@@ -243,126 +247,26 @@
       "count": 4,
       "examples": [
         {
-          "entity": "WLD",
-          "horizon": "intraday",
-          "hypothesis_text": "WLD money velocity compressed as on-chain signal stale, low-conviction no-trade zone with no fresh catalyst available.",
-          "lens": "money_velocity",
-          "prompt_quality": 0.74,
-          "seed_id": "seed_cycle_live100_20260522_live_100_S_0001__mexp_pair_7464f91e637c_control",
+          "entity": "BRK-B",
+          "horizon": "structural",
+          "hypothesis_text": "",
+          "lens": "options_flow",
+          "prompt_quality": 0.17,
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_S_0037",
           "weak_flags": [
-            "adversarial_review:quarantine",
-            "prompt_string_missing_evidence_refs"
+            "empty_hypothesis_text",
+            "prompt_missing_hypothesis",
+            "prompt_missing_information_strings",
+            "scout_empty_hypothesis"
           ]
         },
-        {
-          "entity": "PEOPLE",
-          "horizon": "1w",
-          "hypothesis_text": "PEOPLE Polymarket probabilities are not primarily driven by base-layer project fundamentals but by positioning and liquidity events, with the current 8.99% funding spread indicating a crowded short that repricing will originate from forced covering within 1w.",
-          "lens": "polymarket",
-          "prompt_quality": 0.74,
-          "seed_id": "seed_cycle_live100_20260522_live_100_S_0005",
-          "weak_flags": [
-            "adversarial_review:quarantine",
-            "prompt_string_missing_evidence_refs"
-          ]
-        },
-        {
-          "entity": "SUPER",
-          "horizon": "1q",
-          "hypothesis_text": "SUPER Polymarket 1q outcomes are influenced by the 8-K filing on 2026-05-19 which may trigger active market updates, but current evidence is too stale to confirm a directional trade.",
-          "lens": "polymarket",
-          "prompt_quality": 0.74,
-          "seed_id": "seed_cycle_live100_20260522_live_100_S_0060",
-          "weak_flags": [
-            "adversarial_review:quarantine",
-            "prompt_string_missing_evidence_refs"
-          ]
-        },
-        {
-          "entity": "TNSR",
-          "horizon": "intraday",
-          "hypothesis_text": "TNSR macro funding rate data is stale by ~2.5 days, making any intraday momentum conclusion unreliable until fresh data is ingested.",
-          "lens": "macro",
-          "prompt_quality": 0.75,
-          "seed_id": "seed_cycle_live100_20260522_live_100_S_0016",
-          "weak_flags": [
-            "adversarial_review:quarantine",
-            "prompt_string_missing_evidence_refs"
-          ]
-        }
-      ],
-      "id": "missing_evidence_refs",
-      "mitigation": "Strings without provided refs should become tool_requests or be rejected by prompt quality.",
-      "mitigation_id": "evidence_ref_hard_gate",
-      "severity": "yellow"
-    },
-    {
-      "count": 4,
-      "examples": [
-        {
-          "entity": "WLD",
-          "horizon": "intraday",
-          "hypothesis_text": "WLD money velocity compressed as on-chain signal stale, low-conviction no-trade zone with no fresh catalyst available.",
-          "lens": "money_velocity",
-          "prompt_quality": 0.74,
-          "seed_id": "seed_cycle_live100_20260522_live_100_S_0001__mexp_pair_7464f91e637c_control",
-          "weak_flags": [
-            "adversarial_review:quarantine",
-            "prompt_string_missing_evidence_refs"
-          ]
-        },
-        {
-          "entity": "PEOPLE",
-          "horizon": "1w",
-          "hypothesis_text": "PEOPLE Polymarket probabilities are not primarily driven by base-layer project fundamentals but by positioning and liquidity events, with the current 8.99% funding spread indicating a crowded short that repricing will originate from forced covering within 1w.",
-          "lens": "polymarket",
-          "prompt_quality": 0.74,
-          "seed_id": "seed_cycle_live100_20260522_live_100_S_0005",
-          "weak_flags": [
-            "adversarial_review:quarantine",
-            "prompt_string_missing_evidence_refs"
-          ]
-        },
-        {
-          "entity": "SUPER",
-          "horizon": "1q",
-          "hypothesis_text": "SUPER Polymarket 1q outcomes are influenced by the 8-K filing on 2026-05-19 which may trigger active market updates, but current evidence is too stale to confirm a directional trade.",
-          "lens": "polymarket",
-          "prompt_quality": 0.74,
-          "seed_id": "seed_cycle_live100_20260522_live_100_S_0060",
-          "weak_flags": [
-            "adversarial_review:quarantine",
-            "prompt_string_missing_evidence_refs"
-          ]
-        },
-        {
-          "entity": "TNSR",
-          "horizon": "intraday",
-          "hypothesis_text": "TNSR macro funding rate data is stale by ~2.5 days, making any intraday momentum conclusion unreliable until fresh data is ingested.",
-          "lens": "macro",
-          "prompt_quality": 0.75,
-          "seed_id": "seed_cycle_live100_20260522_live_100_S_0016",
-          "weak_flags": [
-            "adversarial_review:quarantine",
-            "prompt_string_missing_evidence_refs"
-          ]
-        }
-      ],
-      "id": "adversarial_quarantine",
-      "mitigation": "Quarantined strings should route to source repair or independent scout replication before verifier spend.",
-      "mitigation_id": "source_repair_before_verify",
-      "severity": "yellow"
-    },
-    {
-      "count": 3,
-      "examples": [
         {
           "entity": "kFLOKI",
           "horizon": "1d",
           "hypothesis_text": "",
           "lens": "factor",
           "prompt_quality": 0.25,
-          "seed_id": "seed_cycle_live100_20260522_live_100_T_0000__mexp_pair_8b7c3a1c1615_candidate",
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0000__mexp_pair_31cbf9b730ae_control",
           "weak_flags": [
             "empty_hypothesis_text",
             "prompt_missing_hypothesis",
@@ -371,12 +275,12 @@
           ]
         },
         {
-          "entity": "NFLX",
-          "horizon": "1w",
+          "entity": "WIF",
+          "horizon": "1q",
           "hypothesis_text": "",
-          "lens": "factor",
+          "lens": "catalyst",
           "prompt_quality": 0.25,
-          "seed_id": "seed_cycle_live100_20260522_live_100_S_0018",
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0001__mexp_pair_025cca9ce0d5_control",
           "weak_flags": [
             "empty_hypothesis_text",
             "prompt_missing_hypothesis",
@@ -385,12 +289,12 @@
           ]
         },
         {
-          "entity": "COIN",
+          "entity": "VINE",
           "horizon": "1m",
           "hypothesis_text": "",
-          "lens": "structural",
+          "lens": "catalyst",
           "prompt_quality": 0.25,
-          "seed_id": "seed_cycle_live100_20260522_live_100_S_0046",
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0012__mexp_pair_65a56743380f_candidate",
           "weak_flags": [
             "empty_hypothesis_text",
             "prompt_missing_hypothesis",
@@ -408,23 +312,23 @@
       "count": 2,
       "examples": [
         {
-          "entity": "ATOM",
-          "horizon": "1w",
-          "hypothesis_text": "ATOM vol surface is unobservable due to stale/failing sources, preventing 1w trading edge.",
-          "lens": "vol_surface",
+          "entity": "GRIFFAIN",
+          "horizon": "1q",
+          "hypothesis_text": "Griffain will underperform relative to BTC and ETH on a 1-quarter horizon due to deteriorating on-chain liquidity and high noob rejection rates at Hyperliquid that suppress order-book recovery.",
+          "lens": "on_chain",
           "prompt_quality": 0.9,
-          "seed_id": "seed_cycle_live100_20260522_live_100_S_0041",
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0004__mexp_pair_6be5f2c91248_control",
           "weak_flags": [
             "prompt_invented_tool"
           ]
         },
         {
-          "entity": "RENDER",
-          "horizon": "1m",
-          "hypothesis_text": "RENDER vol surface is unobservable due to failed options fetch and stale candle data, preventing mean-reversion calibration for 1m horizon.",
-          "lens": "vol_surface",
+          "entity": "WIF",
+          "horizon": "1d",
+          "hypothesis_text": "WIF 1d microstructure is dominated by stale funding data and pervasive noob reject flow that suppresses perceived funding, making a squeeze unlikely without fresh catalyst.",
+          "lens": "microstructure",
           "prompt_quality": 0.9,
-          "seed_id": "seed_cycle_live100_20260522_live_100_S_0053",
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_S_0054",
           "weak_flags": [
             "prompt_invented_tool"
           ]
@@ -436,27 +340,36 @@
       "severity": "red"
     },
     {
-      "count": 2,
+      "count": 1,
       "examples": [
         {
-          "entity": "VINE",
-          "horizon": "1d",
-          "hypothesis_text": "VINE funding spread at 12.09% annual with HL cap true indicates sustained short demand and bearish sentiment for 1d horizon.",
-          "lens": "sentiment",
-          "prompt_quality": 0.74,
-          "seed_id": "seed_cycle_live100_20260522_live_100_S_0035",
-          "weak_flags": [
-            "prompt_string_rubric_failed",
-            "prompt_string_stale_date_reference"
-          ]
-        },
-        {
-          "entity": "ETHFI",
+          "entity": "WLD",
           "horizon": "intraday",
-          "hypothesis_text": "ETHFI funding rate data is stale by ~2.5 days while Hydromancer reveals high reject-rate noob wallets scanning BTC, indicating a regime shift risk that on-chain ETHFI liquidity may be mispriced intraday.",
-          "lens": "on_chain",
+          "hypothesis_text": "WLD intraday money velocity is suppressed by stale funding data and a lack of fresh on-chain flow evidence, requiring a source-health repair before directional conviction can be formed.",
+          "lens": "money_velocity",
+          "prompt_quality": 0.74,
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_S_0001__mexp_pair_50008f9698e5_control",
+          "weak_flags": [
+            "adversarial_review:quarantine",
+            "prompt_string_missing_evidence_refs"
+          ]
+        }
+      ],
+      "id": "missing_evidence_refs",
+      "mitigation": "Strings without provided refs should become tool_requests or be rejected by prompt quality.",
+      "mitigation_id": "evidence_ref_hard_gate",
+      "severity": "yellow"
+    },
+    {
+      "count": 1,
+      "examples": [
+        {
+          "entity": "IO",
+          "horizon": "1d",
+          "hypothesis_text": "IO microstructure anomaly (VPIN\u22650.3, high OFI, stale source health) indicates elevated informed-flow risk that will degrade liquidity within 1 day absent fresh order-book refresh.",
+          "lens": "anomaly",
           "prompt_quality": 0.9,
-          "seed_id": "seed_cycle_live100_20260522_live_100_T_0002__mexp_pair_55c3b108a00b_candidate",
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_S_0032",
           "weak_flags": [
             "prompt_string_stale_date_reference"
           ]
@@ -471,75 +384,83 @@
       "count": 1,
       "examples": [
         {
-          "entity": "RUNE",
-          "horizon": "structural",
-          "hypothesis_text": "",
-          "lens": "options_flow",
-          "prompt_quality": null,
-          "seed_id": "seed_cycle_live100_20260522_live_100_S_0020",
+          "entity": "WLD",
+          "horizon": "intraday",
+          "hypothesis_text": "WLD intraday money velocity is suppressed by stale funding data and a lack of fresh on-chain flow evidence, requiring a source-health repair before directional conviction can be formed.",
+          "lens": "money_velocity",
+          "prompt_quality": 0.74,
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_S_0001__mexp_pair_50008f9698e5_control",
           "weak_flags": [
-            "empty_hypothesis_text",
-            "scout_json_unparseable"
+            "adversarial_review:quarantine",
+            "prompt_string_missing_evidence_refs"
           ]
         }
       ],
+      "id": "adversarial_quarantine",
+      "mitigation": "Quarantined strings should route to source repair or independent scout replication before verifier spend.",
+      "mitigation_id": "source_repair_before_verify",
+      "severity": "yellow"
+    },
+    {
+      "count": 0,
+      "examples": [],
       "id": "json_unparseable",
       "mitigation": "One fallback-model JSON repair is now attempted before a non-calendar scout is dropped.",
       "mitigation_id": "fallback_json_repair_before_drop",
-      "severity": "red"
+      "severity": "green"
     }
   ],
-  "generated_at": "2026-05-22T16:21:42.001216+00:00",
+  "generated_at": "2026-05-22T17:49:58.385283+00:00",
   "market_evolve": {
     "arm_counts": {
       "candidate": 50,
       "control": 50
     },
-    "final_passed": false,
-    "final_score": 0.6133,
+    "final_passed": true,
+    "final_score": 0.6789,
     "latest_experiment_decision": "reject_candidate",
     "paired_seed_slices": 20
   },
   "next_ramp_policy": {
     "allowed_next_step": "live_1000_scout_ramp",
     "apply_mode": "monotonic_patch",
-    "generated_at": "2026-05-22T16:21:42.000996+00:00",
+    "generated_at": "2026-05-22T17:49:58.385260+00:00",
     "geometry_replication_targets": [
       {
-        "cell_key": "NTRN|structural|catalyst|",
+        "cell_key": "TST|structural|microstructure|",
         "route_directive": "widen_scouts",
         "source_work_order_id": "lso_geometry_replication",
-        "trade_scream_score": 0.6474
+        "trade_scream_score": 0.6798
       },
       {
-        "cell_key": "TRX|1q|microstructure|",
+        "cell_key": "NIL|intraday|polymarket|",
         "route_directive": "widen_scouts",
         "source_work_order_id": "lso_geometry_replication",
-        "trade_scream_score": 0.6254
-      },
-      {
-        "cell_key": "ILV|intraday|sentiment|",
-        "route_directive": "widen_scouts",
-        "source_work_order_id": "lso_geometry_replication",
-        "trade_scream_score": 0.6034
-      },
-      {
-        "cell_key": "KAS|1d|macro|",
-        "route_directive": "widen_scouts",
-        "source_work_order_id": "lso_geometry_replication",
-        "trade_scream_score": 0.5795
-      },
-      {
-        "cell_key": "IMX|intraday|rotation|",
-        "route_directive": "widen_scouts",
-        "source_work_order_id": "lso_geometry_replication",
-        "trade_scream_score": 0.5653
+        "trade_scream_score": 0.6441
       },
       {
         "cell_key": "MEME|1w|factor|",
         "route_directive": "widen_scouts",
         "source_work_order_id": "lso_geometry_replication",
-        "trade_scream_score": 0.595
+        "trade_scream_score": 0.6415
+      },
+      {
+        "cell_key": "ILV|intraday|sentiment|",
+        "route_directive": "widen_scouts",
+        "source_work_order_id": "lso_geometry_replication",
+        "trade_scream_score": 0.6436
+      },
+      {
+        "cell_key": "BCH|1m|on_chain|source_health_gap",
+        "route_directive": "verify_now",
+        "source_work_order_id": "lso_geometry_replication",
+        "trade_scream_score": 0.6346
+      },
+      {
+        "cell_key": "JELLY|1m|microstructure|",
+        "route_directive": "widen_scouts",
+        "source_work_order_id": "lso_geometry_replication",
+        "trade_scream_score": 0.6263
       }
     ],
     "intent": "Apply live-100 learning as a monotonic seed policy patch for the next evaluator-gated ramp.",
@@ -555,7 +476,7 @@
       "min_pairs_for_100_plus_scouts": 20,
       "promote_only_on_evaluator_positive_delta": true
     },
-    "policy_id": "lrp_cycle_live100_20260522_live_100_100",
+    "policy_id": "lrp_cycle_live_scout_canary_20260522t174212z_100",
     "prompt_repair_modes": [
       "hypothesis_string_consistency",
       "gap_string_instead_of_empty",
@@ -612,7 +533,7 @@
       "tool_candidate_limit_min": 12
     },
     "source": "live_scout_learning_report",
-    "source_cycle_id": "cycle_live100_20260522_live_100",
+    "source_cycle_id": "cycle_live_scout_canary_20260522T174212Z",
     "watch_metrics": [
       "accepted_unique_high_quality_coverage_per_dollar_delta",
       "empty_hypothesis_with_strings_rate",
@@ -654,16 +575,14 @@
       ],
       "ready_for_authorized_1000": true,
       "red_failure_modes_from_prior_ramp": [
-        "invented_tools",
-        "json_unparseable"
+        "invented_tools"
       ],
       "scheduled_production_allowed": false
     },
     "recommended_command": "PYTHONPATH=. python scripts/run_scout_system_launch_gate.py --allow-live-spend --live-scouts 1000 --live-cost-cap-usd 5.00 --live-concurrency 8 --max-tool-iterations 1 --ramp-policy LIVE_PROMPT_OUTPUT_DIR/live_scout_ramp_policy.json",
     "requires_explicit_spend_authorization": true,
     "watch_before_promoting": [
-      "invented_tools",
-      "json_unparseable"
+      "invented_tools"
     ]
   },
   "pre_1000_gate": {
@@ -692,36 +611,23 @@
     ],
     "ready_for_authorized_1000": true,
     "red_failure_modes_from_prior_ramp": [
-      "invented_tools",
-      "json_unparseable"
+      "invented_tools"
     ],
     "scheduled_production_allowed": false
   },
   "repair_work_orders": [
     {
       "action": "Run fallback JSON repair before dropping non-calendar scouts; preserve raw transcript and flag repair success/failure.",
-      "examples": [
-        {
-          "entity": "RUNE",
-          "horizon": "structural",
-          "lens": "options_flow",
-          "prompt_quality": null,
-          "seed_id": "seed_cycle_live100_20260522_live_100_S_0020",
-          "weak_flags": [
-            "empty_hypothesis_text",
-            "scout_json_unparseable"
-          ]
-        }
-      ],
+      "examples": [],
       "metric": "json_unparseable_rate",
       "owner": "scout_harness",
       "priority": "P0",
-      "severity": "red",
+      "severity": "green",
       "source_learning_report_field": "failure_modes.json_unparseable",
-      "status": "open_watch_next_ramp",
+      "status": "guardrail_installed_watch",
       "success_gate": "json_unparseable_rate == 0 across the next ramp or every parse miss has scout_json_retry_success.",
       "target_surface": "talis_desk/swarm/scout_runner.py::json_repair",
-      "trigger_count": 1,
+      "trigger_count": 0,
       "trigger_failure_mode": "json_unparseable",
       "work_order_id": "lso_json_unparseable_scout_harness"
     },
@@ -729,21 +635,21 @@
       "action": "Filter suggested_tools against allowed_tool_candidates and keep invented tool desire only as an analysis_tool_proposal.",
       "examples": [
         {
-          "entity": "ATOM",
-          "horizon": "1w",
-          "lens": "vol_surface",
+          "entity": "GRIFFAIN",
+          "horizon": "1q",
+          "lens": "on_chain",
           "prompt_quality": 0.9,
-          "seed_id": "seed_cycle_live100_20260522_live_100_S_0041",
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0004__mexp_pair_6be5f2c91248_control",
           "weak_flags": [
             "prompt_invented_tool"
           ]
         },
         {
-          "entity": "RENDER",
-          "horizon": "1m",
-          "lens": "vol_surface",
+          "entity": "WIF",
+          "horizon": "1d",
+          "lens": "microstructure",
           "prompt_quality": 0.9,
-          "seed_id": "seed_cycle_live100_20260522_live_100_S_0053",
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_S_0054",
           "weak_flags": [
             "prompt_invented_tool"
           ]
@@ -765,37 +671,11 @@
       "action": "Force hypothesis to summarize the best valid string; if no valid string exists, emit a gap string or abstain with explicit missing edge.",
       "examples": [
         {
-          "entity": "kFLOKI",
-          "horizon": "1d",
-          "lens": "factor",
-          "prompt_quality": 0.25,
-          "seed_id": "seed_cycle_live100_20260522_live_100_T_0000__mexp_pair_8b7c3a1c1615_candidate",
-          "weak_flags": [
-            "empty_hypothesis_text",
-            "prompt_missing_hypothesis",
-            "prompt_missing_information_strings",
-            "scout_empty_hypothesis"
-          ]
-        },
-        {
-          "entity": "NFLX",
-          "horizon": "1w",
-          "lens": "factor",
-          "prompt_quality": 0.25,
-          "seed_id": "seed_cycle_live100_20260522_live_100_S_0018",
-          "weak_flags": [
-            "empty_hypothesis_text",
-            "prompt_missing_hypothesis",
-            "prompt_missing_information_strings",
-            "scout_empty_hypothesis"
-          ]
-        },
-        {
-          "entity": "COIN",
-          "horizon": "1m",
-          "lens": "structural",
-          "prompt_quality": 0.25,
-          "seed_id": "seed_cycle_live100_20260522_live_100_S_0046",
+          "entity": "BRK-B",
+          "horizon": "structural",
+          "lens": "options_flow",
+          "prompt_quality": 0.17,
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_S_0037",
           "weak_flags": [
             "empty_hypothesis_text",
             "prompt_missing_hypothesis",
@@ -807,12 +687,12 @@
           "entity": "kFLOKI",
           "horizon": "1d",
           "lens": "factor",
-          "prompt_quality": 0.6,
-          "seed_id": "seed_cycle_live100_20260522_live_100_T_0000__mexp_pair_8b7c3a1c1615_control",
+          "prompt_quality": 0.25,
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0000__mexp_pair_31cbf9b730ae_control",
           "weak_flags": [
             "empty_hypothesis_text",
             "prompt_missing_hypothesis",
-            "prompt_string_obvious_and_crowded",
+            "prompt_missing_information_strings",
             "scout_empty_hypothesis"
           ]
         },
@@ -820,8 +700,34 @@
           "entity": "WIF",
           "horizon": "1q",
           "lens": "catalyst",
+          "prompt_quality": 0.25,
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0001__mexp_pair_025cca9ce0d5_control",
+          "weak_flags": [
+            "empty_hypothesis_text",
+            "prompt_missing_hypothesis",
+            "prompt_missing_information_strings",
+            "scout_empty_hypothesis"
+          ]
+        },
+        {
+          "entity": "VINE",
+          "horizon": "1m",
+          "lens": "catalyst",
+          "prompt_quality": 0.25,
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0012__mexp_pair_65a56743380f_candidate",
+          "weak_flags": [
+            "empty_hypothesis_text",
+            "prompt_missing_hypothesis",
+            "prompt_missing_information_strings",
+            "scout_empty_hypothesis"
+          ]
+        },
+        {
+          "entity": "kFLOKI",
+          "horizon": "1d",
+          "lens": "factor",
           "prompt_quality": 0.65,
-          "seed_id": "seed_cycle_live100_20260522_live_100_T_0001__mexp_pair_be54f2b49127_control",
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0000__mexp_pair_31cbf9b730ae_candidate",
           "weak_flags": [
             "empty_hypothesis_text",
             "prompt_missing_hypothesis",
@@ -837,7 +743,7 @@
       "status": "open_watch_next_ramp",
       "success_gate": "empty_hypothesis_with_strings_rate == 0 and low_prompt_quality_rate <= 0.05.",
       "target_surface": "flash_temporal_v4 hypothesis/string consistency",
-      "trigger_count": 19,
+      "trigger_count": 21,
       "trigger_failure_mode": "empty_hypothesis",
       "work_order_id": "lso_empty_hypothesis_prompt_policy"
     },
@@ -845,11 +751,24 @@
       "action": "Convert thin/stale evidence into low-conviction source-gap strings with kill signals instead of empty packets.",
       "examples": [
         {
+          "entity": "BRK-B",
+          "horizon": "structural",
+          "lens": "options_flow",
+          "prompt_quality": 0.17,
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_S_0037",
+          "weak_flags": [
+            "empty_hypothesis_text",
+            "prompt_missing_hypothesis",
+            "prompt_missing_information_strings",
+            "scout_empty_hypothesis"
+          ]
+        },
+        {
           "entity": "kFLOKI",
           "horizon": "1d",
           "lens": "factor",
           "prompt_quality": 0.25,
-          "seed_id": "seed_cycle_live100_20260522_live_100_T_0000__mexp_pair_8b7c3a1c1615_candidate",
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0000__mexp_pair_31cbf9b730ae_control",
           "weak_flags": [
             "empty_hypothesis_text",
             "prompt_missing_hypothesis",
@@ -858,11 +777,11 @@
           ]
         },
         {
-          "entity": "NFLX",
-          "horizon": "1w",
-          "lens": "factor",
+          "entity": "WIF",
+          "horizon": "1q",
+          "lens": "catalyst",
           "prompt_quality": 0.25,
-          "seed_id": "seed_cycle_live100_20260522_live_100_S_0018",
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0001__mexp_pair_025cca9ce0d5_control",
           "weak_flags": [
             "empty_hypothesis_text",
             "prompt_missing_hypothesis",
@@ -871,11 +790,11 @@
           ]
         },
         {
-          "entity": "COIN",
+          "entity": "VINE",
           "horizon": "1m",
-          "lens": "structural",
+          "lens": "catalyst",
           "prompt_quality": 0.25,
-          "seed_id": "seed_cycle_live100_20260522_live_100_S_0046",
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0012__mexp_pair_65a56743380f_candidate",
           "weak_flags": [
             "empty_hypothesis_text",
             "prompt_missing_hypothesis",
@@ -892,7 +811,7 @@
       "status": "open_watch_next_ramp",
       "success_gate": "missing_information_strings_rate <= 0.01 for scouts with usable evidence or allowed repair tools.",
       "target_surface": "flash_temporal_v4 gap-string contract",
-      "trigger_count": 3,
+      "trigger_count": 4,
       "trigger_failure_mode": "missing_information_strings",
       "work_order_id": "lso_missing_information_strings_prompt_policy"
     },
@@ -904,40 +823,7 @@
           "horizon": "intraday",
           "lens": "money_velocity",
           "prompt_quality": 0.74,
-          "seed_id": "seed_cycle_live100_20260522_live_100_S_0001__mexp_pair_7464f91e637c_control",
-          "weak_flags": [
-            "adversarial_review:quarantine",
-            "prompt_string_missing_evidence_refs"
-          ]
-        },
-        {
-          "entity": "PEOPLE",
-          "horizon": "1w",
-          "lens": "polymarket",
-          "prompt_quality": 0.74,
-          "seed_id": "seed_cycle_live100_20260522_live_100_S_0005",
-          "weak_flags": [
-            "adversarial_review:quarantine",
-            "prompt_string_missing_evidence_refs"
-          ]
-        },
-        {
-          "entity": "SUPER",
-          "horizon": "1q",
-          "lens": "polymarket",
-          "prompt_quality": 0.74,
-          "seed_id": "seed_cycle_live100_20260522_live_100_S_0060",
-          "weak_flags": [
-            "adversarial_review:quarantine",
-            "prompt_string_missing_evidence_refs"
-          ]
-        },
-        {
-          "entity": "TNSR",
-          "horizon": "intraday",
-          "lens": "macro",
-          "prompt_quality": 0.75,
-          "seed_id": "seed_cycle_live100_20260522_live_100_S_0016",
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_S_0001__mexp_pair_50008f9698e5_control",
           "weak_flags": [
             "adversarial_review:quarantine",
             "prompt_string_missing_evidence_refs"
@@ -952,7 +838,7 @@
       "status": "open_watch_next_ramp",
       "success_gate": "missing_evidence_refs_rate <= 0.01 and tool_request_followup_rate rises on missing-edge cells.",
       "target_surface": "information_strings.evidence_refs",
-      "trigger_count": 4,
+      "trigger_count": 1,
       "trigger_failure_mode": "missing_evidence_refs",
       "work_order_id": "lso_missing_evidence_refs_source_router"
     },
@@ -960,22 +846,11 @@
       "action": "Treat stale observations as source-health gaps unless a fresh ref bridges the time horizon.",
       "examples": [
         {
-          "entity": "VINE",
+          "entity": "IO",
           "horizon": "1d",
-          "lens": "sentiment",
-          "prompt_quality": 0.74,
-          "seed_id": "seed_cycle_live100_20260522_live_100_S_0035",
-          "weak_flags": [
-            "prompt_string_rubric_failed",
-            "prompt_string_stale_date_reference"
-          ]
-        },
-        {
-          "entity": "ETHFI",
-          "horizon": "intraday",
-          "lens": "on_chain",
+          "lens": "anomaly",
           "prompt_quality": 0.9,
-          "seed_id": "seed_cycle_live100_20260522_live_100_T_0002__mexp_pair_55c3b108a00b_candidate",
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_S_0032",
           "weak_flags": [
             "prompt_string_stale_date_reference"
           ]
@@ -989,7 +864,7 @@
       "status": "open_watch_next_ramp",
       "success_gate": "stale_directionality_flag_rate <= 0.01 and stale evidence produces repair_source/gap strings.",
       "target_surface": "freshness and temporal contract",
-      "trigger_count": 2,
+      "trigger_count": 1,
       "trigger_failure_mode": "stale_date_directionality",
       "work_order_id": "lso_stale_date_directionality_source_router"
     },
@@ -1001,40 +876,7 @@
           "horizon": "intraday",
           "lens": "money_velocity",
           "prompt_quality": 0.74,
-          "seed_id": "seed_cycle_live100_20260522_live_100_S_0001__mexp_pair_7464f91e637c_control",
-          "weak_flags": [
-            "adversarial_review:quarantine",
-            "prompt_string_missing_evidence_refs"
-          ]
-        },
-        {
-          "entity": "PEOPLE",
-          "horizon": "1w",
-          "lens": "polymarket",
-          "prompt_quality": 0.74,
-          "seed_id": "seed_cycle_live100_20260522_live_100_S_0005",
-          "weak_flags": [
-            "adversarial_review:quarantine",
-            "prompt_string_missing_evidence_refs"
-          ]
-        },
-        {
-          "entity": "SUPER",
-          "horizon": "1q",
-          "lens": "polymarket",
-          "prompt_quality": 0.74,
-          "seed_id": "seed_cycle_live100_20260522_live_100_S_0060",
-          "weak_flags": [
-            "adversarial_review:quarantine",
-            "prompt_string_missing_evidence_refs"
-          ]
-        },
-        {
-          "entity": "TNSR",
-          "horizon": "intraday",
-          "lens": "macro",
-          "prompt_quality": 0.75,
-          "seed_id": "seed_cycle_live100_20260522_live_100_S_0016",
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_S_0001__mexp_pair_50008f9698e5_control",
           "weak_flags": [
             "adversarial_review:quarantine",
             "prompt_string_missing_evidence_refs"
@@ -1049,7 +891,7 @@
       "status": "open_watch_next_ramp",
       "success_gate": "quarantine_to_repair_route_rate >= 0.95 and quarantined strings are excluded from promoted trade hypotheses.",
       "target_surface": "review_information_string route outcome",
-      "trigger_count": 4,
+      "trigger_count": 1,
       "trigger_failure_mode": "adversarial_quarantine",
       "work_order_id": "lso_adversarial_quarantine_adversarial_reviewer"
     },
@@ -1057,11 +899,11 @@
       "action": "Upgrade node intelligence from sidecar context to actor/source-backed graph edges when wallet quality, reject behavior, or builder flow is source-backed.",
       "examples": [
         {
-          "entity": "kFLOKI",
-          "horizon": "1d",
-          "lens": "factor",
-          "prompt_quality": 0.25,
-          "seed_id": "seed_cycle_live100_20260522_live_100_T_0000__mexp_pair_8b7c3a1c1615_candidate",
+          "entity": "BRK-B",
+          "horizon": "structural",
+          "lens": "options_flow",
+          "prompt_quality": 0.17,
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_S_0037",
           "weak_flags": [
             "empty_hypothesis_text",
             "prompt_missing_hypothesis",
@@ -1073,12 +915,36 @@
           "entity": "kFLOKI",
           "horizon": "1d",
           "lens": "factor",
-          "prompt_quality": 0.6,
-          "seed_id": "seed_cycle_live100_20260522_live_100_T_0000__mexp_pair_8b7c3a1c1615_control",
+          "prompt_quality": 0.25,
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0000__mexp_pair_31cbf9b730ae_control",
           "weak_flags": [
             "empty_hypothesis_text",
             "prompt_missing_hypothesis",
-            "prompt_string_obvious_and_crowded",
+            "prompt_missing_information_strings",
+            "scout_empty_hypothesis"
+          ]
+        },
+        {
+          "entity": "kFLOKI",
+          "horizon": "1d",
+          "lens": "factor",
+          "prompt_quality": 0.65,
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0000__mexp_pair_31cbf9b730ae_candidate",
+          "weak_flags": [
+            "empty_hypothesis_text",
+            "prompt_missing_hypothesis",
+            "scout_empty_hypothesis"
+          ]
+        },
+        {
+          "entity": "NIL",
+          "horizon": "1d",
+          "lens": "rotation",
+          "prompt_quality": 0.65,
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0015__mexp_pair_c67927e40c55_candidate",
+          "weak_flags": [
+            "empty_hypothesis_text",
+            "prompt_missing_hypothesis",
             "scout_empty_hypothesis"
           ]
         },
@@ -1087,30 +953,10 @@
           "horizon": "intraday",
           "lens": "money_velocity",
           "prompt_quality": 0.74,
-          "seed_id": "seed_cycle_live100_20260522_live_100_S_0001__mexp_pair_7464f91e637c_control",
+          "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_S_0001__mexp_pair_50008f9698e5_control",
           "weak_flags": [
             "adversarial_review:quarantine",
             "prompt_string_missing_evidence_refs"
-          ]
-        },
-        {
-          "entity": "ETHFI",
-          "horizon": "intraday",
-          "lens": "on_chain",
-          "prompt_quality": 0.9,
-          "seed_id": "seed_cycle_live100_20260522_live_100_T_0002__mexp_pair_55c3b108a00b_candidate",
-          "weak_flags": [
-            "prompt_string_stale_date_reference"
-          ]
-        },
-        {
-          "entity": "ATOM",
-          "horizon": "1w",
-          "lens": "vol_surface",
-          "prompt_quality": 0.9,
-          "seed_id": "seed_cycle_live100_20260522_live_100_S_0041",
-          "weak_flags": [
-            "prompt_invented_tool"
           ]
         }
       ],
@@ -1122,7 +968,7 @@
       "status": "open_watch_next_ramp",
       "success_gate": "node_promoted_string_rate improves while adversarial_quarantine_rate does not rise.",
       "target_surface": "Hydromancer/HL-node promotion contract",
-      "trigger_count": 52,
+      "trigger_count": 57,
       "trigger_failure_mode": "node_not_promoted",
       "work_order_id": "lso_node_not_promoted_node_intelligence"
     },
@@ -1130,29 +976,29 @@
       "action": "Allocate independent follow-up scouts to top geometry cells before verifier spend.",
       "examples": [
         {
-          "cell_key": "NTRN|structural|catalyst|",
+          "cell_key": "TST|structural|microstructure|",
           "route_directive": "widen_scouts",
-          "trade_scream_score": 0.6474
+          "trade_scream_score": 0.6798
         },
         {
-          "cell_key": "TRX|1q|microstructure|",
+          "cell_key": "NIL|intraday|polymarket|",
           "route_directive": "widen_scouts",
-          "trade_scream_score": 0.6254
+          "trade_scream_score": 0.6441
+        },
+        {
+          "cell_key": "MEME|1w|factor|",
+          "route_directive": "widen_scouts",
+          "trade_scream_score": 0.6415
         },
         {
           "cell_key": "ILV|intraday|sentiment|",
           "route_directive": "widen_scouts",
-          "trade_scream_score": 0.6034
+          "trade_scream_score": 0.6436
         },
         {
-          "cell_key": "KAS|1d|macro|",
-          "route_directive": "widen_scouts",
-          "trade_scream_score": 0.5795
-        },
-        {
-          "cell_key": "IMX|intraday|rotation|",
-          "route_directive": "widen_scouts",
-          "trade_scream_score": 0.5653
+          "cell_key": "BCH|1m|on_chain|source_health_gap",
+          "route_directive": "verify_now",
+          "trade_scream_score": 0.6346
         }
       ],
       "metric": "top_geometry_confirmation_rate",
@@ -1185,135 +1031,67 @@
   ],
   "schema_version": "talis_live_scout_learning_report_v1",
   "scorecard": {
-    "avg_prompt_quality": 0.8622,
+    "avg_prompt_quality": 0.8615,
     "completed": 93,
     "duplicate_hypothesis_rate": 0.06,
-    "estimated_cost_usd": 0.35944,
-    "geometry_cells": 79,
-    "low_prompt_quality_count": 6,
+    "estimated_cost_usd": 0.64944,
+    "geometry_cells": 80,
+    "low_prompt_quality_count": 7,
     "provider_calls": 100,
     "requested": 100,
     "routing_queue_count": 24,
-    "strings": 292,
+    "strings": 291,
     "success_rate": 0.93,
     "tool_error_rate": 0.0,
-    "weak_scout_count": 15
+    "weak_scout_count": 11
   },
   "source_family_counts": {
-    "event_feed": 40,
-    "fundamentals_filings": 153,
-    "hydromancer": 84,
-    "macro_official": 1,
-    "market_microstructure": 167,
+    "celestial_cycles": 8,
+    "event_feed": 42,
+    "fundamentals_filings": 176,
+    "hydromancer": 103,
+    "macro_official": 20,
+    "market_microstructure": 194,
     "market_timeseries": 100,
     "our_node": 16,
-    "parallel_web": 44,
+    "parallel_web": 51,
     "source_health": 100,
     "tool_atlas": 100,
-    "web": 49
+    "web": 29
   },
-  "source_live_report": "/tmp/talis-live100-20260522/live_canary/prompt_outputs/live_scout_canary_report.json",
-  "source_tournament_report": "/tmp/talis-live100-20260522/tournament/live_scout_tournament_report.json",
-  "summary": "The live run earned `promote_to_1000_scout_ramp` with average prompt quality 0.862 and 15/100 scouts carrying at least one repair signal. The system should treat the next scale step as an evaluator-gated ramp, not production; the main repair pockets are node_not_promoted, empty_hypothesis, missing_evidence_refs.",
+  "source_live_report": "/private/var/folders/rq/2m7m487n3nl33jy9q_r7lzn00000gn/T/talis-scout-system-launch-20260522T174209Z/live_canary/prompt_outputs/live_scout_canary_report.json",
+  "source_tournament_report": "/var/folders/rq/2m7m487n3nl33jy9q_r7lzn00000gn/T/talis-scout-system-launch-20260522T174209Z/tournament/live_scout_tournament_report.json",
+  "summary": "The live run earned `promote_to_1000_scout_ramp` with average prompt quality 0.862 and 11/100 scouts carrying at least one repair signal. The system should treat the next scale step as an evaluator-gated ramp, not production; the main repair pockets are node_not_promoted, empty_hypothesis, missing_information_strings.",
   "top_geometry_actions": [
     {
       "action": "replicate_with_independent_scouts",
-      "cell_key": "NTRN|structural|catalyst|",
+      "cell_key": "TST|structural|microstructure|",
       "coordinates": {
         "color_fragility": 0.0,
-        "size_support_mass": 0.6013,
+        "size_support_mass": 0.8047,
         "x_source_independence": 1.0,
-        "y_frontier_pressure": 0.5893,
-        "z_tension": 0.6267
+        "y_frontier_pressure": 0.719,
+        "z_tension": 0.3764
       },
-      "entity": "NTRN",
+      "entity": "TST",
       "horizon": "structural",
-      "lens": "catalyst",
-      "metrics": {
-        "avg_attention": 0.579,
-        "avg_conviction": 0.4263,
-        "avg_crowdedness": 0.1167,
-        "avg_novelty": 0.3933,
-        "contradiction_density": 0.6667,
-        "evidence_coverage": 1.0,
-        "fragility": 0.0,
-        "frontier_pressure": 0.5893,
-        "geometry_weight_fragility_penalty": 0.18,
-        "geometry_weight_frontier_pressure": 0.38,
-        "geometry_weight_source_independence": 0.0,
-        "geometry_weight_support_mass": 0.14,
-        "geometry_weight_tension": 0.24,
-        "geometry_weight_verifier_readiness": 0.24,
-        "novelty_pressure": 0.4343,
-        "routing_threshold_repair_fragility_min": 0.55,
-        "routing_threshold_tension_min": 0.45,
-        "routing_threshold_tension_readiness_min": 0.45,
-        "routing_threshold_verify_allow_fragility_max": 1.0,
-        "routing_threshold_verify_readiness_min": 0.55,
-        "routing_threshold_verify_source_independence_min": 0.0,
-        "routing_threshold_verify_trade_scream_min": 0.62,
-        "routing_threshold_widen_scouts_novelty_min": 0.35,
-        "routing_threshold_widen_sources_frontier_min": 0.5,
-        "routing_threshold_widen_sources_source_max": 0.45,
-        "scout_independence": 0.3333,
-        "source_entropy": 1.0,
-        "source_independence": 1.0,
-        "support_mass": 0.6013,
-        "tension": 0.6267,
-        "trade_scream_score": 0.6474,
-        "verifier_readiness": 0.7871
-      },
-      "missing_edges": [
-        "frontier_cell -> next_receptive_field",
-        "single_scout_cell -> independent_replication"
-      ],
-      "owner": "seed_router",
-      "priority_score": 0.5713,
-      "quality_flags": [
-        "frontier_trade_candidate",
-        "multi_string_single_scout_cell",
-        "single_scout_cell",
-        "tension_resolution_candidate"
-      ],
-      "reason": "The cell is novel but still needs independent scout replication.",
-      "route_directive": "widen_scouts",
-      "route_task_id": "shape_task_adac1f60ffef",
-      "success_gate": "second scout confirms, contradicts, or kills the string",
-      "suggested_next_tools": [
-        "tic://tool/builtin/query_events_recent@v1",
-        "tic://tool/builtin/query_timeseries@v1"
-      ],
-      "theme": ""
-    },
-    {
-      "action": "replicate_with_independent_scouts",
-      "cell_key": "TRX|1q|microstructure|",
-      "coordinates": {
-        "color_fragility": 0.0,
-        "size_support_mass": 0.7455,
-        "x_source_independence": 1.0,
-        "y_frontier_pressure": 0.641,
-        "z_tension": 0.3256
-      },
-      "entity": "TRX",
-      "horizon": "1q",
       "lens": "microstructure",
       "metrics": {
-        "avg_attention": 0.7291,
-        "avg_conviction": 0.6393,
-        "avg_crowdedness": 0.2333,
-        "avg_novelty": 0.51,
+        "avg_attention": 0.7961,
+        "avg_conviction": 0.7132,
+        "avg_crowdedness": 0.2133,
+        "avg_novelty": 0.6572,
         "contradiction_density": 0.3333,
         "evidence_coverage": 1.0,
         "fragility": 0.0,
-        "frontier_pressure": 0.641,
+        "frontier_pressure": 0.719,
         "geometry_weight_fragility_penalty": 0.18,
         "geometry_weight_frontier_pressure": 0.38,
         "geometry_weight_source_independence": 0.0,
         "geometry_weight_support_mass": 0.14,
         "geometry_weight_tension": 0.24,
         "geometry_weight_verifier_readiness": 0.24,
-        "novelty_pressure": 0.4888,
+        "novelty_pressure": 0.6462,
         "routing_threshold_repair_fragility_min": 0.55,
         "routing_threshold_tension_min": 0.45,
         "routing_threshold_tension_readiness_min": 0.45,
@@ -1327,17 +1105,17 @@
         "scout_independence": 0.3333,
         "source_entropy": 1.0,
         "source_independence": 1.0,
-        "support_mass": 0.7455,
-        "tension": 0.3256,
-        "trade_scream_score": 0.6254,
-        "verifier_readiness": 0.8303
+        "support_mass": 0.8047,
+        "tension": 0.3764,
+        "trade_scream_score": 0.6798,
+        "verifier_readiness": 0.8481
       },
       "missing_edges": [
         "frontier_cell -> next_receptive_field",
         "single_scout_cell -> independent_replication"
       ],
       "owner": "seed_router",
-      "priority_score": 0.5397,
+      "priority_score": 0.5829,
       "quality_flags": [
         "frontier_trade_candidate",
         "multi_string_single_scout_cell",
@@ -1345,7 +1123,7 @@
       ],
       "reason": "The cell is novel but still needs independent scout replication.",
       "route_directive": "widen_scouts",
-      "route_task_id": "shape_task_efac46356c80",
+      "route_task_id": "shape_task_11b0beaf9e5e",
       "success_gate": "second scout confirms, contradicts, or kills the string",
       "suggested_next_tools": [
         "tic://tool/builtin/query_events_recent@v1",
@@ -1355,33 +1133,33 @@
     },
     {
       "action": "replicate_with_independent_scouts",
-      "cell_key": "ILV|intraday|sentiment|",
+      "cell_key": "NIL|intraday|polymarket|",
       "coordinates": {
         "color_fragility": 0.0,
-        "size_support_mass": 0.6289,
+        "size_support_mass": 0.6686,
         "x_source_independence": 1.0,
-        "y_frontier_pressure": 0.5676,
+        "y_frontier_pressure": 0.6525,
         "z_tension": 0.4533
       },
-      "entity": "ILV",
+      "entity": "NIL",
       "horizon": "intraday",
-      "lens": "sentiment",
+      "lens": "polymarket",
       "metrics": {
-        "avg_attention": 0.6118,
-        "avg_conviction": 0.4567,
-        "avg_crowdedness": 0.3333,
-        "avg_novelty": 0.4433,
+        "avg_attention": 0.6655,
+        "avg_conviction": 0.4833,
+        "avg_crowdedness": 0.2333,
+        "avg_novelty": 0.5767,
         "contradiction_density": 0.3333,
         "evidence_coverage": 1.0,
         "fragility": 0.0,
-        "frontier_pressure": 0.5676,
+        "frontier_pressure": 0.6525,
         "geometry_weight_fragility_penalty": 0.18,
         "geometry_weight_frontier_pressure": 0.38,
         "geometry_weight_source_independence": 0.0,
         "geometry_weight_support_mass": 0.14,
         "geometry_weight_tension": 0.24,
         "geometry_weight_verifier_readiness": 0.24,
-        "novelty_pressure": 0.3694,
+        "novelty_pressure": 0.5526,
         "routing_threshold_repair_fragility_min": 0.55,
         "routing_threshold_tension_min": 0.45,
         "routing_threshold_tension_readiness_min": 0.45,
@@ -1395,159 +1173,26 @@
         "scout_independence": 0.3333,
         "source_entropy": 1.0,
         "source_independence": 1.0,
-        "support_mass": 0.6289,
+        "support_mass": 0.6686,
         "tension": 0.4533,
-        "trade_scream_score": 0.6034,
-        "verifier_readiness": 0.7953
+        "trade_scream_score": 0.6441,
+        "verifier_readiness": 0.8072
       },
       "missing_edges": [
         "frontier_cell -> next_receptive_field",
         "single_scout_cell -> independent_replication"
       ],
       "owner": "seed_router",
-      "priority_score": 0.5298,
+      "priority_score": 0.5613,
       "quality_flags": [
+        "frontier_trade_candidate",
         "multi_string_single_scout_cell",
         "single_scout_cell",
         "tension_resolution_candidate"
       ],
       "reason": "The cell is novel but still needs independent scout replication.",
       "route_directive": "widen_scouts",
-      "route_task_id": "shape_task_00665c3bdd72",
-      "success_gate": "second scout confirms, contradicts, or kills the string",
-      "suggested_next_tools": [
-        "tic://tool/builtin/query_events_recent@v1",
-        "tic://tool/builtin/query_timeseries@v1"
-      ],
-      "theme": ""
-    },
-    {
-      "action": "replicate_with_independent_scouts",
-      "cell_key": "KAS|1d|macro|",
-      "coordinates": {
-        "color_fragility": 0.0667,
-        "size_support_mass": 0.7898,
-        "x_source_independence": 0.6667,
-        "y_frontier_pressure": 0.6251,
-        "z_tension": 0.2505
-      },
-      "entity": "KAS",
-      "horizon": "1d",
-      "lens": "macro",
-      "metrics": {
-        "avg_attention": 0.7579,
-        "avg_conviction": 0.7497,
-        "avg_crowdedness": 0.1167,
-        "avg_novelty": 0.5933,
-        "contradiction_density": 0.3333,
-        "evidence_coverage": 1.0,
-        "fragility": 0.0667,
-        "frontier_pressure": 0.6251,
-        "geometry_weight_fragility_penalty": 0.18,
-        "geometry_weight_frontier_pressure": 0.38,
-        "geometry_weight_source_independence": 0.0,
-        "geometry_weight_support_mass": 0.14,
-        "geometry_weight_tension": 0.24,
-        "geometry_weight_verifier_readiness": 0.24,
-        "novelty_pressure": 0.6551,
-        "routing_threshold_repair_fragility_min": 0.55,
-        "routing_threshold_tension_min": 0.45,
-        "routing_threshold_tension_readiness_min": 0.45,
-        "routing_threshold_verify_allow_fragility_max": 1.0,
-        "routing_threshold_verify_readiness_min": 0.55,
-        "routing_threshold_verify_source_independence_min": 0.0,
-        "routing_threshold_verify_trade_scream_min": 0.62,
-        "routing_threshold_widen_scouts_novelty_min": 0.35,
-        "routing_threshold_widen_sources_frontier_min": 0.5,
-        "routing_threshold_widen_sources_source_max": 0.45,
-        "scout_independence": 0.3333,
-        "source_entropy": 1.0,
-        "source_independence": 0.6667,
-        "support_mass": 0.7898,
-        "tension": 0.2505,
-        "trade_scream_score": 0.5795,
-        "verifier_readiness": 0.7636
-      },
-      "missing_edges": [
-        "frontier_cell -> next_receptive_field",
-        "single_scout_cell -> independent_replication"
-      ],
-      "owner": "seed_router",
-      "priority_score": 0.5173,
-      "quality_flags": [
-        "multi_string_single_scout_cell",
-        "single_scout_cell"
-      ],
-      "reason": "The cell is novel but still needs independent scout replication.",
-      "route_directive": "widen_scouts",
-      "route_task_id": "shape_task_0714e99777ad",
-      "success_gate": "second scout confirms, contradicts, or kills the string",
-      "suggested_next_tools": [
-        "tic://tool/builtin/query_events_recent@v1",
-        "tic://tool/builtin/query_timeseries@v1"
-      ],
-      "theme": ""
-    },
-    {
-      "action": "replicate_with_independent_scouts",
-      "cell_key": "IMX|intraday|rotation|",
-      "coordinates": {
-        "color_fragility": 0.0667,
-        "size_support_mass": 0.6598,
-        "x_source_independence": 0.6667,
-        "y_frontier_pressure": 0.5535,
-        "z_tension": 0.4198
-      },
-      "entity": "IMX",
-      "horizon": "intraday",
-      "lens": "rotation",
-      "metrics": {
-        "avg_attention": 0.659,
-        "avg_conviction": 0.4633,
-        "avg_crowdedness": 0.2833,
-        "avg_novelty": 0.61,
-        "contradiction_density": 0.3333,
-        "evidence_coverage": 1.0,
-        "fragility": 0.0667,
-        "frontier_pressure": 0.5535,
-        "geometry_weight_fragility_penalty": 0.18,
-        "geometry_weight_frontier_pressure": 0.38,
-        "geometry_weight_source_independence": 0.0,
-        "geometry_weight_support_mass": 0.14,
-        "geometry_weight_tension": 0.24,
-        "geometry_weight_verifier_readiness": 0.24,
-        "novelty_pressure": 0.5465,
-        "routing_threshold_repair_fragility_min": 0.55,
-        "routing_threshold_tension_min": 0.45,
-        "routing_threshold_tension_readiness_min": 0.45,
-        "routing_threshold_verify_allow_fragility_max": 1.0,
-        "routing_threshold_verify_readiness_min": 0.55,
-        "routing_threshold_verify_source_independence_min": 0.0,
-        "routing_threshold_verify_trade_scream_min": 0.62,
-        "routing_threshold_widen_scouts_novelty_min": 0.35,
-        "routing_threshold_widen_sources_frontier_min": 0.5,
-        "routing_threshold_widen_sources_source_max": 0.45,
-        "scout_independence": 0.3333,
-        "source_entropy": 1.0,
-        "source_independence": 0.6667,
-        "support_mass": 0.6598,
-        "tension": 0.4198,
-        "trade_scream_score": 0.5653,
-        "verifier_readiness": 0.7246
-      },
-      "missing_edges": [
-        "frontier_cell -> next_receptive_field",
-        "single_scout_cell -> independent_replication"
-      ],
-      "owner": "seed_router",
-      "priority_score": 0.5155,
-      "quality_flags": [
-        "multi_string_single_scout_cell",
-        "single_scout_cell"
-      ],
-      "reason": "The cell is novel but still needs independent scout replication.",
-      "route_directive": "widen_scouts",
-      "route_task_id": "shape_task_a14d4cc01d03",
+      "route_task_id": "shape_task_a0ecd318b397",
       "success_gate": "second scout confirms, contradicts, or kills the string",
       "suggested_next_tools": [
         "tic://tool/builtin/query_events_recent@v1",
@@ -1560,30 +1205,30 @@
       "cell_key": "MEME|1w|factor|",
       "coordinates": {
         "color_fragility": 0.0,
-        "size_support_mass": 0.704,
+        "size_support_mass": 0.661,
         "x_source_independence": 1.0,
-        "y_frontier_pressure": 0.6661,
-        "z_tension": 0.1962
+        "y_frontier_pressure": 0.6499,
+        "z_tension": 0.4533
       },
       "entity": "MEME",
       "horizon": "1w",
       "lens": "factor",
       "metrics": {
-        "avg_attention": 0.6916,
-        "avg_conviction": 0.5632,
-        "avg_crowdedness": 0.2167,
-        "avg_novelty": 0.5802,
-        "contradiction_density": 0.0,
+        "avg_attention": 0.6635,
+        "avg_conviction": 0.4567,
+        "avg_crowdedness": 0.3333,
+        "avg_novelty": 0.66,
+        "contradiction_density": 0.3333,
         "evidence_coverage": 1.0,
         "fragility": 0.0,
-        "frontier_pressure": 0.6661,
+        "frontier_pressure": 0.6499,
         "geometry_weight_fragility_penalty": 0.18,
         "geometry_weight_frontier_pressure": 0.38,
         "geometry_weight_source_independence": 0.0,
         "geometry_weight_support_mass": 0.14,
         "geometry_weight_tension": 0.24,
         "geometry_weight_verifier_readiness": 0.24,
-        "novelty_pressure": 0.5681,
+        "novelty_pressure": 0.55,
         "routing_threshold_repair_fragility_min": 0.55,
         "routing_threshold_tension_min": 0.45,
         "routing_threshold_tension_readiness_min": 0.45,
@@ -1597,24 +1242,228 @@
         "scout_independence": 0.3333,
         "source_entropy": 1.0,
         "source_independence": 1.0,
-        "support_mass": 0.704,
-        "tension": 0.1962,
-        "trade_scream_score": 0.595,
-        "verifier_readiness": 0.8179
+        "support_mass": 0.661,
+        "tension": 0.4533,
+        "trade_scream_score": 0.6415,
+        "verifier_readiness": 0.805
       },
       "missing_edges": [
         "frontier_cell -> next_receptive_field",
         "single_scout_cell -> independent_replication"
       ],
       "owner": "seed_router",
-      "priority_score": 0.5132,
+      "priority_score": 0.5596,
       "quality_flags": [
+        "frontier_trade_candidate",
+        "multi_string_single_scout_cell",
+        "single_scout_cell",
+        "tension_resolution_candidate"
+      ],
+      "reason": "The cell is novel but still needs independent scout replication.",
+      "route_directive": "widen_scouts",
+      "route_task_id": "shape_task_2f6f98b9f560",
+      "success_gate": "second scout confirms, contradicts, or kills the string",
+      "suggested_next_tools": [
+        "tic://tool/builtin/query_events_recent@v1",
+        "tic://tool/builtin/query_timeseries@v1"
+      ],
+      "theme": ""
+    },
+    {
+      "action": "replicate_with_independent_scouts",
+      "cell_key": "ILV|intraday|sentiment|",
+      "coordinates": {
+        "color_fragility": 0.0,
+        "size_support_mass": 0.7536,
+        "x_source_independence": 1.0,
+        "y_frontier_pressure": 0.652,
+        "z_tension": 0.377
+      },
+      "entity": "ILV",
+      "horizon": "intraday",
+      "lens": "sentiment",
+      "metrics": {
+        "avg_attention": 0.7445,
+        "avg_conviction": 0.6333,
+        "avg_crowdedness": 0.35,
+        "avg_novelty": 0.6288,
+        "contradiction_density": 0.3333,
+        "evidence_coverage": 1.0,
+        "fragility": 0.0,
+        "frontier_pressure": 0.652,
+        "geometry_weight_fragility_penalty": 0.18,
+        "geometry_weight_frontier_pressure": 0.38,
+        "geometry_weight_source_independence": 0.0,
+        "geometry_weight_support_mass": 0.14,
+        "geometry_weight_tension": 0.24,
+        "geometry_weight_verifier_readiness": 0.24,
+        "novelty_pressure": 0.5109,
+        "routing_threshold_repair_fragility_min": 0.55,
+        "routing_threshold_tension_min": 0.45,
+        "routing_threshold_tension_readiness_min": 0.45,
+        "routing_threshold_verify_allow_fragility_max": 1.0,
+        "routing_threshold_verify_readiness_min": 0.55,
+        "routing_threshold_verify_source_independence_min": 0.0,
+        "routing_threshold_verify_trade_scream_min": 0.62,
+        "routing_threshold_widen_scouts_novelty_min": 0.35,
+        "routing_threshold_widen_sources_frontier_min": 0.5,
+        "routing_threshold_widen_sources_source_max": 0.45,
+        "scout_independence": 0.3333,
+        "source_entropy": 1.0,
+        "source_independence": 1.0,
+        "support_mass": 0.7536,
+        "tension": 0.377,
+        "trade_scream_score": 0.6436,
+        "verifier_readiness": 0.8327
+      },
+      "missing_edges": [
+        "frontier_cell -> next_receptive_field",
+        "single_scout_cell -> independent_replication"
+      ],
+      "owner": "seed_router",
+      "priority_score": 0.5555,
+      "quality_flags": [
+        "frontier_trade_candidate",
         "multi_string_single_scout_cell",
         "single_scout_cell"
       ],
       "reason": "The cell is novel but still needs independent scout replication.",
       "route_directive": "widen_scouts",
-      "route_task_id": "shape_task_2f6f98b9f560",
+      "route_task_id": "shape_task_00665c3bdd72",
+      "success_gate": "second scout confirms, contradicts, or kills the string",
+      "suggested_next_tools": [
+        "tic://tool/builtin/query_events_recent@v1",
+        "tic://tool/builtin/query_timeseries@v1"
+      ],
+      "theme": ""
+    },
+    {
+      "action": "send_to_verifier_council",
+      "cell_key": "BCH|1m|on_chain|source_health_gap",
+      "coordinates": {
+        "color_fragility": 0.0,
+        "size_support_mass": 0.6918,
+        "x_source_independence": 1.0,
+        "y_frontier_pressure": 0.6547,
+        "z_tension": 0.3667
+      },
+      "entity": "BCH",
+      "horizon": "1m",
+      "lens": "on_chain",
+      "metrics": {
+        "avg_attention": 0.6738,
+        "avg_conviction": 0.5583,
+        "avg_crowdedness": 0.2417,
+        "avg_novelty": 0.5183,
+        "contradiction_density": 0.1667,
+        "evidence_coverage": 1.0,
+        "fragility": 0.0,
+        "frontier_pressure": 0.6547,
+        "geometry_weight_fragility_penalty": 0.18,
+        "geometry_weight_frontier_pressure": 0.38,
+        "geometry_weight_source_independence": 0.0,
+        "geometry_weight_support_mass": 0.14,
+        "geometry_weight_tension": 0.24,
+        "geometry_weight_verifier_readiness": 0.24,
+        "novelty_pressure": 0.4913,
+        "routing_threshold_repair_fragility_min": 0.55,
+        "routing_threshold_tension_min": 0.45,
+        "routing_threshold_tension_readiness_min": 0.45,
+        "routing_threshold_verify_allow_fragility_max": 1.0,
+        "routing_threshold_verify_readiness_min": 0.55,
+        "routing_threshold_verify_source_independence_min": 0.0,
+        "routing_threshold_verify_trade_scream_min": 0.62,
+        "routing_threshold_widen_scouts_novelty_min": 0.35,
+        "routing_threshold_widen_sources_frontier_min": 0.5,
+        "routing_threshold_widen_sources_source_max": 0.45,
+        "scout_independence": 0.5,
+        "source_entropy": 1.0,
+        "source_independence": 1.0,
+        "support_mass": 0.6918,
+        "tension": 0.3667,
+        "trade_scream_score": 0.6346,
+        "verifier_readiness": 0.8375
+      },
+      "missing_edges": [
+        "claim -> verifier_decision",
+        "frontier_cell -> next_receptive_field"
+      ],
+      "owner": "verifier",
+      "priority_score": 0.5524,
+      "quality_flags": [
+        "frontier_trade_candidate"
+      ],
+      "reason": "The geometry is both high-signal and verifier-ready.",
+      "route_directive": "verify_now",
+      "route_task_id": "shape_task_283110b1dba7",
+      "success_gate": "2_of_3 verifier majority with independent source receipts",
+      "suggested_next_tools": [
+        "tic://tool/builtin/query_source_health@v1",
+        "tic://tool/builtin/query_timeseries@v1"
+      ],
+      "theme": "source_health_gap"
+    },
+    {
+      "action": "replicate_with_independent_scouts",
+      "cell_key": "JELLY|1m|microstructure|",
+      "coordinates": {
+        "color_fragility": 0.0,
+        "size_support_mass": 0.7444,
+        "x_source_independence": 1.0,
+        "y_frontier_pressure": 0.5979,
+        "z_tension": 0.3984
+      },
+      "entity": "JELLY",
+      "horizon": "1m",
+      "lens": "microstructure",
+      "metrics": {
+        "avg_attention": 0.7182,
+        "avg_conviction": 0.663,
+        "avg_crowdedness": 0.4167,
+        "avg_novelty": 0.5302,
+        "contradiction_density": 0.3333,
+        "evidence_coverage": 1.0,
+        "fragility": 0.0,
+        "frontier_pressure": 0.5979,
+        "geometry_weight_fragility_penalty": 0.18,
+        "geometry_weight_frontier_pressure": 0.38,
+        "geometry_weight_source_independence": 0.0,
+        "geometry_weight_support_mass": 0.14,
+        "geometry_weight_tension": 0.24,
+        "geometry_weight_verifier_readiness": 0.24,
+        "novelty_pressure": 0.3866,
+        "routing_threshold_repair_fragility_min": 0.55,
+        "routing_threshold_tension_min": 0.45,
+        "routing_threshold_tension_readiness_min": 0.45,
+        "routing_threshold_verify_allow_fragility_max": 1.0,
+        "routing_threshold_verify_readiness_min": 0.55,
+        "routing_threshold_verify_source_independence_min": 0.0,
+        "routing_threshold_verify_trade_scream_min": 0.62,
+        "routing_threshold_widen_scouts_novelty_min": 0.35,
+        "routing_threshold_widen_sources_frontier_min": 0.5,
+        "routing_threshold_widen_sources_source_max": 0.45,
+        "scout_independence": 0.3333,
+        "source_entropy": 1.0,
+        "source_independence": 1.0,
+        "support_mass": 0.7444,
+        "tension": 0.3984,
+        "trade_scream_score": 0.6263,
+        "verifier_readiness": 0.83
+      },
+      "missing_edges": [
+        "frontier_cell -> next_receptive_field",
+        "single_scout_cell -> independent_replication"
+      ],
+      "owner": "seed_router",
+      "priority_score": 0.5423,
+      "quality_flags": [
+        "frontier_trade_candidate",
+        "multi_string_single_scout_cell",
+        "single_scout_cell"
+      ],
+      "reason": "The cell is novel but still needs independent scout replication.",
+      "route_directive": "widen_scouts",
+      "route_task_id": "shape_task_f663a11ab5e1",
       "success_gate": "second scout confirms, contradicts, or kills the string",
       "suggested_next_tools": [
         "tic://tool/builtin/query_events_recent@v1",
@@ -1631,6 +1480,41 @@
   },
   "weak_scouts": [
     {
+      "bias_mode": "momentum",
+      "confidence": 0.0,
+      "entity": "BRK-B",
+      "error": null,
+      "horizon": "structural",
+      "hypothesis_text": "",
+      "lens": "options_flow",
+      "prompt_quality": 0.17,
+      "quality_flags": [
+        "prompt_variant:flash_temporal_v4",
+        "prompt_quality:0.17",
+        "prompt_missing_hypothesis",
+        "prompt_missing_information_strings",
+        "prompt_too_few_valid_tools",
+        "node_intelligence_not_promoted",
+        "data_substrate_map_string_emitted",
+        "adversarial_review:allow",
+        "scout_empty_hypothesis"
+      ],
+      "scout_id": "scout_ec8008bcba",
+      "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_S_0037",
+      "string_count": 1,
+      "suggested_tools_count": 1,
+      "tool_evidence_count": 6,
+      "tool_iteration_count": 0,
+      "tool_request_count": 0,
+      "weak_flags": [
+        "empty_hypothesis_text",
+        "prompt_missing_hypothesis",
+        "prompt_missing_information_strings",
+        "scout_empty_hypothesis"
+      ],
+      "weakness_score": 4
+    },
+    {
       "bias_mode": "mean_reversion",
       "confidence": 0.0,
       "entity": "kFLOKI",
@@ -1649,11 +1533,11 @@
         "adversarial_review:allow",
         "scout_empty_hypothesis"
       ],
-      "scout_id": "scout_8d44ce1eee",
-      "seed_id": "seed_cycle_live100_20260522_live_100_T_0000__mexp_pair_8b7c3a1c1615_candidate",
+      "scout_id": "scout_12180352b0",
+      "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0000__mexp_pair_31cbf9b730ae_control",
       "string_count": 1,
-      "suggested_tools_count": 3,
-      "tool_evidence_count": 4,
+      "suggested_tools_count": 6,
+      "tool_evidence_count": 6,
       "tool_iteration_count": 0,
       "tool_request_count": 0,
       "weak_flags": [
@@ -1665,13 +1549,13 @@
       "weakness_score": 4
     },
     {
-      "bias_mode": "frontier",
+      "bias_mode": "momentum",
       "confidence": 0.0,
-      "entity": "NFLX",
+      "entity": "WIF",
       "error": null,
-      "horizon": "1w",
+      "horizon": "1q",
       "hypothesis_text": "",
-      "lens": "factor",
+      "lens": "catalyst",
       "prompt_quality": 0.25,
       "quality_flags": [
         "prompt_variant:flash_temporal_v4",
@@ -1680,13 +1564,18 @@
         "prompt_missing_information_strings",
         "data_substrate_map_string_emitted",
         "adversarial_review:allow",
+        "route_contract_alignment:1.00",
+        "route_contract_applicable",
+        "route_contract_no_missing_edges",
+        "route_contract_success_gate_addressed",
+        "route_contract_satisfied",
         "scout_empty_hypothesis"
       ],
-      "scout_id": "scout_f0eadb6675",
-      "seed_id": "seed_cycle_live100_20260522_live_100_S_0018",
+      "scout_id": "scout_9976344677",
+      "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0001__mexp_pair_025cca9ce0d5_control",
       "string_count": 1,
-      "suggested_tools_count": 6,
-      "tool_evidence_count": 4,
+      "suggested_tools_count": 3,
+      "tool_evidence_count": 6,
       "tool_iteration_count": 0,
       "tool_request_count": 0,
       "weak_flags": [
@@ -1698,13 +1587,13 @@
       "weakness_score": 4
     },
     {
-      "bias_mode": "contrarian",
+      "bias_mode": "momentum",
       "confidence": 0.0,
-      "entity": "COIN",
+      "entity": "VINE",
       "error": null,
       "horizon": "1m",
       "hypothesis_text": "",
-      "lens": "structural",
+      "lens": "catalyst",
       "prompt_quality": 0.25,
       "quality_flags": [
         "prompt_variant:flash_temporal_v4",
@@ -1715,11 +1604,11 @@
         "adversarial_review:allow",
         "scout_empty_hypothesis"
       ],
-      "scout_id": "scout_685a6085dd",
-      "seed_id": "seed_cycle_live100_20260522_live_100_S_0046",
+      "scout_id": "scout_a86dce5ced",
+      "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0012__mexp_pair_65a56743380f_candidate",
       "string_count": 1,
       "suggested_tools_count": 6,
-      "tool_evidence_count": 4,
+      "tool_evidence_count": 6,
       "tool_iteration_count": 0,
       "tool_request_count": 0,
       "weak_flags": [
@@ -1738,12 +1627,11 @@
       "horizon": "1d",
       "hypothesis_text": "",
       "lens": "factor",
-      "prompt_quality": 0.6,
+      "prompt_quality": 0.65,
       "quality_flags": [
         "prompt_variant:flash_temporal_v4",
-        "prompt_quality:0.60",
+        "prompt_quality:0.65",
         "prompt_missing_hypothesis",
-        "prompt_string_obvious_and_crowded",
         "node_intelligence_not_promoted",
         "data_substrate_map_string_emitted",
         "adversarial_review:allow",
@@ -1751,20 +1639,19 @@
         "adversarial_review:allow",
         "scout_empty_hypothesis"
       ],
-      "scout_id": "scout_a251147530",
-      "seed_id": "seed_cycle_live100_20260522_live_100_T_0000__mexp_pair_8b7c3a1c1615_control",
+      "scout_id": "scout_e0d8497dbf",
+      "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0000__mexp_pair_31cbf9b730ae_candidate",
       "string_count": 3,
-      "suggested_tools_count": 3,
-      "tool_evidence_count": 4,
+      "suggested_tools_count": 4,
+      "tool_evidence_count": 6,
       "tool_iteration_count": 0,
       "tool_request_count": 0,
       "weak_flags": [
         "empty_hypothesis_text",
         "prompt_missing_hypothesis",
-        "prompt_string_obvious_and_crowded",
         "scout_empty_hypothesis"
       ],
-      "weakness_score": 4
+      "weakness_score": 3
     },
     {
       "bias_mode": "momentum",
@@ -1780,16 +1667,21 @@
         "prompt_quality:0.65",
         "prompt_missing_hypothesis",
         "data_substrate_map_string_emitted",
+        "adversarial_review:downgrade",
         "adversarial_review:allow",
         "adversarial_review:allow",
-        "adversarial_review:allow",
+        "route_contract_alignment:1.00",
+        "route_contract_applicable",
+        "route_contract_no_missing_edges",
+        "route_contract_success_gate_addressed",
+        "route_contract_satisfied",
         "scout_empty_hypothesis"
       ],
-      "scout_id": "scout_2e078d4a07",
-      "seed_id": "seed_cycle_live100_20260522_live_100_T_0001__mexp_pair_be54f2b49127_control",
+      "scout_id": "scout_6a06ab9653",
+      "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0001__mexp_pair_025cca9ce0d5_candidate",
       "string_count": 3,
-      "suggested_tools_count": 3,
-      "tool_evidence_count": 2,
+      "suggested_tools_count": 2,
+      "tool_evidence_count": 6,
       "tool_iteration_count": 0,
       "tool_request_count": 0,
       "weak_flags": [
@@ -1800,29 +1692,30 @@
       "weakness_score": 3
     },
     {
-      "bias_mode": "frontier",
+      "bias_mode": "momentum",
       "confidence": 0.0,
-      "entity": "UNH",
+      "entity": "NIL",
       "error": null,
-      "horizon": "intraday",
+      "horizon": "1d",
       "hypothesis_text": "",
-      "lens": "polymarket",
+      "lens": "rotation",
       "prompt_quality": 0.65,
       "quality_flags": [
         "prompt_variant:flash_temporal_v4",
         "prompt_quality:0.65",
         "prompt_missing_hypothesis",
+        "node_intelligence_not_promoted",
         "data_substrate_map_string_emitted",
         "adversarial_review:allow",
         "adversarial_review:downgrade",
         "adversarial_review:allow",
         "scout_empty_hypothesis"
       ],
-      "scout_id": "scout_765d8e9ceb",
-      "seed_id": "seed_cycle_live100_20260522_live_100_S_0010",
+      "scout_id": "scout_fd80404ef6",
+      "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0015__mexp_pair_c67927e40c55_candidate",
       "string_count": 3,
       "suggested_tools_count": 6,
-      "tool_evidence_count": 2,
+      "tool_evidence_count": 6,
       "tool_iteration_count": 0,
       "tool_request_count": 0,
       "weak_flags": [
@@ -1833,38 +1726,12 @@
       "weakness_score": 3
     },
     {
-      "bias_mode": "mean_reversion",
-      "confidence": 0.0,
-      "entity": "RUNE",
-      "error": "scout_json_unparseable",
-      "horizon": "structural",
-      "hypothesis_text": "",
-      "lens": "options_flow",
-      "prompt_quality": null,
-      "quality_flags": [
-        "prompt_variant:flash_temporal_v4",
-        "scout_json_unparseable"
-      ],
-      "scout_id": "scout_512e8e5eb7",
-      "seed_id": "seed_cycle_live100_20260522_live_100_S_0020",
-      "string_count": 0,
-      "suggested_tools_count": 0,
-      "tool_evidence_count": 4,
-      "tool_iteration_count": 0,
-      "tool_request_count": 0,
-      "weak_flags": [
-        "empty_hypothesis_text",
-        "scout_json_unparseable"
-      ],
-      "weakness_score": 2
-    },
-    {
       "bias_mode": "consensus_confirm",
-      "confidence": 0.2,
+      "confidence": 0.25,
       "entity": "WLD",
       "error": null,
       "horizon": "intraday",
-      "hypothesis_text": "WLD money velocity compressed as on-chain signal stale, low-conviction no-trade zone with no fresh catalyst available.",
+      "hypothesis_text": "WLD intraday money velocity is suppressed by stale funding data and a lack of fresh on-chain flow evidence, requiring a source-health repair before directional conviction can be formed.",
       "lens": "money_velocity",
       "prompt_quality": 0.74,
       "quality_flags": [
@@ -1877,11 +1744,11 @@
         "adversarial_review:quarantine",
         "adversarial_review:allow"
       ],
-      "scout_id": "scout_6a6d8fb6df",
-      "seed_id": "seed_cycle_live100_20260522_live_100_S_0001__mexp_pair_7464f91e637c_control",
+      "scout_id": "scout_ec0c8a158e",
+      "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_S_0001__mexp_pair_50008f9698e5_control",
       "string_count": 3,
-      "suggested_tools_count": 5,
-      "tool_evidence_count": 4,
+      "suggested_tools_count": 6,
+      "tool_evidence_count": 6,
       "tool_iteration_count": 0,
       "tool_request_count": 0,
       "weak_flags": [
@@ -1892,184 +1759,29 @@
     },
     {
       "bias_mode": "contrarian",
-      "confidence": 0.62,
-      "entity": "PEOPLE",
-      "error": null,
-      "horizon": "1w",
-      "hypothesis_text": "PEOPLE Polymarket probabilities are not primarily driven by base-layer project fundamentals but by positioning and liquidity events, with the current 8.99% funding spread indicating a crowded short that repricing will originate from forced covering within 1w.",
-      "lens": "polymarket",
-      "prompt_quality": 0.74,
-      "quality_flags": [
-        "prompt_variant:flash_temporal_v4",
-        "prompt_quality:0.74",
-        "prompt_string_missing_evidence_refs",
-        "data_substrate_map_string_emitted",
-        "adversarial_review:downgrade",
-        "adversarial_review:quarantine",
-        "adversarial_review:allow"
-      ],
-      "scout_id": "scout_12cb7043fe",
-      "seed_id": "seed_cycle_live100_20260522_live_100_S_0005",
-      "string_count": 3,
-      "suggested_tools_count": 4,
-      "tool_evidence_count": 2,
-      "tool_iteration_count": 0,
-      "tool_request_count": 0,
-      "weak_flags": [
-        "adversarial_review:quarantine",
-        "prompt_string_missing_evidence_refs"
-      ],
-      "weakness_score": 2
-    },
-    {
-      "bias_mode": "consensus_confirm",
-      "confidence": 0.45,
-      "entity": "VINE",
-      "error": null,
-      "horizon": "1d",
-      "hypothesis_text": "VINE funding spread at 12.09% annual with HL cap true indicates sustained short demand and bearish sentiment for 1d horizon.",
-      "lens": "sentiment",
-      "prompt_quality": 0.74,
-      "quality_flags": [
-        "prompt_variant:flash_temporal_v4",
-        "prompt_quality:0.74",
-        "prompt_string_rubric_failed",
-        "prompt_string_stale_date_reference",
-        "data_substrate_map_string_emitted",
-        "adversarial_review:downgrade",
-        "adversarial_review:downgrade",
-        "adversarial_review:allow"
-      ],
-      "scout_id": "scout_bad2643d4d",
-      "seed_id": "seed_cycle_live100_20260522_live_100_S_0035",
-      "string_count": 3,
-      "suggested_tools_count": 6,
-      "tool_evidence_count": 2,
-      "tool_iteration_count": 0,
-      "tool_request_count": 0,
-      "weak_flags": [
-        "prompt_string_rubric_failed",
-        "prompt_string_stale_date_reference"
-      ],
-      "weakness_score": 2
-    },
-    {
-      "bias_mode": "consensus_confirm",
-      "confidence": 0.35,
-      "entity": "SUPER",
+      "confidence": 0.55,
+      "entity": "GRIFFAIN",
       "error": null,
       "horizon": "1q",
-      "hypothesis_text": "SUPER Polymarket 1q outcomes are influenced by the 8-K filing on 2026-05-19 which may trigger active market updates, but current evidence is too stale to confirm a directional trade.",
-      "lens": "polymarket",
-      "prompt_quality": 0.74,
-      "quality_flags": [
-        "prompt_variant:flash_temporal_v4",
-        "prompt_quality:0.74",
-        "prompt_string_missing_evidence_refs",
-        "data_substrate_map_string_emitted",
-        "adversarial_review:downgrade",
-        "adversarial_review:quarantine",
-        "adversarial_review:allow"
-      ],
-      "scout_id": "scout_c93722c484",
-      "seed_id": "seed_cycle_live100_20260522_live_100_S_0060",
-      "string_count": 3,
-      "suggested_tools_count": 3,
-      "tool_evidence_count": 2,
-      "tool_iteration_count": 0,
-      "tool_request_count": 0,
-      "weak_flags": [
-        "adversarial_review:quarantine",
-        "prompt_string_missing_evidence_refs"
-      ],
-      "weakness_score": 2
-    },
-    {
-      "bias_mode": "momentum",
-      "confidence": 0.7,
-      "entity": "TNSR",
-      "error": null,
-      "horizon": "intraday",
-      "hypothesis_text": "TNSR macro funding rate data is stale by ~2.5 days, making any intraday momentum conclusion unreliable until fresh data is ingested.",
-      "lens": "macro",
-      "prompt_quality": 0.75,
-      "quality_flags": [
-        "prompt_variant:flash_temporal_v4",
-        "prompt_quality:0.75",
-        "prompt_string_missing_evidence_refs",
-        "data_substrate_map_string_emitted",
-        "adversarial_review:allow",
-        "adversarial_review:quarantine",
-        "adversarial_review:allow"
-      ],
-      "scout_id": "scout_71b9a7e974",
-      "seed_id": "seed_cycle_live100_20260522_live_100_S_0016",
-      "string_count": 3,
-      "suggested_tools_count": 5,
-      "tool_evidence_count": 2,
-      "tool_iteration_count": 0,
-      "tool_request_count": 0,
-      "weak_flags": [
-        "adversarial_review:quarantine",
-        "prompt_string_missing_evidence_refs"
-      ],
-      "weakness_score": 2
-    },
-    {
-      "bias_mode": "tail_risk",
-      "confidence": 0.45,
-      "entity": "ETHFI",
-      "error": null,
-      "horizon": "intraday",
-      "hypothesis_text": "ETHFI funding rate data is stale by ~2.5 days while Hydromancer reveals high reject-rate noob wallets scanning BTC, indicating a regime shift risk that on-chain ETHFI liquidity may be mispriced intraday.",
+      "hypothesis_text": "Griffain will underperform relative to BTC and ETH on a 1-quarter horizon due to deteriorating on-chain liquidity and high noob rejection rates at Hyperliquid that suppress order-book recovery.",
       "lens": "on_chain",
       "prompt_quality": 0.9,
       "quality_flags": [
         "prompt_variant:flash_temporal_v4",
         "prompt_quality:0.90",
-        "prompt_string_stale_date_reference",
-        "node_intelligence_not_promoted",
-        "data_substrate_map_string_emitted",
-        "adversarial_review:downgrade",
-        "adversarial_review:downgrade",
-        "adversarial_review:allow"
-      ],
-      "scout_id": "scout_fccffe4162",
-      "seed_id": "seed_cycle_live100_20260522_live_100_T_0002__mexp_pair_55c3b108a00b_candidate",
-      "string_count": 3,
-      "suggested_tools_count": 6,
-      "tool_evidence_count": 4,
-      "tool_iteration_count": 0,
-      "tool_request_count": 0,
-      "weak_flags": [
-        "prompt_string_stale_date_reference"
-      ],
-      "weakness_score": 1
-    },
-    {
-      "bias_mode": "consensus_confirm",
-      "confidence": 0.55,
-      "entity": "ATOM",
-      "error": null,
-      "horizon": "1w",
-      "hypothesis_text": "ATOM vol surface is unobservable due to stale/failing sources, preventing 1w trading edge.",
-      "lens": "vol_surface",
-      "prompt_quality": 0.9,
-      "quality_flags": [
-        "prompt_variant:flash_temporal_v4",
-        "prompt_quality:0.90",
         "prompt_invented_tool",
+        "suggested_tools_filtered",
         "node_intelligence_not_promoted",
         "data_substrate_map_string_emitted",
         "adversarial_review:downgrade",
-        "adversarial_review:allow",
+        "adversarial_review:downgrade",
         "adversarial_review:allow"
       ],
-      "scout_id": "scout_ab712a1098",
-      "seed_id": "seed_cycle_live100_20260522_live_100_S_0041",
+      "scout_id": "scout_fa308cd724",
+      "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0004__mexp_pair_6be5f2c91248_control",
       "string_count": 3,
-      "suggested_tools_count": 6,
-      "tool_evidence_count": 4,
+      "suggested_tools_count": 5,
+      "tool_evidence_count": 6,
       "tool_iteration_count": 0,
       "tool_request_count": 0,
       "weak_flags": [
@@ -2078,29 +1790,60 @@
       "weakness_score": 1
     },
     {
-      "bias_mode": "mean_reversion",
-      "confidence": 0.37,
-      "entity": "RENDER",
+      "bias_mode": "momentum",
+      "confidence": 0.65,
+      "entity": "IO",
       "error": null,
-      "horizon": "1m",
-      "hypothesis_text": "RENDER vol surface is unobservable due to failed options fetch and stale candle data, preventing mean-reversion calibration for 1m horizon.",
-      "lens": "vol_surface",
+      "horizon": "1d",
+      "hypothesis_text": "IO microstructure anomaly (VPIN\u22650.3, high OFI, stale source health) indicates elevated informed-flow risk that will degrade liquidity within 1 day absent fresh order-book refresh.",
+      "lens": "anomaly",
+      "prompt_quality": 0.9,
+      "quality_flags": [
+        "prompt_variant:flash_temporal_v4",
+        "prompt_quality:0.90",
+        "prompt_string_stale_date_reference",
+        "data_substrate_map_string_emitted",
+        "adversarial_review:allow",
+        "adversarial_review:downgrade",
+        "adversarial_review:allow"
+      ],
+      "scout_id": "scout_f777e108d7",
+      "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_S_0032",
+      "string_count": 3,
+      "suggested_tools_count": 5,
+      "tool_evidence_count": 6,
+      "tool_iteration_count": 0,
+      "tool_request_count": 0,
+      "weak_flags": [
+        "prompt_string_stale_date_reference"
+      ],
+      "weakness_score": 1
+    },
+    {
+      "bias_mode": "momentum",
+      "confidence": 0.55,
+      "entity": "WIF",
+      "error": null,
+      "horizon": "1d",
+      "hypothesis_text": "WIF 1d microstructure is dominated by stale funding data and pervasive noob reject flow that suppresses perceived funding, making a squeeze unlikely without fresh catalyst.",
+      "lens": "microstructure",
       "prompt_quality": 0.9,
       "quality_flags": [
         "prompt_variant:flash_temporal_v4",
         "prompt_quality:0.90",
         "prompt_invented_tool",
+        "suggested_tools_filtered",
         "node_intelligence_not_promoted",
         "data_substrate_map_string_emitted",
         "adversarial_review:downgrade",
-        "adversarial_review:allow",
+        "adversarial_review:downgrade",
         "adversarial_review:allow"
       ],
-      "scout_id": "scout_8ff037f8df",
-      "seed_id": "seed_cycle_live100_20260522_live_100_S_0053",
+      "scout_id": "scout_716cdd223e",
+      "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_S_0054",
       "string_count": 3,
-      "suggested_tools_count": 5,
-      "tool_evidence_count": 4,
+      "suggested_tools_count": 4,
+      "tool_evidence_count": 6,
       "tool_iteration_count": 0,
       "tool_request_count": 0,
       "weak_flags": [

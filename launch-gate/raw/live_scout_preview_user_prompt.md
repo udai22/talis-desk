@@ -1,4 +1,4 @@
-as_of_utc=2026-05-22T15:42:45.191166+00:00
+as_of_utc=2026-05-22T17:42:15.654472+00:00
 Freshness rule: for intraday/1d/1w horizons, do not use old historical dates as live catalyst evidence unless explicitly labeled as regime context.
 
 Cell:
@@ -23,5 +23,7 @@ allowed_tool_candidates:
   tic://tool/agent_native/find_confluence@v1
   tic://tool/agent_native/replay_artifact_reasoning@v1
   tic://tool/agent_native/semantic_search@v1
+  tic://tool/builtin/analyze_microstructure@v1
+  tic://tool/builtin/compare_vehicle_flow_to_af_baseline@v1
 
 Return one JSON object only.

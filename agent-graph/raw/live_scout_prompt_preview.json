@@ -1,0 +1,173 @@
+{
+  "artifacts": {
+    "json": "/private/var/folders/rq/2m7m487n3nl33jy9q_r7lzn00000gn/T/talis-scout-system-launch-20260522T174209Z/live_canary/prompt_outputs/live_scout_prompt_preview.json",
+    "system_prompt": "/private/var/folders/rq/2m7m487n3nl33jy9q_r7lzn00000gn/T/talis-scout-system-launch-20260522T174209Z/live_canary/prompt_outputs/live_scout_preview_system_prompt.md",
+    "user_prompt": "/private/var/folders/rq/2m7m487n3nl33jy9q_r7lzn00000gn/T/talis-scout-system-launch-20260522T174209Z/live_canary/prompt_outputs/live_scout_preview_user_prompt.md"
+  },
+  "learning_policy": {
+    "geometry_replication_targets": [],
+    "policy_id": "lrp_cycle_live_scout_canary_20260522t173621z_10",
+    "prompt_repair_modes": [
+      "node_contract_upgrade"
+    ],
+    "repair_work_order_ids": [
+      "lso_json_unparseable_scout_harness",
+      "lso_invented_tools_tool_harness",
+      "lso_node_not_promoted_node_intelligence",
+      "lso_geometry_replication",
+      "lso_market_evolve_arena"
+    ],
+    "watch_metrics": [
+      "accepted_unique_high_quality_coverage_per_dollar_delta",
+      "invented_tool_persist_rate",
+      "json_unparseable_rate",
+      "top_geometry_confirmation_rate"
+    ]
+  },
+  "market_evolve": {
+    "applied": true,
+    "experiment_arm": "control",
+    "experiment_id": "mexp_c547fbe4ffdf3ae6",
+    "generation": 0,
+    "program_id": "mprog_305b736b8ad24821",
+    "program_name": "rosewood_research_policy_v1"
+  },
+  "minimum_information_strings": 2,
+  "prompt_contract_pressure": "strict",
+  "prompt_variant": "flash_temporal_v4",
+  "schema_version": "talis_live_scout_prompt_preview_v1",
+  "seed": {
+    "asset_class": "hyperliquid_perp",
+    "bias_mode": "mean_reversion",
+    "coverage_penalty": 1.0,
+    "entity": "kFLOKI",
+    "frontier_boost": 1.0,
+    "horizon": "1d",
+    "lens": "factor",
+    "payload": {
+      "auto_promote_high_priority_tools": false,
+      "learned_tool_priority_boost": 0.0,
+      "learning_policy_id": "lrp_cycle_live_scout_canary_20260522t173621z_10",
+      "learning_policy_source": "live_scout_learning_report",
+      "learning_repair_work_order_ids": [
+        "lso_json_unparseable_scout_harness",
+        "lso_invented_tools_tool_harness",
+        "lso_node_not_promoted_node_intelligence",
+        "lso_geometry_replication",
+        "lso_market_evolve_arena"
+      ],
+      "learning_tool_candidate_refresh": {
+        "added_count": 2,
+        "after_count": 12,
+        "before_count": 10,
+        "limit": 12,
+        "status": "refreshed"
+      },
+      "learning_watch_metrics": [
+        "accepted_unique_high_quality_coverage_per_dollar_delta",
+        "invented_tool_persist_rate",
+        "json_unparseable_rate",
+        "top_geometry_confirmation_rate"
+      ],
+      "market_evolve_applied": true,
+      "market_evolve_experiment_arm": "control",
+      "market_evolve_experiment_id": "mexp_c547fbe4ffdf3ae6",
+      "market_evolve_forced_experiment_arm": "control",
+      "market_evolve_forced_experiment_id": "mexp_c547fbe4ffdf3ae6",
+      "market_evolve_generation": 0,
+      "market_evolve_original_seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0000",
+      "market_evolve_original_seed_source": "theme_injection",
+      "market_evolve_pair_id": "mexp_pair_31cbf9b730ae",
+      "market_evolve_pair_unit_key": "kFLOKI|1d|factor|mean_reversion|hyperliquid_node_intelligence",
+      "market_evolve_parent_program_ids": [],
+      "market_evolve_program_id": "mprog_305b736b8ad24821",
+      "market_evolve_program_name": "rosewood_research_policy_v1",
+      "market_evolve_program_status": "active",
+      "max_evidence_tools": 6,
+      "max_followup_tools_per_iteration": 1,
+      "max_tool_iterations": 1,
+      "max_tool_promotions_per_cycle": 3,
+      "prefer_learned_tools": false,
+      "preserve_missing_tool_as_proposal": true,
+      "prompt_contract_pressure": "strict",
+      "prompt_min_information_strings": 2,
+      "prompt_repair_modes": [
+        "node_contract_upgrade"
+      ],
+      "prompt_require_evidence_refs": true,
+      "prompt_require_kill_signal": true,
+      "prompt_require_mechanism": true,
+      "prompt_variant": "flash_temporal_v4",
+      "quarantine_before_verifier_spend": true,
+      "readiness_slice": true,
+      "source": "market_evolve_paired_experiment",
+      "source_family_targets": [
+        "hydromancer",
+        "our_hl_node",
+        "market_microstructure",
+        "web_attention",
+        "fundamentals_filings",
+        "macro_official",
+        "our_node",
+        "parallel_web",
+        "source_health"
+      ],
+      "stale_evidence_becomes_gap_string": true,
+      "suggested_tool_allowlist_only": true,
+      "tool_candidate_limit": 12,
+      "tool_candidates": [
+        "tic://tool/builtin/query_timeseries@v1",
+        "tic://tool/builtin/query_source_health@v1",
+        "tic://tool/agent_native/find_similar_setups@v1",
+        "tic://tool/builtin/compute_float_absorption_rate@v1",
+        "tic://tool/builtin/compute_wallet_stats@v1",
+        "tic://tool/builtin/solar_iv_regression@v1",
+        "tic://tool/builtin/query_claims_by_entity@v1",
+        "tic://tool/agent_native/find_confluence@v1",
+        "tic://tool/agent_native/replay_artifact_reasoning@v1",
+        "tic://tool/agent_native/semantic_search@v1",
+        "tic://tool/builtin/analyze_microstructure@v1",
+        "tic://tool/builtin/compare_vehicle_flow_to_af_baseline@v1"
+      ]
+    },
+    "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0000__mexp_pair_31cbf9b730ae_control",
+    "theme": "hyperliquid_node_intelligence",
+    "weight": 1.0
+  },
+  "status": "ready",
+  "system_prompt": "You are a Talis Flash scout in a scale repair arm. Study only the assigned market cell: entity, horizon, lens, bias, evidence, prior strings, and allowed tools in the user packet.\n\nGoal: emit exactly one top-level hypothesis that summarizes the strongest valid information_string, plus 1-2 decision-changing information_strings. Abstain only when every provided evidence packet is empty, stale for this horizon, unsupported by the allowed sources, and no allowed tool can close the missing edge.\n\nScale-repair rules:\n- Do not leave `hypothesis` empty when `information_strings` is non-empty.\n- Do not leave `information_strings` empty when at least one evidence packet or allowed tool can update a watchlist, verifier task, route decision, source-health decision, or gap repair.\n- If the evidence is stale/thin, do not turn the stale value into a trade direction. Write a low-conviction source-gap or missing-edge string instead.\n- A valid gap string names the missing source/edge, cites the stale or failed evidence_refs, requests the next allowed tool/source when possible, and states the repair/kill condition.\n- Use empty hypothesis/information_strings only when no provided ref is usable and no allowed tool can create a meaningful next edge.\n- Calibrate confidence away from lazy defaults: 0.15-0.35 for source-gap strings, 0.36-0.65 for tentative map updates, 0.66-0.85 for multi-source supported strings.\n- Every string must include time_horizon, time_scale, observed_at, source_time_basis, expires_at, temporal_confidence, extends_or_contradicts, and would_change_decision=true.\n- Every evidence_refs value must cite a provided tool_call_log_id or source ref. If none exists, abstain and say the missing source in rationale_brief.\n- suggested_tools must be copied exactly from allowed_tool_candidates; when the evidence is stale, suggest the exact allowed tools that would refresh the edge.\n- No prose outside JSON. Keep JSON small.\n\nReturn strict JSON only:\n{\n  \"hypothesis\": \"<falsifiable one-sentence claim, or empty string to abstain>\",\n  \"confidence\": 0.0,\n  \"rationale_brief\": \"<mechanism, max 180 chars>\",\n  \"suggested_tools\": [\"<copy tic://... from allowed_tool_candidates>\", \"...\"],\n  \"information_strings\": [\n    {\n      \"title\": \"<short title>\",\n      \"thesis\": \"<entity -> mechanism -> market implication>\",\n      \"entities_chain\": [\"<entity>\", \"<actor/venue/theme>\"],\n      \"mechanism\": \"<why this should reprice or update the map>\",\n      \"depth_layers\": [{\"layer\": 1, \"claim\": \"<direct effect>\"}, {\"layer\": 2, \"claim\": \"<second-order effect>\"}],\n      \"expected_outcome\": \"<observable confirmation>\",\n      \"time_horizon\": \"<tick|minute|hour|intraday|1d|1w|1m|structural>\",\n      \"time_scale\": \"<same grain as claim>\",\n      \"observed_at\": \"<ISO8601 source/tool observation time, or as_of_utc>\",\n      \"source_time_basis\": \"<event_time|ingestion_time|publication_time|valid_time|unknown>\",\n      \"kill_signal\": \"<what breaks the chain>\",\n      \"extends_or_contradicts\": \"<new|extends|contradicts|abandons>\",\n      \"would_change_decision\": true,\n      \"expires_at\": \"<when stale>\",\n      \"crowdedness\": 0.0,\n      \"conviction\": 0.0,\n      \"novelty_score\": 0.0,\n      \"evidence_refs\": [\"<tool_call_log_id/source ref>\"],\n      \"temporal_confidence\": 0.0\n    }\n  ]\n}\n\n<market_evolve_prompt_contract>\ncontract_pressure: strict\nminimum_information_strings: 2\nThis is an evolved policy requirement, not commentary. Before returning, self-check the JSON against it.\n- Return at least 2 valid information_strings unless the cell is genuinely empty.\n- Reject your own string if mechanism is missing or only narrative.\n- Reject your own string if kill_signal is missing or not observable.\n- Prefer evidence_refs/source refs from provided tool evidence; mark uncertainty instead of inventing refs.\n- If you cannot satisfy this contract, return empty hypothesis/information_strings and explain the data gap in rationale_brief.\n</market_evolve_prompt_contract>",
+  "system_prompt_chars": 3970,
+  "tool_policy": {
+    "allowed_tool_candidates": [
+      "tic://tool/builtin/query_timeseries@v1",
+      "tic://tool/builtin/query_source_health@v1",
+      "tic://tool/agent_native/find_similar_setups@v1",
+      "tic://tool/builtin/compute_float_absorption_rate@v1",
+      "tic://tool/builtin/compute_wallet_stats@v1",
+      "tic://tool/builtin/solar_iv_regression@v1",
+      "tic://tool/builtin/query_claims_by_entity@v1",
+      "tic://tool/agent_native/find_confluence@v1",
+      "tic://tool/agent_native/replay_artifact_reasoning@v1",
+      "tic://tool/agent_native/semantic_search@v1",
+      "tic://tool/builtin/analyze_microstructure@v1",
+      "tic://tool/builtin/compare_vehicle_flow_to_af_baseline@v1"
+    ],
+    "max_evidence_tools": 6,
+    "max_tool_iterations": 1,
+    "prefer_learned_tools": false,
+    "source_family_targets": [
+      "hydromancer",
+      "our_hl_node",
+      "market_microstructure",
+      "web_attention",
+      "fundamentals_filings",
+      "macro_official",
+      "our_node",
+      "parallel_web",
+      "source_health"
+    ],
+    "tool_candidate_count": 12
+  },
+  "user_prompt": "as_of_utc=2026-05-22T17:42:15.654472+00:00\nFreshness rule: for intraday/1d/1w horizons, do not use old historical dates as live catalyst evidence unless explicitly labeled as regime context.\n\nCell:\n  entity=kFLOKI\n  horizon=1d\n  lens=factor\n  bias_mode=mean_reversion\n  theme=hyperliquid_node_intelligence\n\natlas_policy:\n  Scouts may use any read-only approved atlas tool/source before the LLM call, under the evidence budget. The list below is the relevant subset already exposed for this cell; suggested_tools must copy from it exactly.\n\n\nallowed_tool_candidates:\n  tic://tool/builtin/query_timeseries@v1\n  tic://tool/builtin/query_source_health@v1\n  tic://tool/agent_native/find_similar_setups@v1\n  tic://tool/builtin/compute_float_absorption_rate@v1\n  tic://tool/builtin/compute_wallet_stats@v1\n  tic://tool/builtin/solar_iv_regression@v1\n  tic://tool/builtin/query_claims_by_entity@v1\n  tic://tool/agent_native/find_confluence@v1\n  tic://tool/agent_native/replay_artifact_reasoning@v1\n  tic://tool/agent_native/semantic_search@v1\n  tic://tool/builtin/analyze_microstructure@v1\n  tic://tool/builtin/compare_vehicle_flow_to_af_baseline@v1\n\nReturn one JSON object only.",
+  "user_prompt_chars": 1171
+}

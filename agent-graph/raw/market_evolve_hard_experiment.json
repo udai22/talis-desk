@@ -1,0 +1,645 @@
+{
+  "active_program_id": "mprog_305b736b8ad24821",
+  "arm_counts": {
+    "candidate": 50,
+    "control": 50
+  },
+  "cycle_id": "cycle_live_scout_canary_20260522T174212Z",
+  "experiment_id": "mexp_c547fbe4ffdf3ae6",
+  "experiment_ids": [
+    "mexp_c547fbe4ffdf3ae6"
+  ],
+  "experiment_kind": "matched_policy_ab",
+  "final_decision": "reject_candidate",
+  "final_score_delta": 0.0067,
+  "paired_seed_slices": 20,
+  "plans": [
+    {
+      "arms": [
+        {
+          "arm": "control",
+          "generation": 0,
+          "program_id": "mprog_305b736b8ad24821",
+          "status": "active"
+        },
+        {
+          "arm": "candidate",
+          "generation": 1,
+          "mutation_kind": "raise_tool_promotion_discipline",
+          "program_id": "mprog_719c2d73b8b855e2",
+          "status": "candidate"
+        }
+      ],
+      "candidate_program_id": "mprog_719c2d73b8b855e2",
+      "created_at": "2026-05-22T17:49:57.025201+00:00",
+      "cycle_id": "cycle_live_scout_canary_20260522T174212Z",
+      "experiment_kind": "matched_policy_ab",
+      "id": "mexp_cb57c4651ddbc6de",
+      "matched_slice": {
+        "assignment": "paired_seed_clone_then_deterministic_hash",
+        "axes": [
+          "entity",
+          "horizon",
+          "lens",
+          "bias_mode",
+          "theme"
+        ],
+        "hold_constant": [
+          "entity_universe",
+          "calendar_gate",
+          "budget_per_seed",
+          "model_family"
+        ],
+        "min_seeds_per_arm": 20,
+        "pairing": {
+          "enabled": true,
+          "max_seed_budget_share": 0.12,
+          "unit_key": "entity|horizon|lens|bias_mode|theme"
+        },
+        "unit": "seed_cell"
+      },
+      "parent_program_id": "mprog_305b736b8ad24821",
+      "quality_flags": [
+        "hard_experiment_required",
+        "mutation:raise_tool_promotion_discipline",
+        "mutation_intent_packet"
+      ],
+      "rationale": "Agents are proposing plausible tools, but too few are reaching evaluated active-tool status.",
+      "status": "planned",
+      "success_criteria": {
+        "falsification_gates": [
+          {
+            "decision": "reject_or_continue_candidate",
+            "metric": "score_delta",
+            "operator": "<",
+            "threshold": 0.05
+          },
+          {
+            "decision": "reject_candidate",
+            "metric": "candidate_valid_string_rate",
+            "operator": "<",
+            "threshold": 0.9897
+          },
+          {
+            "decision": "reject_candidate",
+            "metric": "candidate_tool_activation_rate",
+            "operator": "<=",
+            "threshold": 0.0
+          }
+        ],
+        "kill_signal": "Candidate does not improve active/evaluated tool usage or creates more low-EV/tool-failure backlog.",
+        "max_avg_fragility": 0.25,
+        "max_low_ev_tool_rate": 0.25,
+        "max_tool_eval_failed_rate": 0.5,
+        "min_candidate_wins": 2,
+        "min_completed_cycles": 2,
+        "min_consecutive_candidate_wins": 2,
+        "min_score_delta": 0.05,
+        "min_source_independence": 0.9,
+        "min_valid_string_rate": 0.9897,
+        "mutation_intent": {
+          "changed_paths": [
+            {
+              "after": true,
+              "before": false,
+              "path": "tool_request_policy.auto_promote_high_priority_tools"
+            },
+            {
+              "after": 4,
+              "before": 3,
+              "path": "tool_request_policy.max_tool_promotions_per_cycle"
+            },
+            {
+              "after": true,
+              "before": true,
+              "path": "tool_request_policy.require_eval_plan"
+            },
+            {
+              "after": true,
+              "before": true,
+              "path": "tool_request_policy.require_expected_edge"
+            }
+          ],
+          "falsification_gates": [
+            {
+              "decision": "reject_or_continue_candidate",
+              "metric": "score_delta",
+              "operator": "<",
+              "threshold": 0.05
+            },
+            {
+              "decision": "reject_candidate",
+              "metric": "candidate_valid_string_rate",
+              "operator": "<",
+              "threshold": 0.9897
+            },
+            {
+              "decision": "reject_candidate",
+              "metric": "candidate_tool_activation_rate",
+              "operator": "<=",
+              "threshold": 0.0
+            }
+          ],
+          "hypothesis": "If tool promotion is more disciplined, useful proposed tools reach active status faster.",
+          "intended_effect": "Agents are proposing plausible tools, but too few are reaching evaluated active-tool status.",
+          "kill_signal": "Candidate does not improve active/evaluated tool usage or creates more low-EV/tool-failure backlog.",
+          "mutation_kind": "raise_tool_promotion_discipline",
+          "mutation_source": "market_evolve_metric_heuristic",
+          "parent_generation": 0,
+          "parent_program_id": "mprog_305b736b8ad24821",
+          "population_gate": {
+            "allowed": true,
+            "candidate_diversity_signature": "73158e447bd6",
+            "candidate_mutation_kind": "raise_tool_promotion_discipline",
+            "max_open_experiments_per_parent": 4,
+            "max_open_same_signature_per_parent": 1,
+            "open_experiment_count": 1,
+            "open_same_kind_count": 0,
+            "open_same_signature_count": 0,
+            "parent_program_id": "mprog_305b736b8ad24821",
+            "population_mode": "bounded_parallel",
+            "reason": "allowed",
+            "schema_version": "market_evolve_population_gate_v1"
+          },
+          "promotion_evidence_required": [
+            "matched control/candidate seed slices",
+            "multi-cycle out-of-sample candidate win",
+            "hard gates passed",
+            "no cost explosion",
+            "lineage remains human-readable"
+          ],
+          "schema_version": "market_evolve_mutation_proof_v1",
+          "source_candidate_rank": 0,
+          "source_diagnostic_codes": [],
+          "source_schema_version": "",
+          "source_shape_health": {},
+          "source_work_order_ids": [],
+          "target_metrics": {
+            "active_tool_proposal_count": 0.0,
+            "tool_activation_rate": 0.0,
+            "tool_proposal_count": 202.0
+          }
+        },
+        "mutation_target_metrics": {
+          "active_tool_proposal_count": 0.0,
+          "tool_activation_rate": 0.0,
+          "tool_proposal_count": 202.0
+        },
+        "primary_metric": "accepted_unique_high_quality_coverage_per_dollar",
+        "promotion_requires": [
+          "passes_hard_gates",
+          "beats_control_out_of_sample",
+          "multi_cycle_out_of_sample_evidence",
+          "no_cost_explosion",
+          "human_readable_lineage",
+          "evolution_proof_required"
+        ]
+      },
+      "transaction_from": "2026-05-22T17:49:57.025201+00:00",
+      "transaction_to": null,
+      "valid_from": "2026-05-22T17:49:57.025201+00:00"
+    },
+    {
+      "arms": [
+        {
+          "arm": "control",
+          "generation": 0,
+          "program_id": "mprog_305b736b8ad24821",
+          "status": "active"
+        },
+        {
+          "arm": "candidate",
+          "generation": 1,
+          "mutation_kind": "widen_source_families",
+          "program_id": "mprog_96570525068fa415",
+          "status": "candidate"
+        }
+      ],
+      "candidate_program_id": "mprog_96570525068fa415",
+      "created_at": "2026-05-22T17:42:15.588087+00:00",
+      "cycle_id": "cycle_live_scout_canary_20260522T174212Z",
+      "experiment_kind": "matched_policy_ab",
+      "id": "mexp_c547fbe4ffdf3ae6",
+      "matched_slice": {
+        "assignment": "paired_seed_clone_then_deterministic_hash",
+        "axes": [
+          "entity",
+          "horizon",
+          "lens",
+          "bias_mode",
+          "theme"
+        ],
+        "hold_constant": [
+          "entity_universe",
+          "calendar_gate",
+          "budget_per_seed",
+          "model_family"
+        ],
+        "min_seeds_per_arm": 20,
+        "pairing": {
+          "enabled": true,
+          "max_seed_budget_share": 0.12,
+          "unit_key": "entity|horizon|lens|bias_mode|theme"
+        },
+        "unit": "seed_cell"
+      },
+      "parent_program_id": "mprog_305b736b8ad24821",
+      "quality_flags": [
+        "hard_experiment_required",
+        "mutation:widen_source_families",
+        "mutation_intent_packet"
+      ],
+      "rationale": "The map is too dependent on a narrow source family; widen scout tool surfaces before scaling spend.",
+      "status": "rejected",
+      "success_criteria": {
+        "falsification_gates": [
+          {
+            "decision": "reject_or_continue_candidate",
+            "metric": "score_delta",
+            "operator": "<",
+            "threshold": 0.05
+          },
+          {
+            "decision": "reject_candidate",
+            "metric": "candidate_valid_string_rate",
+            "operator": "<",
+            "threshold": 0.6
+          },
+          {
+            "decision": "reject_candidate",
+            "metric": "candidate_accepted_unique_high_quality_coverage_per_dollar",
+            "operator": "<=",
+            "threshold": 0.0
+          }
+        ],
+        "kill_signal": "Candidate fails hard gates, loses to control out of sample, or creates cost/quality regressions.",
+        "max_avg_fragility": 0.25,
+        "max_low_ev_tool_rate": 0.25,
+        "max_tool_eval_failed_rate": 0.5,
+        "min_candidate_wins": 2,
+        "min_completed_cycles": 2,
+        "min_consecutive_candidate_wins": 2,
+        "min_score_delta": 0.05,
+        "min_source_independence": 0.45,
+        "min_valid_string_rate": 0.6,
+        "mutation_intent": {
+          "changed_paths": [
+            {
+              "after": 3,
+              "before": null,
+              "path": "tool_request_policy.min_source_families_per_trade_cell"
+            },
+            {
+              "after": true,
+              "before": null,
+              "path": "tool_request_policy.prefer_missing_source_family"
+            },
+            {
+              "after": 12,
+              "before": 10,
+              "path": "tool_request_policy.max_tool_candidates_per_seed"
+            }
+          ],
+          "falsification_gates": [
+            {
+              "decision": "reject_or_continue_candidate",
+              "metric": "score_delta",
+              "operator": "<",
+              "threshold": 0.05
+            },
+            {
+              "decision": "reject_candidate",
+              "metric": "candidate_valid_string_rate",
+              "operator": "<",
+              "threshold": 0.6
+            },
+            {
+              "decision": "reject_candidate",
+              "metric": "candidate_accepted_unique_high_quality_coverage_per_dollar",
+              "operator": "<=",
+              "threshold": 0.0
+            }
+          ],
+          "hypothesis": "If the source surface broadens, map fragility falls and cross-source confirmation improves.",
+          "intended_effect": "The map is too dependent on a narrow source family; widen scout tool surfaces before scaling spend.",
+          "kill_signal": "Candidate fails hard gates, loses to control out of sample, or creates cost/quality regressions.",
+          "mutation_kind": "widen_source_families",
+          "mutation_source": "market_evolve_metric_heuristic",
+          "parent_generation": 0,
+          "parent_program_id": "mprog_305b736b8ad24821",
+          "population_gate": {
+            "allowed": true,
+            "candidate_diversity_signature": "a780915307b2",
+            "candidate_mutation_kind": "widen_source_families",
+            "max_open_experiments_per_parent": 4,
+            "max_open_same_signature_per_parent": 1,
+            "open_experiment_count": 1,
+            "open_same_kind_count": 0,
+            "open_same_signature_count": 0,
+            "parent_program_id": "mprog_305b736b8ad24821",
+            "population_mode": "bounded_parallel",
+            "reason": "allowed",
+            "schema_version": "market_evolve_population_gate_v1"
+          },
+          "promotion_evidence_required": [
+            "matched control/candidate seed slices",
+            "multi-cycle out-of-sample candidate win",
+            "hard gates passed",
+            "no cost explosion",
+            "lineage remains human-readable"
+          ],
+          "schema_version": "market_evolve_mutation_proof_v1",
+          "source_candidate_rank": 1,
+          "source_diagnostic_codes": [
+            "source_independence_pressure"
+          ],
+          "source_schema_version": "",
+          "source_shape_health": {},
+          "source_work_order_ids": [],
+          "target_metrics": {
+            "avg_fragility": 0.0,
+            "avg_source_independence": 0.0,
+            "valid_string_rate": 0.0
+          }
+        },
+        "mutation_target_metrics": {
+          "avg_fragility": 0.0,
+          "avg_source_independence": 0.0,
+          "valid_string_rate": 0.0
+        },
+        "primary_metric": "accepted_unique_high_quality_coverage_per_dollar",
+        "promotion_requires": [
+          "passes_hard_gates",
+          "beats_control_out_of_sample",
+          "multi_cycle_out_of_sample_evidence",
+          "no_cost_explosion",
+          "human_readable_lineage",
+          "evolution_proof_required"
+        ]
+      },
+      "transaction_from": "2026-05-22T17:49:56.983774+00:00",
+      "transaction_to": null,
+      "valid_from": "2026-05-22T17:42:15.588087+00:00"
+    },
+    {
+      "arms": [
+        {
+          "arm": "control",
+          "generation": 0,
+          "program_id": "mprog_305b736b8ad24821",
+          "status": "active"
+        },
+        {
+          "arm": "candidate",
+          "generation": 1,
+          "mutation_kind": "tighten_prompt_contract",
+          "program_id": "mprog_f3702ed4079fa381",
+          "status": "candidate"
+        }
+      ],
+      "candidate_program_id": "mprog_f3702ed4079fa381",
+      "created_at": "2026-05-22T17:42:15.587245+00:00",
+      "cycle_id": "cycle_live_scout_canary_20260522T174212Z",
+      "experiment_kind": "matched_policy_ab",
+      "id": "mexp_980087d672b42582",
+      "matched_slice": {
+        "assignment": "paired_seed_clone_then_deterministic_hash",
+        "axes": [
+          "entity",
+          "horizon",
+          "lens",
+          "bias_mode",
+          "theme"
+        ],
+        "hold_constant": [
+          "entity_universe",
+          "calendar_gate",
+          "budget_per_seed",
+          "model_family"
+        ],
+        "min_seeds_per_arm": 20,
+        "pairing": {
+          "enabled": true,
+          "max_seed_budget_share": 0.12,
+          "unit_key": "entity|horizon|lens|bias_mode|theme"
+        },
+        "unit": "seed_cell"
+      },
+      "parent_program_id": "mprog_305b736b8ad24821",
+      "quality_flags": [
+        "hard_experiment_required",
+        "mutation:tighten_prompt_contract",
+        "mutation_intent_packet"
+      ],
+      "rationale": "Too few scout strings passed structural and evidence checks.",
+      "status": "planned",
+      "success_criteria": {
+        "falsification_gates": [
+          {
+            "decision": "reject_or_continue_candidate",
+            "metric": "score_delta",
+            "operator": "<",
+            "threshold": 0.05
+          },
+          {
+            "decision": "reject_candidate",
+            "metric": "candidate_valid_string_rate",
+            "operator": "<",
+            "threshold": 0.6
+          },
+          {
+            "decision": "reject_candidate",
+            "metric": "candidate_avg_prompt_quality",
+            "operator": "<=",
+            "threshold": 0.0
+          }
+        ],
+        "kill_signal": "Candidate does not improve prompt quality/pass rate or reduces valid string yield enough to lose the experiment.",
+        "max_avg_fragility": 0.25,
+        "max_low_ev_tool_rate": 0.25,
+        "max_tool_eval_failed_rate": 0.5,
+        "min_candidate_wins": 2,
+        "min_completed_cycles": 2,
+        "min_consecutive_candidate_wins": 2,
+        "min_score_delta": 0.05,
+        "min_source_independence": 0.45,
+        "min_valid_string_rate": 0.6,
+        "mutation_intent": {
+          "changed_paths": [
+            {
+              "after": true,
+              "before": true,
+              "path": "prompt_policy.require_mechanism"
+            },
+            {
+              "after": true,
+              "before": true,
+              "path": "prompt_policy.require_kill_signal"
+            },
+            {
+              "after": true,
+              "before": true,
+              "path": "prompt_policy.require_evidence_refs"
+            },
+            {
+              "after": 2,
+              "before": 1,
+              "path": "prompt_policy.min_information_strings"
+            },
+            {
+              "after": "raise",
+              "before": null,
+              "path": "prompt_policy.contract_pressure"
+            }
+          ],
+          "falsification_gates": [
+            {
+              "decision": "reject_or_continue_candidate",
+              "metric": "score_delta",
+              "operator": "<",
+              "threshold": 0.05
+            },
+            {
+              "decision": "reject_candidate",
+              "metric": "candidate_valid_string_rate",
+              "operator": "<",
+              "threshold": 0.6
+            },
+            {
+              "decision": "reject_candidate",
+              "metric": "candidate_avg_prompt_quality",
+              "operator": "<=",
+              "threshold": 0.0
+            }
+          ],
+          "hypothesis": "If the scout contract is stricter, cheap model calls emit more valid decision-changing strings per dollar.",
+          "intended_effect": "Too few scout strings passed structural and evidence checks.",
+          "kill_signal": "Candidate does not improve prompt quality/pass rate or reduces valid string yield enough to lose the experiment.",
+          "mutation_kind": "tighten_prompt_contract",
+          "mutation_source": "market_evolve_metric_heuristic",
+          "parent_generation": 0,
+          "parent_program_id": "mprog_305b736b8ad24821",
+          "population_gate": {
+            "allowed": true,
+            "candidate_diversity_signature": "0ec794652037",
+            "candidate_mutation_kind": "tighten_prompt_contract",
+            "max_open_experiments_per_parent": 4,
+            "max_open_same_signature_per_parent": 1,
+            "open_experiment_count": 0,
+            "open_same_kind_count": 0,
+            "open_same_signature_count": 0,
+            "parent_program_id": "mprog_305b736b8ad24821",
+            "population_mode": "bounded_parallel",
+            "reason": "allowed",
+            "schema_version": "market_evolve_population_gate_v1"
+          },
+          "promotion_evidence_required": [
+            "matched control/candidate seed slices",
+            "multi-cycle out-of-sample candidate win",
+            "hard gates passed",
+            "no cost explosion",
+            "lineage remains human-readable"
+          ],
+          "schema_version": "market_evolve_mutation_proof_v1",
+          "source_candidate_rank": 0,
+          "source_diagnostic_codes": [],
+          "source_schema_version": "",
+          "source_shape_health": {},
+          "source_work_order_ids": [],
+          "target_metrics": {
+            "avg_prompt_quality": 0.0,
+            "prompt_contract_failure_rate": 0.0,
+            "prompt_pass_rate": 0.0
+          }
+        },
+        "mutation_target_metrics": {
+          "avg_prompt_quality": 0.0,
+          "prompt_contract_failure_rate": 0.0,
+          "prompt_pass_rate": 0.0
+        },
+        "primary_metric": "accepted_unique_high_quality_coverage_per_dollar",
+        "promotion_requires": [
+          "passes_hard_gates",
+          "beats_control_out_of_sample",
+          "multi_cycle_out_of_sample_evidence",
+          "no_cost_explosion",
+          "human_readable_lineage",
+          "evolution_proof_required"
+        ]
+      },
+      "transaction_from": "2026-05-22T17:42:15.587245+00:00",
+      "transaction_to": null,
+      "valid_from": "2026-05-22T17:42:15.587245+00:00"
+    }
+  ],
+  "policy_application_count": 100,
+  "proof": {
+    "candidate_arm_present": true,
+    "candidate_promoted_or_continued": false,
+    "control_arm_present": true,
+    "experiment_result_evaluated": true,
+    "falsification_gates_evaluated": true,
+    "matched_seed_pairs_present": true,
+    "policy_stamped_on_seeds": true,
+    "quality_flags": [
+      "falsification_gates_evaluated:3",
+      "market_evolve_online_experiment_v1",
+      "proof_gate_failed:score_delta",
+      "proof_gate_passed:candidate_accepted_unique_high_quality_coverage_per_dollar",
+      "proof_gate_passed:candidate_valid_string_rate",
+      "proof_gate_triggered:score_delta",
+      "score_delta_below_gate"
+    ]
+  },
+  "results": [
+    {
+      "candidate_score": 0.8149,
+      "control_score": 0.8082,
+      "decision": "reject_candidate",
+      "experiment_id": "mexp_c547fbe4ffdf3ae6",
+      "falsification_gate_results": [
+        {
+          "decision": "reject_or_continue_candidate",
+          "metric": "score_delta",
+          "observed": 0.0067,
+          "operator": "<",
+          "status": "triggered",
+          "threshold": 0.05,
+          "triggered": true
+        },
+        {
+          "decision": "reject_candidate",
+          "metric": "candidate_valid_string_rate",
+          "observed": 1.0,
+          "operator": "<",
+          "status": "passed",
+          "threshold": 0.6,
+          "triggered": false
+        },
+        {
+          "decision": "reject_candidate",
+          "metric": "candidate_accepted_unique_high_quality_coverage_per_dollar",
+          "observed": 0.1254,
+          "operator": "<=",
+          "status": "passed",
+          "threshold": 0.0,
+          "triggered": false
+        }
+      ],
+      "id": "mres_f250759c102dea29",
+      "quality_flags": [
+        "falsification_gates_evaluated:3",
+        "market_evolve_online_experiment_v1",
+        "proof_gate_failed:score_delta",
+        "proof_gate_passed:candidate_accepted_unique_high_quality_coverage_per_dollar",
+        "proof_gate_passed:candidate_valid_string_rate",
+        "proof_gate_triggered:score_delta",
+        "score_delta_below_gate"
+      ],
+      "rationale": "candidate failed gates: score_delta_below_gate, proof_gate_failed:score_delta; delta=0.007",
+      "score_delta": 0.0067
+    }
+  ],
+  "schema_version": "market_evolve_hard_experiment_episode_v1",
+  "status": "evaluated"
+}

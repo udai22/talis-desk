@@ -1,43 +1,43 @@
 {
   "allowed_next_step": "live_1000_scout_ramp",
   "apply_mode": "monotonic_patch",
-  "generated_at": "2026-05-22T16:21:42.000996+00:00",
+  "generated_at": "2026-05-22T17:49:58.385260+00:00",
   "geometry_replication_targets": [
     {
-      "cell_key": "NTRN|structural|catalyst|",
+      "cell_key": "TST|structural|microstructure|",
       "route_directive": "widen_scouts",
       "source_work_order_id": "lso_geometry_replication",
-      "trade_scream_score": 0.6474
+      "trade_scream_score": 0.6798
     },
     {
-      "cell_key": "TRX|1q|microstructure|",
+      "cell_key": "NIL|intraday|polymarket|",
       "route_directive": "widen_scouts",
       "source_work_order_id": "lso_geometry_replication",
-      "trade_scream_score": 0.6254
-    },
-    {
-      "cell_key": "ILV|intraday|sentiment|",
-      "route_directive": "widen_scouts",
-      "source_work_order_id": "lso_geometry_replication",
-      "trade_scream_score": 0.6034
-    },
-    {
-      "cell_key": "KAS|1d|macro|",
-      "route_directive": "widen_scouts",
-      "source_work_order_id": "lso_geometry_replication",
-      "trade_scream_score": 0.5795
-    },
-    {
-      "cell_key": "IMX|intraday|rotation|",
-      "route_directive": "widen_scouts",
-      "source_work_order_id": "lso_geometry_replication",
-      "trade_scream_score": 0.5653
+      "trade_scream_score": 0.6441
     },
     {
       "cell_key": "MEME|1w|factor|",
       "route_directive": "widen_scouts",
       "source_work_order_id": "lso_geometry_replication",
-      "trade_scream_score": 0.595
+      "trade_scream_score": 0.6415
+    },
+    {
+      "cell_key": "ILV|intraday|sentiment|",
+      "route_directive": "widen_scouts",
+      "source_work_order_id": "lso_geometry_replication",
+      "trade_scream_score": 0.6436
+    },
+    {
+      "cell_key": "BCH|1m|on_chain|source_health_gap",
+      "route_directive": "verify_now",
+      "source_work_order_id": "lso_geometry_replication",
+      "trade_scream_score": 0.6346
+    },
+    {
+      "cell_key": "JELLY|1m|microstructure|",
+      "route_directive": "widen_scouts",
+      "source_work_order_id": "lso_geometry_replication",
+      "trade_scream_score": 0.6263
     }
   ],
   "intent": "Apply live-100 learning as a monotonic seed policy patch for the next evaluator-gated ramp.",
@@ -53,7 +53,7 @@
     "min_pairs_for_100_plus_scouts": 20,
     "promote_only_on_evaluator_positive_delta": true
   },
-  "policy_id": "lrp_cycle_live100_20260522_live_100_100",
+  "policy_id": "lrp_cycle_live_scout_canary_20260522t174212z_100",
   "prompt_repair_modes": [
     "hypothesis_string_consistency",
     "gap_string_instead_of_empty",
@@ -110,7 +110,7 @@
     "tool_candidate_limit_min": 12
   },
   "source": "live_scout_learning_report",
-  "source_cycle_id": "cycle_live100_20260522_live_100",
+  "source_cycle_id": "cycle_live_scout_canary_20260522T174212Z",
   "watch_metrics": [
     "accepted_unique_high_quality_coverage_per_dollar_delta",
     "empty_hypothesis_with_strings_rate",

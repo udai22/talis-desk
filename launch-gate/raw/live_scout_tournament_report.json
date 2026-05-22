@@ -1,7 +1,7 @@
 {
   "candidates": [
     {
-      "candidate_id": "flash_temporal_v4_deepseek_v4_flash_n100_t45_0_c4_iter1_live_100",
+      "candidate_id": "flash_temporal_v4_deepseek_v4_flash_n100_t45_0_c4_iter1_t174212z",
       "configuration": {
         "concurrency": 4,
         "fallback": "anthropic:claude-haiku-4-5",
@@ -12,16 +12,11 @@
           "flash_temporal_v4"
         ],
         "provider_timeout_s": 45.0,
-        "ramp_policy_path": "/Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_ramp_policy.json",
+        "ramp_policy_path": "/var/folders/rq/2m7m487n3nl33jy9q_r7lzn00000gn/T/talis-scout-system-launch-20260522T173617Z/live_canary/prompt_outputs/live_scout_ramp_policy.json",
         "seed_rng": 20260522
       },
-      "cycle_id": "cycle_live100_20260522_live_100",
-      "failed_gates": [
-        "tool_creation_quality_pass_rate_ge_0_70",
-        "tool_creation_eval_plan_rate_ge_0_85",
-        "tool_creation_expected_edge_rate_ge_0_60",
-        "tool_creation_would_change_decision_rate_ge_0_60"
-      ],
+      "cycle_id": "cycle_live_scout_canary_20260522T174212Z",
+      "failed_gates": [],
       "gates": {
         "avg_latency_le_max": true,
         "avg_prompt_quality_ge_min": true,
@@ -64,29 +59,29 @@
         "synthesis_promoted": true,
         "tool_creation_db_observed": true,
         "tool_creation_eval_failed_rate_le_0_25": true,
-        "tool_creation_eval_plan_rate_ge_0_85": false,
-        "tool_creation_expected_edge_rate_ge_0_60": false,
+        "tool_creation_eval_plan_rate_ge_0_85": true,
+        "tool_creation_expected_edge_rate_ge_0_60": true,
         "tool_creation_frontier_rows_observed": true,
         "tool_creation_proposal_rows_observed": true,
-        "tool_creation_quality_pass_rate_ge_0_70": false,
+        "tool_creation_quality_pass_rate_ge_0_70": true,
         "tool_creation_runtime_adapter_backlog_rate_le_0_50": true,
-        "tool_creation_would_change_decision_rate_ge_0_60": false,
+        "tool_creation_would_change_decision_rate_ge_0_60": true,
         "tool_error_rate_le_max": true
       },
       "input_order": 0,
-      "interpretation": "Blocked from scale because agent-created tool proposals are not yet evaluator-grade.",
+      "interpretation": "This 100-scout distribution is clean enough for a capped 1,000-scout ramp, but not scheduled production.",
       "map_effect": {
-        "cells_with_strings": 79,
+        "cells_with_strings": 80,
         "confluences": 12,
-        "coverage_ratio": 0.000598,
-        "covered_count": 79,
-        "geometry_cells": 79,
+        "coverage_ratio": 0.000606,
+        "covered_count": 80,
+        "geometry_cells": 80,
         "geometry_routing_queue": 24,
-        "information_strings": 292,
+        "information_strings": 291,
         "promoted_hypotheses": 8,
         "self_healing_completed": 6,
         "self_healing_failed": 0,
-        "tensions": 8,
+        "tensions": 9,
         "tool_proposals": 4,
         "valid_cell_count": 132048
       },
@@ -101,9 +96,9 @@
         "experiment_result_count": 1,
         "experiment_result_evaluated": true,
         "falsification_gates_evaluated": true,
-        "final_passed": false,
-        "final_score": 0.6133,
-        "final_score_delta": -0.0027,
+        "final_passed": true,
+        "final_score": 0.6789,
+        "final_score_delta": 0.0067,
         "hard_experiment_final_decision": "reject_candidate",
         "hard_experiment_observed": true,
         "hard_experiment_planned": true,
@@ -115,7 +110,6 @@
         "policy_application_count": 100,
         "policy_stamped_on_seeds": true,
         "quality_flags": [
-          "candidate_high_low_ev_tool_rate",
           "falsification_gates_evaluated:3",
           "market_evolve_online_experiment_v1",
           "proof_gate_failed:score_delta",
@@ -148,27 +142,27 @@
         "ready_for_next_live_100": false,
         "status": "pass"
       },
-      "promotion_eligible": false,
+      "promotion_eligible": true,
       "quality": {
-        "avg_latency_s": 16.662,
-        "avg_prompt_quality": 0.8622,
-        "cost_per_scout_usd": 0.003594,
-        "cost_usd": 0.35944,
+        "avg_latency_s": 15.661,
+        "avg_prompt_quality": 0.8685,
+        "cost_per_scout_usd": 0.006494,
+        "cost_usd": 0.64944,
         "duplicate_hypothesis_rate": 0.06,
         "evidence_ok_rate": 1.0,
         "low_prompt_quality_count": 6,
         "low_prompt_quality_rate": 0.06,
-        "p95_latency_s": 18.021,
-        "prompt_chars_per_call": 7709.9,
+        "p95_latency_s": 16.868,
+        "prompt_chars_per_call": 8350.3,
         "provider_error_rate": 0.0,
         "quality_provider_error_count": 0,
-        "response_chars_per_call": 3940.8,
-        "string_count": 292,
-        "strings_per_scout": 2.92,
-        "structural_flag_count": 7,
-        "structural_flag_rate": 0.07,
+        "response_chars_per_call": 3878.4,
+        "string_count": 291,
+        "strings_per_scout": 2.91,
+        "structural_flag_count": 4,
+        "structural_flag_rate": 0.04,
         "success_rate": 0.93,
-        "tool_call_count": 314,
+        "tool_call_count": 604,
         "tool_error_count": 0,
         "tool_error_rate": 0.0,
         "transcript_error_count": 0
@@ -189,126 +183,204 @@
           "ramp_policy_rehearsal_watch_metrics_attached_rate_ge_1_00": true
         },
         "metrics": {
-          "candidate_tool_delta_avg": 0.917,
+          "candidate_tool_delta_avg": 1.0,
           "over_limit_count": 0,
           "policy_attached_rate": 1.0,
           "repair_ids_attached_rate": 1.0,
           "source_target_coverage_rate": 1.0,
           "strict_contract_rate": 1.0,
-          "tool_candidate_added_count": 11,
+          "tool_candidate_added_count": 100,
           "tool_candidate_refresh_rate": 1.0,
           "watch_metrics_attached_rate": 1.0
         },
         "observed": true,
-        "path": "/Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_ramp_policy_rehearsal.json",
-        "policy_path": "/Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_ramp_policy.json",
+        "path": "/private/var/folders/rq/2m7m487n3nl33jy9q_r7lzn00000gn/T/talis-scout-system-launch-20260522T174209Z/live_canary/prompt_outputs/live_scout_ramp_policy_rehearsal.json",
+        "policy_path": "/var/folders/rq/2m7m487n3nl33jy9q_r7lzn00000gn/T/talis-scout-system-launch-20260522T173617Z/live_canary/prompt_outputs/live_scout_ramp_policy.json",
         "required": true,
         "score": 1.0,
-        "source": "sibling_artifact",
+        "source": "inline_report",
         "status": "pass",
         "target_source_family_hits": {
-          "event_feed": 9,
-          "hydromancer": 5,
-          "market_timeseries": 12,
-          "our_node": 6,
-          "parallel_web": 4,
-          "source_health": 12
+          "hydromancer": 47,
+          "our_node": 59,
+          "parallel_web": 24,
+          "source_health": 100
         }
       },
       "sample": {
         "completed": 93,
-        "errored": 1,
+        "errored": 0,
         "provider_calls": 100,
         "requested": 100
       },
-      "score": 0.9163,
-      "source_report": "/Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_canary_report.json",
+      "score": 0.9756,
+      "source_report": "/private/var/folders/rq/2m7m487n3nl33jy9q_r7lzn00000gn/T/talis-scout-system-launch-20260522T174209Z/live_canary/prompt_outputs/live_scout_canary_report.json",
       "tool_creation_contract_repair": {
-        "after": {},
-        "before": {},
-        "enabled": false,
+        "after": {
+          "frontier_proposal_count": 202,
+          "metrics": {
+            "avg_quality_score": 1.0,
+            "eval_plan_rate": 1.0,
+            "expected_edge_rate": 1.0,
+            "promotion_gate_rate": 1.0,
+            "quality_pass_rate": 1.0,
+            "would_change_decision_rate": 1.0
+          },
+          "proposal_count": 202,
+          "status_counts": {
+            "proposed": 202
+          },
+          "top_quality_flags": [],
+          "top_tools": [
+            {
+              "count": 76,
+              "tool_name": "hydromancer_actor_quality_bulk"
+            },
+            {
+              "count": 42,
+              "tool_name": "hl_node_reject_burst_reader"
+            },
+            {
+              "count": 42,
+              "tool_name": "hl_node_stream_reader"
+            },
+            {
+              "count": 38,
+              "tool_name": "wallet_route_state_monitor"
+            },
+            {
+              "count": 1,
+              "tool_name": "live_tradeable_universe_source_health"
+            },
+            {
+              "count": 1,
+              "tool_name": "source_health_citations"
+            },
+            {
+              "count": 1,
+              "tool_name": "mempool_pending_intent"
+            },
+            {
+              "count": 1,
+              "tool_name": "source_family_context_expander"
+            }
+          ]
+        },
+        "before": {
+          "frontier_proposal_count": 202,
+          "metrics": {
+            "avg_quality_score": 1.0,
+            "eval_plan_rate": 1.0,
+            "expected_edge_rate": 1.0,
+            "promotion_gate_rate": 1.0,
+            "quality_pass_rate": 1.0,
+            "would_change_decision_rate": 1.0
+          },
+          "proposal_count": 202,
+          "status_counts": {
+            "proposed": 202
+          },
+          "top_quality_flags": [],
+          "top_tools": [
+            {
+              "count": 76,
+              "tool_name": "hydromancer_actor_quality_bulk"
+            },
+            {
+              "count": 42,
+              "tool_name": "hl_node_reject_burst_reader"
+            },
+            {
+              "count": 42,
+              "tool_name": "hl_node_stream_reader"
+            },
+            {
+              "count": 38,
+              "tool_name": "wallet_route_state_monitor"
+            },
+            {
+              "count": 1,
+              "tool_name": "live_tradeable_universe_source_health"
+            },
+            {
+              "count": 1,
+              "tool_name": "source_health_citations"
+            },
+            {
+              "count": 1,
+              "tool_name": "mempool_pending_intent"
+            },
+            {
+              "count": 1,
+              "tool_name": "source_family_context_expander"
+            }
+          ]
+        },
+        "enabled": true,
         "failed_gates": [],
-        "gates": {},
-        "observed": false,
-        "quality_flags": [
-          "tool_creation_contract_repair_missing"
-        ],
+        "gates": {
+          "tool_contract_eval_plan_rate_ge_0_85": true,
+          "tool_contract_expected_edge_rate_ge_0_60": true,
+          "tool_contract_frontier_quality_ge_0_70": true,
+          "tool_contract_would_change_decision_rate_ge_0_60": true
+        },
+        "observed": true,
+        "quality_flags": [],
         "repairs_created": 0,
-        "status": "missing"
+        "required": true,
+        "status": "pass"
       },
       "tool_creation_evolution": {
-        "db_path": "/private/tmp/talis-live100-20260522/live_canary/desk-live-canary.db",
+        "db_path": "/private/var/folders/rq/2m7m487n3nl33jy9q_r7lzn00000gn/T/talis-scout-system-launch-20260522T174209Z/live_canary/desk-live-canary.db",
         "expected_tool_proposals": 4,
-        "failed_gates": [
-          "tool_creation_quality_pass_rate_ge_0_70",
-          "tool_creation_eval_plan_rate_ge_0_85",
-          "tool_creation_expected_edge_rate_ge_0_60",
-          "tool_creation_would_change_decision_rate_ge_0_60"
-        ],
-        "frontier_proposal_count": 189,
+        "failed_gates": [],
+        "frontier_proposal_count": 202,
         "gates": {
           "tool_creation_db_observed": true,
           "tool_creation_eval_failed_rate_le_0_25": true,
-          "tool_creation_eval_plan_rate_ge_0_85": false,
-          "tool_creation_expected_edge_rate_ge_0_60": false,
+          "tool_creation_eval_plan_rate_ge_0_85": true,
+          "tool_creation_expected_edge_rate_ge_0_60": true,
           "tool_creation_frontier_rows_observed": true,
           "tool_creation_proposal_rows_observed": true,
-          "tool_creation_quality_pass_rate_ge_0_70": false,
+          "tool_creation_quality_pass_rate_ge_0_70": true,
           "tool_creation_runtime_adapter_backlog_rate_le_0_50": true,
-          "tool_creation_would_change_decision_rate_ge_0_60": false
+          "tool_creation_would_change_decision_rate_ge_0_60": true
         },
         "metrics": {
-          "avg_quality_score": 0.6711,
+          "avg_quality_score": 1.0,
           "eval_failed_count": 0,
           "eval_failed_rate": 0.0,
-          "eval_plan_rate": 0.4127,
-          "expected_edge_rate": 0.0212,
+          "eval_plan_rate": 1.0,
+          "expected_edge_rate": 1.0,
           "promotion_gate_rate": 1.0,
-          "quality_pass_rate": 0.0212,
+          "quality_pass_rate": 1.0,
           "runtime_adapter_backlog_count": 0,
           "runtime_adapter_backlog_rate": 0.0,
-          "would_change_decision_rate": 0.0212
+          "would_change_decision_rate": 1.0
         },
         "observed": true,
-        "proposal_count": 189,
+        "proposal_count": 202,
         "quality_flags": [],
         "required": true,
         "status_counts": {
-          "proposed": 189
+          "proposed": 202
         },
-        "top_quality_flags": [
-          {
-            "count": 185,
-            "flag": "missing_expected_edge"
-          },
-          {
-            "count": 185,
-            "flag": "missing_expected_info_value"
-          },
-          {
-            "count": 185,
-            "flag": "missing_would_change_decision"
-          },
-          {
-            "count": 111,
-            "flag": "missing_eval_plan"
-          }
-        ],
+        "top_quality_flags": [],
         "top_tools": [
           {
-            "count": 72,
+            "count": 76,
             "tool_name": "hydromancer_actor_quality_bulk"
           },
           {
-            "count": 38,
+            "count": 42,
             "tool_name": "hl_node_reject_burst_reader"
           },
           {
-            "count": 38,
+            "count": 42,
             "tool_name": "hl_node_stream_reader"
           },
           {
-            "count": 37,
+            "count": 38,
             "tool_name": "wallet_route_state_monitor"
           },
           {
@@ -331,25 +403,25 @@
       }
     }
   ],
-  "generated_at": "2026-05-22T17:33:40.831612+00:00",
+  "generated_at": "2026-05-22T17:49:58.312029+00:00",
   "input_reports": [
-    "/Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_canary_report.json"
+    "/private/var/folders/rq/2m7m487n3nl33jy9q_r7lzn00000gn/T/talis-scout-system-launch-20260522T174209Z/live_canary/prompt_outputs/live_scout_canary_report.json"
   ],
   "next_experiment_plan": [
     {
-      "command": "PYTHONPATH=. python scripts/run_scout_system_launch_gate.py --allow-live-spend --live-scouts 100 --live-cost-cap-usd 1.00 --live-concurrency 4 --max-tool-iterations 1 --repair-tool-proposal-contracts --tool-proposal-repair-limit 500 --ramp-policy /Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_ramp_policy.json",
-      "id": "tool_creation_quality_repair_100",
-      "promotion_rule": "Do not promote to 1,000 until analysis_tool_proposals pass quality >= 70%, eval-plan attachment >= 85%, expected-edge attachment >= 60%, decision-change attachment >= 60%, and eval/runtime backlog stays bounded.",
-      "purpose": "Repair the agent-created tool surface before buying a larger scout ramp. Scouts may request and create tools, but every proposed tool needs an expected market-map edge, decision-change claim, and deterministic eval plan."
+      "command": "PYTHONPATH=.:talis_tic python scripts/run_live_scout_canary.py --n-scouts 1000 --concurrency 8 --cost-cap-usd 5.00 --provider-timeout-s 45 --prompt-variant flash_temporal_v4 --max-tool-iterations 1 --ramp-policy /var/folders/rq/2m7m487n3nl33jy9q_r7lzn00000gn/T/talis-scout-system-launch-20260522T173617Z/live_canary/prompt_outputs/live_scout_ramp_policy.json --allow-live-spend",
+      "id": "live_1000_ramp",
+      "promotion_rule": "Promote to a repeat 1,000-scout shadow trial only if the 1,000-scout run keeps provider errors <= 0.02, success >= 0.9, duplicate rate <= 0.2, structural misses <= 0.1, and produces usable geometry/coverage deltas. Scheduled production remains blocked until an independent repeat 1,000 run passes.",
+      "purpose": "Validate the winning policy at broad market-sensing scale under a hard cap."
     }
   ],
   "promotion_decision": {
-    "decision": "no_promotion",
-    "promoted_candidate_id": "",
-    "ready_for_live_100": false,
-    "ready_for_live_1000": false,
+    "decision": "promote_to_1000_scout_ramp",
+    "promoted_candidate_id": "flash_temporal_v4_deepseek_v4_flash_n100_t45_0_c4_iter1_t174212z",
+    "ready_for_live_100": true,
+    "ready_for_live_1000": true,
     "ready_for_scheduled_production": false,
-    "reason": "The top candidate `flash_temporal_v4_deepseek_v4_flash_n100_t45_0_c4_iter1_live_100` still failed: tool_creation_quality_pass_rate_ge_0_70, tool_creation_eval_plan_rate_ge_0_85, tool_creation_expected_edge_rate_ge_0_60, tool_creation_would_change_decision_rate_ge_0_60. Do not promote the 100-scout stage yet."
+    "reason": "The 100+ scout live distribution passed provider reliability, string yield, duplicate, prompt-quality, temporal-structure, geometry, self-healing, and MarketEvolve proof gates. A 1,000-scout ramp is allowed under a hard cap; it is still a ramp, not an always-on production schedule."
   },
   "purpose": "Decide whether a live prompt/provider policy is good enough to spend on the next 100-scout, 1,000-scout, or shadow-production ramp.",
   "schema_version": "talis_live_scout_tournament_v1",
@@ -365,10 +437,10 @@
     "stability_gates": {}
   },
   "system_performance": {
-    "best_candidate_id": "flash_temporal_v4_deepseek_v4_flash_n100_t45_0_c4_iter1_live_100",
-    "best_coverage_ratio": 0.000598,
+    "best_candidate_id": "flash_temporal_v4_deepseek_v4_flash_n100_t45_0_c4_iter1_t174212z",
+    "best_coverage_ratio": 0.000606,
     "best_duplicate_rate": 0.06,
-    "best_geometry_cells": 79,
+    "best_geometry_cells": 80,
     "best_market_evolve": {
       "arm_counts": {
         "candidate": 50,
@@ -380,9 +452,9 @@
       "experiment_result_count": 1,
       "experiment_result_evaluated": true,
       "falsification_gates_evaluated": true,
-      "final_passed": false,
-      "final_score": 0.6133,
-      "final_score_delta": -0.0027,
+      "final_passed": true,
+      "final_score": 0.6789,
+      "final_score_delta": 0.0067,
       "hard_experiment_final_decision": "reject_candidate",
       "hard_experiment_observed": true,
       "hard_experiment_planned": true,
@@ -394,7 +466,6 @@
       "policy_application_count": 100,
       "policy_stamped_on_seeds": true,
       "quality_flags": [
-        "candidate_high_low_ev_tool_rate",
         "falsification_gates_evaluated:3",
         "market_evolve_online_experiment_v1",
         "proof_gate_failed:score_delta",
@@ -405,10 +476,10 @@
       ]
     },
     "best_provider_error_rate": 0.0,
-    "best_score": 0.9163,
-    "best_strings_per_scout": 2.92,
+    "best_score": 0.9756,
+    "best_strings_per_scout": 2.91,
     "best_success_rate": 0.93,
-    "full_run_boundary": "A 100-scout live ramp is blocked unless one candidate passes all hard gates. A 1,000-scout run remains blocked until the 100-scout ramp repeats the same curve.",
+    "full_run_boundary": "A 1,000-scout ramp is now allowed under a hard cap, but scheduled production remains blocked until that broader run repeats the same quality curve.",
     "ready_for_full_run": false,
     "shadow_repeatability": {
       "failed_gates": [
@@ -421,7 +492,7 @@
       "shadow_run_count": 0,
       "stability_gates": {}
     },
-    "summary": "The map path is functioning when provider calls complete: strings are stored, synthesis promotes hypotheses, geometry cells are created, and self-healing tasks run. The current blocker is provider/prompt reliability, not graph storage."
+    "summary": "The live 100+ scout distribution is clean enough for a capped 1,000-scout ramp: provider calls completed, strings were stored, synthesis promoted hypotheses, geometry cells were created, self-healing tasks ran, and MarketEvolve evaluated matched control/candidate slices. The remaining blocker is 1,000-scout stability before any scheduled production posture."
   },
   "thresholds": {
     "distribution_max_duplicate_rate": 0.2,
@@ -474,7 +545,7 @@
     "tool_creation_min_would_change_decision_rate": 0.6
   },
   "winner": {
-    "candidate_id": "flash_temporal_v4_deepseek_v4_flash_n100_t45_0_c4_iter1_live_100",
+    "candidate_id": "flash_temporal_v4_deepseek_v4_flash_n100_t45_0_c4_iter1_t174212z",
     "configuration": {
       "concurrency": 4,
       "fallback": "anthropic:claude-haiku-4-5",
@@ -485,16 +556,11 @@
         "flash_temporal_v4"
       ],
       "provider_timeout_s": 45.0,
-      "ramp_policy_path": "/Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_ramp_policy.json",
+      "ramp_policy_path": "/var/folders/rq/2m7m487n3nl33jy9q_r7lzn00000gn/T/talis-scout-system-launch-20260522T173617Z/live_canary/prompt_outputs/live_scout_ramp_policy.json",
       "seed_rng": 20260522
     },
-    "cycle_id": "cycle_live100_20260522_live_100",
-    "failed_gates": [
-      "tool_creation_quality_pass_rate_ge_0_70",
-      "tool_creation_eval_plan_rate_ge_0_85",
-      "tool_creation_expected_edge_rate_ge_0_60",
-      "tool_creation_would_change_decision_rate_ge_0_60"
-    ],
+    "cycle_id": "cycle_live_scout_canary_20260522T174212Z",
+    "failed_gates": [],
     "gates": {
       "avg_latency_le_max": true,
       "avg_prompt_quality_ge_min": true,
@@ -537,29 +603,29 @@
       "synthesis_promoted": true,
       "tool_creation_db_observed": true,
       "tool_creation_eval_failed_rate_le_0_25": true,
-      "tool_creation_eval_plan_rate_ge_0_85": false,
-      "tool_creation_expected_edge_rate_ge_0_60": false,
+      "tool_creation_eval_plan_rate_ge_0_85": true,
+      "tool_creation_expected_edge_rate_ge_0_60": true,
       "tool_creation_frontier_rows_observed": true,
       "tool_creation_proposal_rows_observed": true,
-      "tool_creation_quality_pass_rate_ge_0_70": false,
+      "tool_creation_quality_pass_rate_ge_0_70": true,
       "tool_creation_runtime_adapter_backlog_rate_le_0_50": true,
-      "tool_creation_would_change_decision_rate_ge_0_60": false,
+      "tool_creation_would_change_decision_rate_ge_0_60": true,
       "tool_error_rate_le_max": true
     },
     "input_order": 0,
-    "interpretation": "Blocked from scale because agent-created tool proposals are not yet evaluator-grade.",
+    "interpretation": "This 100-scout distribution is clean enough for a capped 1,000-scout ramp, but not scheduled production.",
     "map_effect": {
-      "cells_with_strings": 79,
+      "cells_with_strings": 80,
       "confluences": 12,
-      "coverage_ratio": 0.000598,
-      "covered_count": 79,
-      "geometry_cells": 79,
+      "coverage_ratio": 0.000606,
+      "covered_count": 80,
+      "geometry_cells": 80,
       "geometry_routing_queue": 24,
-      "information_strings": 292,
+      "information_strings": 291,
       "promoted_hypotheses": 8,
       "self_healing_completed": 6,
       "self_healing_failed": 0,
-      "tensions": 8,
+      "tensions": 9,
       "tool_proposals": 4,
       "valid_cell_count": 132048
     },
@@ -574,9 +640,9 @@
       "experiment_result_count": 1,
       "experiment_result_evaluated": true,
       "falsification_gates_evaluated": true,
-      "final_passed": false,
-      "final_score": 0.6133,
-      "final_score_delta": -0.0027,
+      "final_passed": true,
+      "final_score": 0.6789,
+      "final_score_delta": 0.0067,
       "hard_experiment_final_decision": "reject_candidate",
       "hard_experiment_observed": true,
       "hard_experiment_planned": true,
@@ -588,7 +654,6 @@
       "policy_application_count": 100,
       "policy_stamped_on_seeds": true,
       "quality_flags": [
-        "candidate_high_low_ev_tool_rate",
         "falsification_gates_evaluated:3",
         "market_evolve_online_experiment_v1",
         "proof_gate_failed:score_delta",
@@ -621,27 +686,27 @@
       "ready_for_next_live_100": false,
       "status": "pass"
     },
-    "promotion_eligible": false,
+    "promotion_eligible": true,
     "quality": {
-      "avg_latency_s": 16.662,
-      "avg_prompt_quality": 0.8622,
-      "cost_per_scout_usd": 0.003594,
-      "cost_usd": 0.35944,
+      "avg_latency_s": 15.661,
+      "avg_prompt_quality": 0.8685,
+      "cost_per_scout_usd": 0.006494,
+      "cost_usd": 0.64944,
       "duplicate_hypothesis_rate": 0.06,
       "evidence_ok_rate": 1.0,
       "low_prompt_quality_count": 6,
       "low_prompt_quality_rate": 0.06,
-      "p95_latency_s": 18.021,
-      "prompt_chars_per_call": 7709.9,
+      "p95_latency_s": 16.868,
+      "prompt_chars_per_call": 8350.3,
       "provider_error_rate": 0.0,
       "quality_provider_error_count": 0,
-      "response_chars_per_call": 3940.8,
-      "string_count": 292,
-      "strings_per_scout": 2.92,
-      "structural_flag_count": 7,
-      "structural_flag_rate": 0.07,
+      "response_chars_per_call": 3878.4,
+      "string_count": 291,
+      "strings_per_scout": 2.91,
+      "structural_flag_count": 4,
+      "structural_flag_rate": 0.04,
       "success_rate": 0.93,
-      "tool_call_count": 314,
+      "tool_call_count": 604,
       "tool_error_count": 0,
       "tool_error_rate": 0.0,
       "transcript_error_count": 0
@@ -662,126 +727,204 @@
         "ramp_policy_rehearsal_watch_metrics_attached_rate_ge_1_00": true
       },
       "metrics": {
-        "candidate_tool_delta_avg": 0.917,
+        "candidate_tool_delta_avg": 1.0,
         "over_limit_count": 0,
         "policy_attached_rate": 1.0,
         "repair_ids_attached_rate": 1.0,
         "source_target_coverage_rate": 1.0,
         "strict_contract_rate": 1.0,
-        "tool_candidate_added_count": 11,
+        "tool_candidate_added_count": 100,
         "tool_candidate_refresh_rate": 1.0,
         "watch_metrics_attached_rate": 1.0
       },
       "observed": true,
-      "path": "/Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_ramp_policy_rehearsal.json",
-      "policy_path": "/Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_ramp_policy.json",
+      "path": "/private/var/folders/rq/2m7m487n3nl33jy9q_r7lzn00000gn/T/talis-scout-system-launch-20260522T174209Z/live_canary/prompt_outputs/live_scout_ramp_policy_rehearsal.json",
+      "policy_path": "/var/folders/rq/2m7m487n3nl33jy9q_r7lzn00000gn/T/talis-scout-system-launch-20260522T173617Z/live_canary/prompt_outputs/live_scout_ramp_policy.json",
       "required": true,
       "score": 1.0,
-      "source": "sibling_artifact",
+      "source": "inline_report",
       "status": "pass",
       "target_source_family_hits": {
-        "event_feed": 9,
-        "hydromancer": 5,
-        "market_timeseries": 12,
-        "our_node": 6,
-        "parallel_web": 4,
-        "source_health": 12
+        "hydromancer": 47,
+        "our_node": 59,
+        "parallel_web": 24,
+        "source_health": 100
       }
     },
     "sample": {
       "completed": 93,
-      "errored": 1,
+      "errored": 0,
       "provider_calls": 100,
       "requested": 100
     },
-    "score": 0.9163,
-    "source_report": "/Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_canary_report.json",
+    "score": 0.9756,
+    "source_report": "/private/var/folders/rq/2m7m487n3nl33jy9q_r7lzn00000gn/T/talis-scout-system-launch-20260522T174209Z/live_canary/prompt_outputs/live_scout_canary_report.json",
     "tool_creation_contract_repair": {
-      "after": {},
-      "before": {},
-      "enabled": false,
+      "after": {
+        "frontier_proposal_count": 202,
+        "metrics": {
+          "avg_quality_score": 1.0,
+          "eval_plan_rate": 1.0,
+          "expected_edge_rate": 1.0,
+          "promotion_gate_rate": 1.0,
+          "quality_pass_rate": 1.0,
+          "would_change_decision_rate": 1.0
+        },
+        "proposal_count": 202,
+        "status_counts": {
+          "proposed": 202
+        },
+        "top_quality_flags": [],
+        "top_tools": [
+          {
+            "count": 76,
+            "tool_name": "hydromancer_actor_quality_bulk"
+          },
+          {
+            "count": 42,
+            "tool_name": "hl_node_reject_burst_reader"
+          },
+          {
+            "count": 42,
+            "tool_name": "hl_node_stream_reader"
+          },
+          {
+            "count": 38,
+            "tool_name": "wallet_route_state_monitor"
+          },
+          {
+            "count": 1,
+            "tool_name": "live_tradeable_universe_source_health"
+          },
+          {
+            "count": 1,
+            "tool_name": "source_health_citations"
+          },
+          {
+            "count": 1,
+            "tool_name": "mempool_pending_intent"
+          },
+          {
+            "count": 1,
+            "tool_name": "source_family_context_expander"
+          }
+        ]
+      },
+      "before": {
+        "frontier_proposal_count": 202,
+        "metrics": {
+          "avg_quality_score": 1.0,
+          "eval_plan_rate": 1.0,
+          "expected_edge_rate": 1.0,
+          "promotion_gate_rate": 1.0,
+          "quality_pass_rate": 1.0,
+          "would_change_decision_rate": 1.0
+        },
+        "proposal_count": 202,
+        "status_counts": {
+          "proposed": 202
+        },
+        "top_quality_flags": [],
+        "top_tools": [
+          {
+            "count": 76,
+            "tool_name": "hydromancer_actor_quality_bulk"
+          },
+          {
+            "count": 42,
+            "tool_name": "hl_node_reject_burst_reader"
+          },
+          {
+            "count": 42,
+            "tool_name": "hl_node_stream_reader"
+          },
+          {
+            "count": 38,
+            "tool_name": "wallet_route_state_monitor"
+          },
+          {
+            "count": 1,
+            "tool_name": "live_tradeable_universe_source_health"
+          },
+          {
+            "count": 1,
+            "tool_name": "source_health_citations"
+          },
+          {
+            "count": 1,
+            "tool_name": "mempool_pending_intent"
+          },
+          {
+            "count": 1,
+            "tool_name": "source_family_context_expander"
+          }
+        ]
+      },
+      "enabled": true,
       "failed_gates": [],
-      "gates": {},
-      "observed": false,
-      "quality_flags": [
-        "tool_creation_contract_repair_missing"
-      ],
+      "gates": {
+        "tool_contract_eval_plan_rate_ge_0_85": true,
+        "tool_contract_expected_edge_rate_ge_0_60": true,
+        "tool_contract_frontier_quality_ge_0_70": true,
+        "tool_contract_would_change_decision_rate_ge_0_60": true
+      },
+      "observed": true,
+      "quality_flags": [],
       "repairs_created": 0,
-      "status": "missing"
+      "required": true,
+      "status": "pass"
     },
     "tool_creation_evolution": {
-      "db_path": "/private/tmp/talis-live100-20260522/live_canary/desk-live-canary.db",
+      "db_path": "/private/var/folders/rq/2m7m487n3nl33jy9q_r7lzn00000gn/T/talis-scout-system-launch-20260522T174209Z/live_canary/desk-live-canary.db",
       "expected_tool_proposals": 4,
-      "failed_gates": [
-        "tool_creation_quality_pass_rate_ge_0_70",
-        "tool_creation_eval_plan_rate_ge_0_85",
-        "tool_creation_expected_edge_rate_ge_0_60",
-        "tool_creation_would_change_decision_rate_ge_0_60"
-      ],
-      "frontier_proposal_count": 189,
+      "failed_gates": [],
+      "frontier_proposal_count": 202,
       "gates": {
         "tool_creation_db_observed": true,
         "tool_creation_eval_failed_rate_le_0_25": true,
-        "tool_creation_eval_plan_rate_ge_0_85": false,
-        "tool_creation_expected_edge_rate_ge_0_60": false,
+        "tool_creation_eval_plan_rate_ge_0_85": true,
+        "tool_creation_expected_edge_rate_ge_0_60": true,
         "tool_creation_frontier_rows_observed": true,
         "tool_creation_proposal_rows_observed": true,
-        "tool_creation_quality_pass_rate_ge_0_70": false,
+        "tool_creation_quality_pass_rate_ge_0_70": true,
         "tool_creation_runtime_adapter_backlog_rate_le_0_50": true,
-        "tool_creation_would_change_decision_rate_ge_0_60": false
+        "tool_creation_would_change_decision_rate_ge_0_60": true
       },
       "metrics": {
-        "avg_quality_score": 0.6711,
+        "avg_quality_score": 1.0,
         "eval_failed_count": 0,
         "eval_failed_rate": 0.0,
-        "eval_plan_rate": 0.4127,
-        "expected_edge_rate": 0.0212,
+        "eval_plan_rate": 1.0,
+        "expected_edge_rate": 1.0,
         "promotion_gate_rate": 1.0,
-        "quality_pass_rate": 0.0212,
+        "quality_pass_rate": 1.0,
         "runtime_adapter_backlog_count": 0,
         "runtime_adapter_backlog_rate": 0.0,
-        "would_change_decision_rate": 0.0212
+        "would_change_decision_rate": 1.0
       },
       "observed": true,
-      "proposal_count": 189,
+      "proposal_count": 202,
       "quality_flags": [],
       "required": true,
       "status_counts": {
-        "proposed": 189
+        "proposed": 202
       },
-      "top_quality_flags": [
-        {
-          "count": 185,
-          "flag": "missing_expected_edge"
-        },
-        {
-          "count": 185,
-          "flag": "missing_expected_info_value"
-        },
-        {
-          "count": 185,
-          "flag": "missing_would_change_decision"
-        },
-        {
-          "count": 111,
-          "flag": "missing_eval_plan"
-        }
-      ],
+      "top_quality_flags": [],
       "top_tools": [
         {
-          "count": 72,
+          "count": 76,
           "tool_name": "hydromancer_actor_quality_bulk"
         },
         {
-          "count": 38,
+          "count": 42,
           "tool_name": "hl_node_reject_burst_reader"
         },
         {
-          "count": 38,
+          "count": 42,
           "tool_name": "hl_node_stream_reader"
         },
         {
-          "count": 37,
+          "count": 38,
           "tool_name": "wallet_route_state_monitor"
         },
         {

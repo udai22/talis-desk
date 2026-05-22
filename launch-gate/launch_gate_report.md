@@ -1,9 +1,9 @@
 # Scout System Launch Gate
 
-- status: `blocked_by_tournament`
-- allowed_next_step: `tool_creation_quality_repair_100`
-- human_authorization_required: `False`
-- reason: The live tournament blocked promotion. Repair the failed gates before increasing scout spend.
+- status: `ready_for_live_1000_ramp`
+- allowed_next_step: `live_1000_scout_ramp`
+- human_authorization_required: `True`
+- reason: The live tournament passed distribution gates. A capped 1,000-scout ramp is allowed, not scheduled production.
 
 ## Deterministic 100
 
@@ -18,17 +18,17 @@
 - failed_gates: `none`
 - first_scout_cell: `kFLOKI / 1d / factor / mean_reversion`
 - first_scout_prompt_variant: `flash_temporal_v4`
-- first_scout_tool_candidates: `10`
+- first_scout_tool_candidates: `12`
 - planned_slice_scouts: `100`
 - planned_slice_unique_cells: `80`
 - planned_slice_market_evolve_arms: `candidate 50 / control 50`
 
 ## Tournament
 
-- decision: `no_promotion`
-- ready_for_live_1000: `False`
+- decision: `promote_to_1000_scout_ramp`
+- ready_for_live_1000: `True`
 - ready_for_scheduled_production: `False`
-- failed_gates: `tool_creation_quality_pass_rate_ge_0_70, tool_creation_eval_plan_rate_ge_0_85, tool_creation_expected_edge_rate_ge_0_60, tool_creation_would_change_decision_rate_ge_0_60`
+- failed_gates: `none`
 
 ## Proof Ladder
 
@@ -36,15 +36,15 @@
 - PASS `live_provider_preflight`: Provider import, tool atlas, and market universe are present before spending.
 - PASS `explicit_spend_gate`: No paid model calls happen unless --allow-live-spend is present.
 - PASS `live_canary_quality`: Live scouts must pass provider, evidence, string-yield, duplicate, synthesis, geometry, and self-healing gates.
-- BLOCKED `tournament_promotion`: Tournament blocked scale because agent-created tool proposals were not evaluator-grade.
+- PASS `tournament_promotion`: The tournament is the only authority for 100/1,000-scout spend promotion.
 - BLOCKED `repeatability_before_schedule`: Scheduled shadow production requires repeat 1,000-scout evidence across independent runs.
 
 ## Next Command
 
 ```bash
-PYTHONPATH=. python scripts/run_scout_system_launch_gate.py --allow-live-spend --live-scouts 100 --live-cost-cap-usd 1.00 --live-concurrency 4 --max-tool-iterations 1 --repair-tool-proposal-contracts --tool-proposal-repair-limit 500 --ramp-policy /Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_ramp_policy.json
+PYTHONPATH=. python scripts/run_scout_system_launch_gate.py --allow-live-spend --live-scouts 1000 --live-cost-cap-usd 5.00 --live-concurrency 8 --max-tool-iterations 1 --ramp-policy /private/var/folders/rq/2m7m487n3nl33jy9q_r7lzn00000gn/T/talis-scout-system-launch-20260522T174209Z/live_canary/prompt_outputs/live_scout_ramp_policy.json --repair-tool-proposal-contracts --tool-proposal-repair-limit 500
 ```
 
-Viewer: `/Users/udaikhattar/talis-desk/docs/scout-system-test/index.html`
+Viewer: `/var/folders/rq/2m7m487n3nl33jy9q_r7lzn00000gn/T/talis-scout-system-launch-20260522T174209Z/scout-system-test/index.html`
 
-Launch cockpit: `/Users/udaikhattar/talis-desk/docs/launch-gate/index.html`
+Launch cockpit: `/var/folders/rq/2m7m487n3nl33jy9q_r7lzn00000gn/T/talis-scout-system-launch-20260522T174209Z/launch-gate/index.html`

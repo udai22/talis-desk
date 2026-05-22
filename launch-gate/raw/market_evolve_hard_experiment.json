@@ -4,14 +4,14 @@
     "candidate": 50,
     "control": 50
   },
-  "cycle_id": "cycle_live100_20260522_live_100",
-  "experiment_id": "mexp_f022c4e9d9c9e338",
+  "cycle_id": "cycle_live_scout_canary_20260522T174212Z",
+  "experiment_id": "mexp_c547fbe4ffdf3ae6",
   "experiment_ids": [
-    "mexp_f022c4e9d9c9e338"
+    "mexp_c547fbe4ffdf3ae6"
   ],
   "experiment_kind": "matched_policy_ab",
   "final_decision": "reject_candidate",
-  "final_score_delta": -0.0027,
+  "final_score_delta": 0.0067,
   "paired_seed_slices": 20,
   "plans": [
     {
@@ -25,16 +25,16 @@
         {
           "arm": "candidate",
           "generation": 1,
-          "mutation_kind": "tighten_tool_ev",
-          "program_id": "mprog_ed7245b8e58bd864",
+          "mutation_kind": "raise_tool_promotion_discipline",
+          "program_id": "mprog_719c2d73b8b855e2",
           "status": "candidate"
         }
       ],
-      "candidate_program_id": "mprog_ed7245b8e58bd864",
-      "created_at": "2026-05-22T15:50:39.769691+00:00",
-      "cycle_id": "cycle_live100_20260522_live_100",
+      "candidate_program_id": "mprog_719c2d73b8b855e2",
+      "created_at": "2026-05-22T17:49:57.025201+00:00",
+      "cycle_id": "cycle_live_scout_canary_20260522T174212Z",
       "experiment_kind": "matched_policy_ab",
-      "id": "mexp_cb8faa359cdb6e35",
+      "id": "mexp_cb57c4651ddbc6de",
       "matched_slice": {
         "assignment": "paired_seed_clone_then_deterministic_hash",
         "axes": [
@@ -61,10 +61,10 @@
       "parent_program_id": "mprog_305b736b8ad24821",
       "quality_flags": [
         "hard_experiment_required",
-        "mutation:tighten_tool_ev",
+        "mutation:raise_tool_promotion_discipline",
         "mutation_intent_packet"
       ],
-      "rationale": "Too many proposed tools lack expected edge or robust evaluation plans.",
+      "rationale": "Agents are proposing plausible tools, but too few are reaching evaluated active-tool status.",
       "status": "planned",
       "success_criteria": {
         "falsification_gates": [
@@ -78,7 +78,7 @@
             "decision": "reject_candidate",
             "metric": "candidate_valid_string_rate",
             "operator": "<",
-            "threshold": 0.9863
+            "threshold": 0.9897
           },
           {
             "decision": "reject_candidate",
@@ -95,14 +95,19 @@
         "min_completed_cycles": 2,
         "min_consecutive_candidate_wins": 2,
         "min_score_delta": 0.05,
-        "min_source_independence": 0.7553,
-        "min_valid_string_rate": 0.9863,
+        "min_source_independence": 0.9,
+        "min_valid_string_rate": 0.9897,
         "mutation_intent": {
           "changed_paths": [
             {
               "after": true,
-              "before": true,
-              "path": "tool_request_policy.require_expected_edge"
+              "before": false,
+              "path": "tool_request_policy.auto_promote_high_priority_tools"
+            },
+            {
+              "after": 4,
+              "before": 3,
+              "path": "tool_request_policy.max_tool_promotions_per_cycle"
             },
             {
               "after": true,
@@ -110,9 +115,9 @@
               "path": "tool_request_policy.require_eval_plan"
             },
             {
-              "after": 10,
-              "before": 12,
-              "path": "tool_request_policy.max_new_tool_proposals_per_cycle"
+              "after": true,
+              "before": true,
+              "path": "tool_request_policy.require_expected_edge"
             }
           ],
           "falsification_gates": [
@@ -126,7 +131,7 @@
               "decision": "reject_candidate",
               "metric": "candidate_valid_string_rate",
               "operator": "<",
-              "threshold": 0.9863
+              "threshold": 0.9897
             },
             {
               "decision": "reject_candidate",
@@ -135,17 +140,17 @@
               "threshold": 0.0
             }
           ],
-          "hypothesis": "If tool requests must name expected edges and eval plans, tool creation produces less low-EV clutter.",
-          "intended_effect": "Too many proposed tools lack expected edge or robust evaluation plans.",
+          "hypothesis": "If tool promotion is more disciplined, useful proposed tools reach active status faster.",
+          "intended_effect": "Agents are proposing plausible tools, but too few are reaching evaluated active-tool status.",
           "kill_signal": "Candidate does not improve active/evaluated tool usage or creates more low-EV/tool-failure backlog.",
-          "mutation_kind": "tighten_tool_ev",
+          "mutation_kind": "raise_tool_promotion_discipline",
           "mutation_source": "market_evolve_metric_heuristic",
           "parent_generation": 0,
           "parent_program_id": "mprog_305b736b8ad24821",
           "population_gate": {
             "allowed": true,
-            "candidate_diversity_signature": "3d13c82c090e",
-            "candidate_mutation_kind": "tighten_tool_ev",
+            "candidate_diversity_signature": "73158e447bd6",
+            "candidate_mutation_kind": "raise_tool_promotion_discipline",
             "max_open_experiments_per_parent": 4,
             "max_open_same_signature_per_parent": 1,
             "open_experiment_count": 1,
@@ -170,15 +175,15 @@
           "source_shape_health": {},
           "source_work_order_ids": [],
           "target_metrics": {
-            "low_ev_tool_rate": 0.5873,
+            "active_tool_proposal_count": 0.0,
             "tool_activation_rate": 0.0,
-            "tool_eval_failed_rate": 0.0
+            "tool_proposal_count": 202.0
           }
         },
         "mutation_target_metrics": {
-          "low_ev_tool_rate": 0.5873,
+          "active_tool_proposal_count": 0.0,
           "tool_activation_rate": 0.0,
-          "tool_eval_failed_rate": 0.0
+          "tool_proposal_count": 202.0
         },
         "primary_metric": "accepted_unique_high_quality_coverage_per_dollar",
         "promotion_requires": [
@@ -190,9 +195,9 @@
           "evolution_proof_required"
         ]
       },
-      "transaction_from": "2026-05-22T15:50:39.769691+00:00",
+      "transaction_from": "2026-05-22T17:49:57.025201+00:00",
       "transaction_to": null,
-      "valid_from": "2026-05-22T15:50:39.769691+00:00"
+      "valid_from": "2026-05-22T17:49:57.025201+00:00"
     },
     {
       "arms": [
@@ -211,10 +216,10 @@
         }
       ],
       "candidate_program_id": "mprog_96570525068fa415",
-      "created_at": "2026-05-22T15:42:45.165647+00:00",
-      "cycle_id": "cycle_live100_20260522_live_100",
+      "created_at": "2026-05-22T17:42:15.588087+00:00",
+      "cycle_id": "cycle_live_scout_canary_20260522T174212Z",
       "experiment_kind": "matched_policy_ab",
-      "id": "mexp_f022c4e9d9c9e338",
+      "id": "mexp_c547fbe4ffdf3ae6",
       "matched_slice": {
         "assignment": "paired_seed_clone_then_deterministic_hash",
         "axes": [
@@ -372,9 +377,9 @@
           "evolution_proof_required"
         ]
       },
-      "transaction_from": "2026-05-22T15:50:39.748085+00:00",
+      "transaction_from": "2026-05-22T17:49:56.983774+00:00",
       "transaction_to": null,
-      "valid_from": "2026-05-22T15:42:45.165647+00:00"
+      "valid_from": "2026-05-22T17:42:15.588087+00:00"
     },
     {
       "arms": [
@@ -393,10 +398,10 @@
         }
       ],
       "candidate_program_id": "mprog_f3702ed4079fa381",
-      "created_at": "2026-05-22T15:42:45.164692+00:00",
-      "cycle_id": "cycle_live100_20260522_live_100",
+      "created_at": "2026-05-22T17:42:15.587245+00:00",
+      "cycle_id": "cycle_live_scout_canary_20260522T174212Z",
       "experiment_kind": "matched_policy_ab",
-      "id": "mexp_96e618e7e4039968",
+      "id": "mexp_980087d672b42582",
       "matched_slice": {
         "assignment": "paired_seed_clone_then_deterministic_hash",
         "axes": [
@@ -562,9 +567,9 @@
           "evolution_proof_required"
         ]
       },
-      "transaction_from": "2026-05-22T15:42:45.164692+00:00",
+      "transaction_from": "2026-05-22T17:42:15.587245+00:00",
       "transaction_to": null,
-      "valid_from": "2026-05-22T15:42:45.164692+00:00"
+      "valid_from": "2026-05-22T17:42:15.587245+00:00"
     }
   ],
   "policy_application_count": 100,
@@ -577,7 +582,6 @@
     "matched_seed_pairs_present": true,
     "policy_stamped_on_seeds": true,
     "quality_flags": [
-      "candidate_high_low_ev_tool_rate",
       "falsification_gates_evaluated:3",
       "market_evolve_online_experiment_v1",
       "proof_gate_failed:score_delta",
@@ -589,15 +593,15 @@
   },
   "results": [
     {
-      "candidate_score": 0.7731,
-      "control_score": 0.7758,
+      "candidate_score": 0.8149,
+      "control_score": 0.8082,
       "decision": "reject_candidate",
-      "experiment_id": "mexp_f022c4e9d9c9e338",
+      "experiment_id": "mexp_c547fbe4ffdf3ae6",
       "falsification_gate_results": [
         {
           "decision": "reject_or_continue_candidate",
           "metric": "score_delta",
-          "observed": -0.0027,
+          "observed": 0.0067,
           "operator": "<",
           "status": "triggered",
           "threshold": 0.05,
@@ -606,7 +610,7 @@
         {
           "decision": "reject_candidate",
           "metric": "candidate_valid_string_rate",
-          "observed": 0.986,
+          "observed": 1.0,
           "operator": "<",
           "status": "passed",
           "threshold": 0.6,
@@ -615,16 +619,15 @@
         {
           "decision": "reject_candidate",
           "metric": "candidate_accepted_unique_high_quality_coverage_per_dollar",
-          "observed": 0.2074,
+          "observed": 0.1254,
           "operator": "<=",
           "status": "passed",
           "threshold": 0.0,
           "triggered": false
         }
       ],
-      "id": "mres_a745377527ad4354",
+      "id": "mres_f250759c102dea29",
       "quality_flags": [
-        "candidate_high_low_ev_tool_rate",
         "falsification_gates_evaluated:3",
         "market_evolve_online_experiment_v1",
         "proof_gate_failed:score_delta",
@@ -633,8 +636,8 @@
         "proof_gate_triggered:score_delta",
         "score_delta_below_gate"
       ],
-      "rationale": "candidate failed gates: score_delta_below_gate, candidate_high_low_ev_tool_rate, proof_gate_failed:score_delta; delta=-0.003",
-      "score_delta": -0.0027
+      "rationale": "candidate failed gates: score_delta_below_gate, proof_gate_failed:score_delta; delta=0.007",
+      "score_delta": 0.0067
     }
   ],
   "schema_version": "market_evolve_hard_experiment_episode_v1",
