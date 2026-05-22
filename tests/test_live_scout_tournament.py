@@ -3,6 +3,7 @@ import sqlite3
 from pathlib import Path
 
 from scripts.evaluate_live_scout_tournament import evaluate_live_scout_tournament
+from talis_desk.tool_atlas import repair_low_quality_analysis_tool_proposals
 
 
 def test_live_scout_tournament_blocks_failed_provider_candidate(tmp_path):
@@ -156,6 +157,37 @@ def test_live_scout_tournament_blocks_low_quality_tool_creation_before_1000(tmp_
     assert "tool_creation_expected_edge_rate_ge_0_60" in tournament["winner"]["failed_gates"]
     assert tournament["winner"]["tool_creation_evolution"]["metrics"]["quality_pass_rate"] < 0.70
     assert tournament["next_experiment_plan"][0]["id"] == "tool_creation_quality_repair_100"
+
+
+def test_live_scout_tournament_scores_repaired_tool_creation_frontier(tmp_path):
+    report_path = _write_canary(
+        tmp_path,
+        n_requested=100,
+        success_rate=0.93,
+        transcript_errors=0,
+        duplicate_rate=0.06,
+        completed=93,
+        geometry_cells=100,
+        low_quality_tool_creation=True,
+    )
+    report = json.loads(report_path.read_text())
+    with sqlite3.connect(report["db_path"]) as conn:
+        conn.row_factory = sqlite3.Row
+        repairs = repair_low_quality_analysis_tool_proposals(
+            cycle_id=report["cycle_id"],
+            limit=10,
+            conn=conn,
+        )
+
+    tournament = evaluate_live_scout_tournament([report_path])
+
+    assert len(repairs) == 3
+    tool_creation = tournament["winner"]["tool_creation_evolution"]
+    assert tool_creation["proposal_count"] == 6
+    assert tool_creation["frontier_proposal_count"] == 3
+    assert tool_creation["metrics"]["quality_pass_rate"] == 1.0
+    assert "tool_creation_quality_pass_rate_ge_0_70" not in tournament["winner"]["failed_gates"]
+    assert "tool_creation_expected_edge_rate_ge_0_60" not in tournament["winner"]["failed_gates"]
 
 
 def test_live_scout_tournament_promotes_clean_thousand_scout_distribution_to_shadow_trial(tmp_path):

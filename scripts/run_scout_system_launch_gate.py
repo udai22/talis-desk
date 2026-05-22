@@ -418,7 +418,23 @@ def render_launch_gate_html(report: dict[str, Any]) -> str:
     pre_1000_rows = _pre_1000_rows(learning)
     ramp_policy_rehearsal_rows = _ramp_policy_rehearsal_rows(ramp_policy_rehearsal)
     tournament_rows = _tournament_gate_rows(tournament)
+    repair_replay = (
+        report.get("tool_creation_repair_replay")
+        if isinstance(report.get("tool_creation_repair_replay"), dict)
+        else {}
+    )
+    repair_replay_rows = _tool_repair_replay_rows(repair_replay)
     next_command = str(decision.get("next_command") or "")
+    learning_next_allowed = str(
+        decision.get("allowed_next_step")
+        or (learning.get("next_run") or {}).get("allowed_next_step")
+        or "unknown"
+    ).replace("_", " ")
+    pre_1000_intro = (
+        "The 100-scout run is blocked from the 1,000 ramp until the failed tournament gates are repaired and proven in a fresh live slice."
+        if tournament and not tournament.get("ready_for_live_1000") else
+        "The 100-scout run opened the next experimental ramp, but scheduled production stays blocked until repeatability is proven. These are the gates to watch in the next authorized run."
+    )
     scout_viewer = str(report.get("viewer_index") or "")
     return f"""<!doctype html>
 <html lang="en">
@@ -536,6 +552,14 @@ def render_launch_gate_html(report: dict[str, Any]) -> str:
   </section>
 
   <section>
+    <h2>Tool Repair Replay</h2>
+    <p>This is the no-spend repair check on the 100-scout tool backlog: bad parent proposals stay auditable, repaired child proposals become the current frontier, and a fresh live run is still required before scaling.</p>
+    <div class="panel">
+      <ul class="list">{repair_replay_rows}</ul>
+    </div>
+  </section>
+
+  <section>
     <h2>Current Evidence</h2>
     <div class="grid metrics">
       <div class="metric"><span>Det scouts</span><strong>{html.escape(str(det_metrics.get("scouts_completed") or 0))}</strong></div>
@@ -592,7 +616,7 @@ def render_launch_gate_html(report: dict[str, Any]) -> str:
       <ul class="list">
         <li><span>Average prompt quality</span><b>{html.escape(str((learning.get("scorecard") or {}).get("avg_prompt_quality") or 0))}</b></li>
         <li><span>Weak scout packets</span><b>{html.escape(str((learning.get("scorecard") or {}).get("weak_scout_count") or 0))}</b></li>
-        <li><span>Next allowed</span><b>{html.escape(str((learning.get("next_run") or {}).get("allowed_next_step") or "unknown").replace("_", " "))}</b></li>
+        <li><span>Next allowed</span><b>{html.escape(learning_next_allowed)}</b></li>
       </ul>
     </div>
     <div class="panel">
@@ -614,7 +638,7 @@ def render_launch_gate_html(report: dict[str, Any]) -> str:
     </div>
     <div class="panel">
       <h2>Pre-1000 Watchlist</h2>
-      <p>The 100-scout run opened the next experimental ramp, but scheduled production stays blocked until repeatability is proven. These are the gates to watch in the next authorized run.</p>
+      <p>{html.escape(pre_1000_intro)}</p>
       <ul class="list">{pre_1000_rows}</ul>
     </div>
   </section>
@@ -1252,10 +1276,34 @@ def _tournament_gate_rows(tournament: dict[str, Any]) -> str:
     if tool_creation:
         rows.extend([
             ("Tool proposals", str(tool_creation.get("proposal_count") or 0), "agent-created tools emitted by the run"),
+            ("Current frontier", str(tool_creation.get("frontier_proposal_count") or 0), "latest non-superseded proposal contracts"),
             ("Proposal quality", str(metrics.get("quality_pass_rate") or 0), "share passing deterministic proposal evaluator"),
             ("Eval plans", str(metrics.get("eval_plan_rate") or 0), "share with a fixture/eval plan"),
             ("Expected edges", str(metrics.get("expected_edge_rate") or 0), "share naming the map edge they would add"),
         ])
+    return "".join(
+        "<li>"
+        f"<span>{html.escape(label)}<small>{html.escape(note)}</small></span>"
+        f"<b>{html.escape(value)}</b>"
+        "</li>"
+        for label, value, note in rows
+    )
+
+
+def _tool_repair_replay_rows(repair: dict[str, Any]) -> str:
+    if not repair:
+        return "<li><span>No repair replay captured<small>run --repair-contracts on a copied proposal DB</small></span><b>missing</b></li>"
+    before = repair.get("before") if isinstance(repair.get("before"), dict) else {}
+    after = repair.get("after") if isinstance(repair.get("after"), dict) else {}
+    rows = [
+        ("Replay type", str(repair.get("kind") or "tool_creation_contract_repair"), "no paid scout calls"),
+        ("Repairs created", str(repair.get("repairs_created") or 0), "child proposal iterations written"),
+        ("Before quality", str(before.get("quality_pass_rate") or 0), "current live-100 proposal frontier"),
+        ("After quality", str(after.get("quality_pass_rate") or 0), "repaired frontier in copied DB"),
+        ("After eval plans", str(after.get("eval_plan_rate") or 0), "fixture-backed proposal contracts"),
+        ("After expected edges", str(after.get("expected_edge_rate") or 0), "map edges named by repaired contracts"),
+        ("Scale authority", str(repair.get("scale_authority") or "fresh_live_repair_required"), "replay is proof of repair loop, not live spend authority"),
+    ]
     return "".join(
         "<li>"
         f"<span>{html.escape(label)}<small>{html.escape(note)}</small></span>"
@@ -1308,6 +1356,9 @@ def _publish_live_artifacts(report: dict[str, Any], *, output_dir: Path) -> dict
             src = Path(str(raw)).expanduser()
             if src.exists() and src.is_file():
                 dest = raw_dir / src.name
+                if src.resolve() == dest.resolve():
+                    published[published_key] = f"raw/{src.name}"
+                    continue
                 shutil.copyfile(src, dest)
                 published[published_key] = f"raw/{src.name}"
     return published

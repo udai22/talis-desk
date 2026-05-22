@@ -17,9 +17,11 @@ from ..store import get_store
 from .atlas import AgentContext, dispatch_uri, learned_tools_dir
 from .discovery import (
     AnalysisToolProposal,
+    evaluate_analysis_tool_proposal,
     iterate_tool_proposal,
     load_analysis_tool_proposals,
     persist_analysis_tool_proposals,
+    repair_analysis_tool_proposal_contract,
 )
 from .learned_runtime import SUPPORTED_LEARNED_RUNTIMES
 
@@ -58,6 +60,17 @@ class RuntimeAdapterReadiness:
     status: str
     quality_flags: list[str] = field(default_factory=list)
     work_order_path: str = ""
+
+
+@dataclass
+class ToolProposalContractRepair:
+    parent_proposal_id: str
+    repaired_proposal_id: str
+    tool_name: str
+    previous_score: float
+    repaired_score: float
+    status: str
+    quality_flags: list[str] = field(default_factory=list)
 
 
 def promote_analysis_tool_proposal(
@@ -169,6 +182,65 @@ def promote_pending_analysis_tool_proposals(
     for row in rows:
         out.append(promote_analysis_tool_proposal(str(row["id"]), conn=db, activate=True))
     return out
+
+
+def repair_low_quality_analysis_tool_proposals(
+    *,
+    cycle_id: str = "",
+    limit: int = 100,
+    conn: Any = None,
+) -> list[ToolProposalContractRepair]:
+    """Iterate proposal contracts before spending engineering or scout budget.
+
+    This is the repair rung between "agent asked for a vague capability" and
+    "engineer/build agent should act." The parent row remains in the audit
+    trail; the child row becomes the current evaluator-grade frontier.
+    """
+    db = conn or get_store().conn
+    rows = load_analysis_tool_proposals(
+        cycle_id=cycle_id,
+        status="proposed",
+        limit=max(1, int(limit)),
+        conn=db,
+    )
+    repairs: list[ToolProposalContractRepair] = []
+    for row in rows:
+        parent_id = str(row.get("id") or "")
+        if not parent_id or _has_child_iteration(db, parent_id):
+            continue
+        proposal = _load_proposal(parent_id, conn=db)
+        if proposal is None:
+            continue
+        quality = evaluate_analysis_tool_proposal(proposal)
+        if quality.passed:
+            continue
+        improved = repair_analysis_tool_proposal_contract(proposal)
+        if improved is None:
+            continue
+        repaired_quality = evaluate_analysis_tool_proposal(improved)
+        ids = persist_analysis_tool_proposals([improved], conn=db)
+        if not ids:
+            continue
+        repaired_id = ids[0]
+        _update_proposal_status(db, parent_id, "superseded")
+        _append_proposal_quality_flags(
+            db,
+            parent_id,
+            [
+                "tool_proposal_contract_repaired",
+                f"superseded_by:{repaired_id}",
+            ],
+        )
+        repairs.append(ToolProposalContractRepair(
+            parent_proposal_id=parent_id,
+            repaired_proposal_id=repaired_id,
+            tool_name=proposal.tool_name,
+            previous_score=quality.score,
+            repaired_score=repaired_quality.score,
+            status="repaired" if repaired_quality.passed else "repair_still_failing",
+            quality_flags=list(repaired_quality.flags),
+        ))
+    return repairs
 
 
 def create_runtime_adapter_work_orders(
@@ -613,6 +685,19 @@ def _update_proposal_status(conn: Any, proposal_id: str, status: str) -> None:
     conn.commit()
 
 
+def _has_child_iteration(conn: Any, proposal_id: str) -> bool:
+    row = conn.execute(
+        """
+        SELECT 1
+        FROM analysis_tool_proposals
+        WHERE parent_proposal_id = ?
+        LIMIT 1
+        """,
+        (proposal_id,),
+    ).fetchone()
+    return row is not None
+
+
 def _append_proposal_quality_flags(conn: Any, proposal_id: str, flags: list[str]) -> None:
     row = conn.execute(
         "SELECT quality_flags FROM analysis_tool_proposals WHERE id = ?",
@@ -758,11 +843,13 @@ __all__ = [
     "LearnedToolPromotion",
     "RuntimeAdapterReadiness",
     "RuntimeAdapterWorkOrder",
+    "ToolProposalContractRepair",
     "create_runtime_adapter_work_orders",
     "evaluate_learned_tool",
     "mark_runtime_adapter_ready",
     "promote_analysis_tool_proposal",
     "promote_pending_analysis_tool_proposals",
+    "repair_low_quality_analysis_tool_proposals",
     "register_learned_tool_in_atlas",
     "scaffold_learned_tool",
 ]

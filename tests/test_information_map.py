@@ -85,6 +85,7 @@ from talis_desk.tool_atlas import (
     regenerate_tool_atlas,
     mark_runtime_adapter_ready,
     promote_analysis_tool_proposal,
+    repair_low_quality_analysis_tool_proposals,
 )
 from talis_desk.swarm.information_bridge import promoted_scouts_from_synthesis
 from talis_desk.swarm.scout_runner import (
@@ -4003,6 +4004,12 @@ def test_analysis_tool_proposals_apply_to_all_analysis_and_iterate(tmp_path):
     assert "liquidity_absorption_context" in names
     assert "evidence_ref_resolver" in names
     assert "hydromancer_actor_quality_bulk" in names
+    for proposal in proposals:
+        quality = evaluate_analysis_tool_proposal(proposal)
+        assert quality.passed, (proposal.tool_name, quality)
+        assert proposal.promotion_gate["expected_edge"]
+        assert proposal.promotion_gate["would_change_decision"] is True
+        assert proposal.eval_plan["must_create_expected_edge"] is True
     ids = persist_analysis_tool_proposals(proposals, conn=store.conn)
     assert len(ids) == len(proposals)
     parent = proposals[0]
@@ -4018,6 +4025,54 @@ def test_analysis_tool_proposals_apply_to_all_analysis_and_iterate(tmp_path):
     assert improved_ids[0] in {r["id"] for r in rows}
     assert any(r["parent_proposal_id"] == ids[0] and r["iteration"] == 1 for r in rows)
     assert store.conn.execute("SELECT COUNT(*) FROM analysis_tool_proposals").fetchone()[0] == len(proposals) + 1
+
+
+def test_low_quality_tool_proposal_contracts_iterate_into_gradeable_frontier(tmp_path):
+    store = DeskStore(db_path=tmp_path / "desk.db")
+    weak = AnalysisToolProposal(
+        cycle_id="cycle_tool_contract_repair",
+        artifact_kind="node_intelligence",
+        artifact_id="nint_weak_tool",
+        entity="HYPE",
+        horizon="intraday",
+        lens="on_chain",
+        proposal_kind="new_tool",
+        tool_name="hl_node_reject_burst_reader",
+        purpose="Read reject bursts from our node.",
+        source_family="our_hl_node",
+        trigger="node_intelligence_coverage_gap",
+        input_shape={"asset": "HYPE"},
+        promotion_gate={"requires_raw_offsets": True},
+        eval_plan={},
+        priority="high",
+        created_by="node_intelligence_discovery",
+    )
+    assert not evaluate_analysis_tool_proposal(weak).passed
+    parent_id = persist_analysis_tool_proposals([weak], conn=store.conn)[0]
+
+    repairs = repair_low_quality_analysis_tool_proposals(
+        cycle_id="cycle_tool_contract_repair",
+        limit=10,
+        conn=store.conn,
+    )
+
+    assert len(repairs) == 1
+    assert repairs[0].parent_proposal_id == parent_id
+    assert repairs[0].status == "repaired"
+    parent_status = store.conn.execute(
+        "SELECT status FROM analysis_tool_proposals WHERE id = ?",
+        (parent_id,),
+    ).fetchone()[0]
+    assert parent_status == "superseded"
+    child = next(
+        row for row in load_analysis_tool_proposals(cycle_id="cycle_tool_contract_repair", limit=10, conn=store.conn)
+        if row["id"] == repairs[0].repaired_proposal_id
+    )
+    child_quality = evaluate_analysis_tool_proposal(child)
+    assert child_quality.passed
+    assert child["parent_proposal_id"] == parent_id
+    assert child["promotion_gate_json"]["expected_edge"].startswith("our_hl_node -> HYPE/intraday/on_chain")
+    assert child["eval_plan_json"]["must_create_expected_edge"] is True
 
 
 def test_node_tool_proposals_are_normalized_to_evaluator_grade_contracts():

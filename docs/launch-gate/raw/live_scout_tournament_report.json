@@ -66,6 +66,7 @@
         "tool_creation_eval_failed_rate_le_0_25": true,
         "tool_creation_eval_plan_rate_ge_0_85": false,
         "tool_creation_expected_edge_rate_ge_0_60": false,
+        "tool_creation_frontier_rows_observed": true,
         "tool_creation_proposal_rows_observed": true,
         "tool_creation_quality_pass_rate_ge_0_70": false,
         "tool_creation_runtime_adapter_backlog_rate_le_0_50": true,
@@ -220,7 +221,7 @@
         "provider_calls": 100,
         "requested": 100
       },
-      "score": 0.932,
+      "score": 0.9163,
       "source_report": "/Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_canary_report.json",
       "tool_creation_evolution": {
         "db_path": "/private/tmp/talis-live100-20260522/live_canary/desk-live-canary.db",
@@ -231,11 +232,13 @@
           "tool_creation_expected_edge_rate_ge_0_60",
           "tool_creation_would_change_decision_rate_ge_0_60"
         ],
+        "frontier_proposal_count": 189,
         "gates": {
           "tool_creation_db_observed": true,
           "tool_creation_eval_failed_rate_le_0_25": true,
           "tool_creation_eval_plan_rate_ge_0_85": false,
           "tool_creation_expected_edge_rate_ge_0_60": false,
+          "tool_creation_frontier_rows_observed": true,
           "tool_creation_proposal_rows_observed": true,
           "tool_creation_quality_pass_rate_ge_0_70": false,
           "tool_creation_runtime_adapter_backlog_rate_le_0_50": true,
@@ -248,7 +251,7 @@
           "eval_plan_rate": 0.4127,
           "expected_edge_rate": 0.0212,
           "promotion_gate_rate": 1.0,
-          "quality_pass_rate": 0.4127,
+          "quality_pass_rate": 0.0212,
           "runtime_adapter_backlog_count": 0,
           "runtime_adapter_backlog_rate": 0.0,
           "would_change_decision_rate": 0.0212
@@ -261,6 +264,18 @@
           "proposed": 189
         },
         "top_quality_flags": [
+          {
+            "count": 185,
+            "flag": "missing_expected_edge"
+          },
+          {
+            "count": 185,
+            "flag": "missing_expected_info_value"
+          },
+          {
+            "count": 185,
+            "flag": "missing_would_change_decision"
+          },
           {
             "count": 111,
             "flag": "missing_eval_plan"
@@ -303,7 +318,7 @@
       }
     }
   ],
-  "generated_at": "2026-05-22T16:54:31.316562+00:00",
+  "generated_at": "2026-05-22T17:18:01.104543+00:00",
   "input_reports": [
     "/Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_canary_report.json"
   ],
@@ -377,7 +392,7 @@
       ]
     },
     "best_provider_error_rate": 0.0,
-    "best_score": 0.932,
+    "best_score": 0.9163,
     "best_strings_per_scout": 2.92,
     "best_success_rate": 0.93,
     "full_run_boundary": "A 100-scout live ramp is blocked unless one candidate passes all hard gates. A 1,000-scout run remains blocked until the 100-scout ramp repeats the same curve.",
@@ -511,6 +526,7 @@
       "tool_creation_eval_failed_rate_le_0_25": true,
       "tool_creation_eval_plan_rate_ge_0_85": false,
       "tool_creation_expected_edge_rate_ge_0_60": false,
+      "tool_creation_frontier_rows_observed": true,
       "tool_creation_proposal_rows_observed": true,
       "tool_creation_quality_pass_rate_ge_0_70": false,
       "tool_creation_runtime_adapter_backlog_rate_le_0_50": true,
@@ -665,7 +681,7 @@
       "provider_calls": 100,
       "requested": 100
     },
-    "score": 0.932,
+    "score": 0.9163,
     "source_report": "/Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_canary_report.json",
     "tool_creation_evolution": {
       "db_path": "/private/tmp/talis-live100-20260522/live_canary/desk-live-canary.db",
@@ -676,11 +692,13 @@
         "tool_creation_expected_edge_rate_ge_0_60",
         "tool_creation_would_change_decision_rate_ge_0_60"
       ],
+      "frontier_proposal_count": 189,
       "gates": {
         "tool_creation_db_observed": true,
         "tool_creation_eval_failed_rate_le_0_25": true,
         "tool_creation_eval_plan_rate_ge_0_85": false,
         "tool_creation_expected_edge_rate_ge_0_60": false,
+        "tool_creation_frontier_rows_observed": true,
         "tool_creation_proposal_rows_observed": true,
         "tool_creation_quality_pass_rate_ge_0_70": false,
         "tool_creation_runtime_adapter_backlog_rate_le_0_50": true,
@@ -693,7 +711,7 @@
         "eval_plan_rate": 0.4127,
         "expected_edge_rate": 0.0212,
         "promotion_gate_rate": 1.0,
-        "quality_pass_rate": 0.4127,
+        "quality_pass_rate": 0.0212,
         "runtime_adapter_backlog_count": 0,
         "runtime_adapter_backlog_rate": 0.0,
         "would_change_decision_rate": 0.0212
@@ -706,6 +724,18 @@
         "proposed": 189
       },
       "top_quality_flags": [
+        {
+          "count": 185,
+          "flag": "missing_expected_edge"
+        },
+        {
+          "count": 185,
+          "flag": "missing_expected_info_value"
+        },
+        {
+          "count": 185,
+          "flag": "missing_would_change_decision"
+        },
         {
           "count": 111,
           "flag": "missing_eval_plan"

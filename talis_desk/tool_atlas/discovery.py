@@ -53,6 +53,8 @@ class AnalysisToolProposalQuality:
             "missing_eval_plan",
             "missing_promotion_gate",
             "missing_expected_edge",
+            "missing_expected_info_value",
+            "missing_would_change_decision",
             "low_expected_info_value",
             "would_not_change_decision",
         }
@@ -97,15 +99,16 @@ def evaluate_analysis_tool_proposal(proposal: AnalysisToolProposal | dict[str, A
         flags.append("missing_promotion_gate")
     if not eval_plan:
         flags.append("missing_eval_plan")
-    if proposal_kind == "next_tool_call" or trigger == "scout_tool_request":
-        if not expected_edge:
-            flags.append("missing_expected_edge")
-        if expected_info_value is None:
-            flags.append("missing_expected_info_value")
-        elif expected_info_value < 0.35:
-            flags.append("low_expected_info_value")
-        if would_change_decision is False:
-            flags.append("would_not_change_decision")
+    if not expected_edge:
+        flags.append("missing_expected_edge")
+    if expected_info_value is None:
+        flags.append("missing_expected_info_value")
+    elif expected_info_value < 0.35:
+        flags.append("low_expected_info_value")
+    if would_change_decision is None:
+        flags.append("missing_would_change_decision")
+    elif would_change_decision is False:
+        flags.append("would_not_change_decision")
     if priority == "low":
         flags.append("low_priority")
 
@@ -128,6 +131,103 @@ def evaluate_analysis_tool_proposal(proposal: AnalysisToolProposal | dict[str, A
         score=round(max(0.0, min(1.0, score)), 3),
         flags=sorted(set(flags)),
     )
+
+
+def normalize_analysis_tool_proposal_contract(
+    proposal: AnalysisToolProposal,
+    *,
+    reason: str = "generated_contract_normalization",
+) -> AnalysisToolProposal:
+    """Fill the evaluator-grade contract fields for generated tool proposals.
+
+    This is not a promotion shortcut. It makes the proposal explicit enough to
+    be judged: what edge it should add, why it would change a decision, and how
+    it must be fixture-tested before the atlas can admit it.
+    """
+    added: list[str] = []
+    if not proposal.purpose.strip():
+        proposal.purpose = (
+            "Resolve an analysis coverage gap with sourced observations and "
+            "fixture-backed promotion evidence."
+        )
+        added.append("purpose")
+    if not proposal.source_family.strip():
+        proposal.source_family = _infer_source_family(proposal.tool_name, proposal.purpose)
+        added.append("source_family")
+    if not proposal.trigger.strip():
+        proposal.trigger = "analysis_tool_contract_gap"
+        added.append("trigger")
+    if not proposal.input_shape:
+        proposal.input_shape = {
+            "entity": proposal.entity,
+            "horizon": proposal.horizon,
+            "lens": proposal.lens,
+            "source_family": proposal.source_family,
+        }
+        added.append("input_shape")
+
+    gate = dict(proposal.promotion_gate or {})
+    if not str(gate.get("expected_edge") or "").strip():
+        gate["expected_edge"] = _default_expected_edge(proposal)
+        added.append("expected_edge")
+    if _bounded_float(gate.get("expected_info_value"), default=None) is None:
+        gate["expected_info_value"] = _default_expected_info_value(proposal)
+        added.append("expected_info_value")
+    if _optional_bool(gate.get("would_change_decision")) is None:
+        gate["would_change_decision"] = proposal.priority.lower() != "low"
+        added.append("would_change_decision")
+    gate.setdefault("must_create_expected_edge", True)
+    gate.setdefault("must_emit_source_timestamp_or_rejection", True)
+    proposal.promotion_gate = gate
+
+    eval_plan = dict(proposal.eval_plan or {})
+    if not eval_plan:
+        eval_plan = _default_eval_plan(proposal)
+        added.append("eval_plan")
+    else:
+        eval_plan.setdefault("fixture_source", proposal.trigger or proposal.source_family)
+        eval_plan.setdefault("fixture_types", _default_fixture_types(proposal))
+        eval_plan.setdefault("min_pass_rate", _default_min_pass_rate(proposal))
+        eval_plan.setdefault("must_link_artifact_id", proposal.artifact_id)
+        eval_plan.setdefault("must_create_expected_edge", True)
+    proposal.eval_plan = eval_plan
+
+    if added:
+        proposal.quality_flags = sorted(set([
+            *proposal.quality_flags,
+            "tool_proposal_contract_normalized",
+            f"tool_proposal_contract_reason:{reason}",
+            *[f"tool_proposal_contract_added_{field}" for field in added],
+        ]))
+    return proposal
+
+
+def repair_analysis_tool_proposal_contract(
+    parent: AnalysisToolProposal,
+    *,
+    reason: str = "tool_creation_quality_repair",
+) -> Optional[AnalysisToolProposal]:
+    """Create an iterated proposal when the current contract is not gradeable."""
+    quality = evaluate_analysis_tool_proposal(parent)
+    if quality.passed:
+        return None
+    improved = iterate_tool_proposal(
+        parent,
+        critique_flags=[
+            "tool_proposal_contract_repair",
+            *[f"repair_from_{flag}" for flag in quality.flags],
+        ],
+        improvement_note=(
+            "Make the proposal evaluator-grade by naming the map edge, expected "
+            "information value, decision effect, and fixture-backed eval plan."
+        ),
+    )
+    normalize_analysis_tool_proposal_contract(improved, reason=reason)
+    improved.quality_flags = sorted(set([
+        *improved.quality_flags,
+        f"parent_quality_score:{quality.score:.2f}",
+    ]))
+    return improved
 
 
 def propose_tools_from_quality_flags(
@@ -225,7 +325,13 @@ def propose_tools_from_quality_flags(
             eval_plan={"fixtures": ["pending_to_settled_transfer"], "min_pass_rate": 0.85},
             priority="high",
         ))
-    return _dedupe(proposals)
+    return _dedupe([
+        normalize_analysis_tool_proposal_contract(
+            proposal,
+            reason="quality_flag_generated",
+        )
+        for proposal in proposals
+    ])
 
 
 def iterate_tool_proposal(
@@ -414,6 +520,75 @@ def _proposal_id(proposal: AnalysisToolProposal) -> str:
     return "atp_" + hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
+def _infer_source_family(tool_name: str, purpose: str) -> str:
+    text = f"{tool_name} {purpose}".lower()
+    if any(tok in text for tok in ("hydromancer", "leaderboard", "pnl", "wallet quality")):
+        return "hydromancer"
+    if any(tok in text for tok in ("mempool", "pending", "hyperevm")):
+        return "mempool"
+    if any(tok in text for tok in ("hl_node", "node", "reject", "fill", "order-status")):
+        return "our_hl_node"
+    if any(tok in text for tok in ("liquidity", "depth", "order-book", "volume")):
+        return "market_microstructure"
+    if any(tok in text for tok in ("source", "citation", "provenance", "ref")):
+        return "provenance"
+    if any(tok in text for tok in ("funding", "oi", "derivative", "basis")):
+        return "derivatives"
+    if any(tok in text for tok in ("historical", "analog", "backtest")):
+        return "historical_store"
+    return "unknown_source_family"
+
+
+def _default_expected_edge(proposal: AnalysisToolProposal) -> str:
+    source = proposal.source_family or _infer_source_family(proposal.tool_name, proposal.purpose)
+    target_parts = [
+        part for part in (proposal.entity, proposal.horizon, proposal.lens)
+        if str(part).strip()
+    ]
+    target = "/".join(target_parts) if target_parts else "market_map"
+    edge = proposal.trigger or proposal.proposal_kind or proposal.tool_name or "analysis_tool"
+    return f"{source} -> {target} {edge} edge"
+
+
+def _default_expected_info_value(proposal: AnalysisToolProposal) -> float:
+    priority = (proposal.priority or "medium").lower()
+    if priority == "high":
+        return 0.72
+    if priority == "low":
+        return 0.36
+    return 0.60
+
+
+def _default_min_pass_rate(proposal: AnalysisToolProposal) -> float:
+    return 0.85 if (proposal.priority or "").lower() == "high" else 0.80
+
+
+def _default_fixture_types(proposal: AnalysisToolProposal) -> list[str]:
+    values = [
+        proposal.trigger,
+        proposal.source_family,
+        proposal.proposal_kind,
+        proposal.lens,
+    ]
+    out: list[str] = []
+    for value in values:
+        text = str(value or "").strip()
+        if text and text not in out:
+            out.append(text)
+    return out or ["analysis_tool_proposal"]
+
+
+def _default_eval_plan(proposal: AnalysisToolProposal) -> dict[str, Any]:
+    return {
+        "fixture_source": proposal.trigger or proposal.source_family or "analysis_tool_proposal",
+        "fixture_types": _default_fixture_types(proposal),
+        "min_pass_rate": _default_min_pass_rate(proposal),
+        "must_link_artifact_id": proposal.artifact_id,
+        "must_create_expected_edge": True,
+        "must_emit_source_timestamp_or_rejection": True,
+    }
+
+
 def _as_dict(raw: Any) -> dict[str, Any]:
     if isinstance(raw, dict):
         return raw
@@ -455,6 +630,8 @@ __all__ = [
     "evaluate_analysis_tool_proposal",
     "iterate_tool_proposal",
     "load_analysis_tool_proposals",
+    "normalize_analysis_tool_proposal_contract",
     "persist_analysis_tool_proposals",
     "propose_tools_from_quality_flags",
+    "repair_analysis_tool_proposal_contract",
 ]

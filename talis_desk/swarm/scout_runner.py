@@ -76,6 +76,7 @@ from ..information_map.deep_scout_prompt import (
 from ..store import get_desk_store
 from ..tool_atlas.discovery import (
     AnalysisToolProposal,
+    normalize_analysis_tool_proposal_contract,
     persist_analysis_tool_proposals,
     propose_tools_from_quality_flags,
 )
@@ -1716,7 +1717,7 @@ def _analysis_tool_proposal_from_node_dict(
             "min_pass_rate": 0.80,
             "must_link_artifact_id": artifact_id,
         }
-    return AnalysisToolProposal(
+    proposal = AnalysisToolProposal(
         cycle_id=cycle_id,
         artifact_kind=artifact_kind,
         artifact_id=artifact_id,
@@ -1737,6 +1738,10 @@ def _analysis_tool_proposal_from_node_dict(
             "from_node_intelligence_coverage_gap",
             "node_tool_proposal_eval_plan_normalized",
         ],
+    )
+    return normalize_analysis_tool_proposal_contract(
+        proposal,
+        reason="node_intelligence_generated",
     )
 
 

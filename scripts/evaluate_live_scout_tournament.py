@@ -699,6 +699,7 @@ def _tool_creation_evolution_metrics(
 
     status_counts: dict[str, int] = {}
     tool_counts: dict[str, int] = {}
+    frontier_rows = _frontier_tool_proposal_rows(rows)
     scores: list[float] = []
     pass_count = 0
     eval_plan_count = 0
@@ -717,6 +718,7 @@ def _tool_creation_evolution_metrics(
             eval_failed_count += 1
         if status in {"needs_runtime_adapter", "adapter_requested"}:
             runtime_adapter_count += 1
+    for row in frontier_rows:
         eval_plan = _json_dict(row.get("eval_plan_json") or row.get("eval_plan"))
         promotion_gate = _json_dict(row.get("promotion_gate_json") or row.get("promotion_gate"))
         if eval_plan:
@@ -734,19 +736,21 @@ def _tool_creation_evolution_metrics(
                 pass_count += 1
             for flag in q.flags:
                 row_flags[flag] = row_flags.get(flag, 0) + 1
-    n = len(rows)
+    n_raw = len(rows)
+    n = len(frontier_rows)
     avg_score = sum(scores) / max(1, len(scores))
     quality_pass_rate = pass_count / max(1, n)
     eval_plan_rate = eval_plan_count / max(1, n)
     expected_edge_rate = expected_edge_count / max(1, n)
     would_change_rate = would_change_count / max(1, n)
-    eval_failed_rate = eval_failed_count / max(1, n)
-    runtime_adapter_rate = runtime_adapter_count / max(1, n)
+    eval_failed_rate = eval_failed_count / max(1, n_raw)
+    runtime_adapter_rate = runtime_adapter_count / max(1, n_raw)
     gates = {}
-    if required or n:
+    if required or n_raw:
         gates = {
             "tool_creation_db_observed": db_path.exists(),
-            "tool_creation_proposal_rows_observed": n >= max(1, expected_tool_proposals),
+            "tool_creation_proposal_rows_observed": n_raw >= max(1, expected_tool_proposals),
+            "tool_creation_frontier_rows_observed": n >= max(1, expected_tool_proposals),
             "tool_creation_quality_pass_rate_ge_0_70": quality_pass_rate >= float(thresholds["tool_creation_min_quality_pass_rate"]),
             "tool_creation_eval_plan_rate_ge_0_85": eval_plan_rate >= float(thresholds["tool_creation_min_eval_plan_rate"]),
             "tool_creation_expected_edge_rate_ge_0_60": expected_edge_rate >= float(thresholds["tool_creation_min_expected_edge_rate"]),
@@ -760,7 +764,8 @@ def _tool_creation_evolution_metrics(
         "observed": bool(n),
         "db_path": str(db_path),
         "expected_tool_proposals": expected_tool_proposals,
-        "proposal_count": n,
+        "proposal_count": n_raw,
+        "frontier_proposal_count": n,
         "status_counts": status_counts,
         "top_tools": [
             {"tool_name": name, "count": count}
@@ -830,7 +835,7 @@ def render_tournament_markdown(report: dict[str, Any]) -> str:
             f"- market_evolve_proof: `policy={evolve.get('policy_stamped_on_seeds')} arms={evolve.get('control_arm_present') and evolve.get('candidate_arm_present')} falsified={evolve.get('falsification_gates_evaluated')}`",
             f"- ramp_policy_rehearsal: `required={rehearsal.get('required')} observed={rehearsal.get('observed')} status={rehearsal.get('status')} decision={rehearsal.get('decision')}`",
             f"- ramp_policy_metrics: `tool_refresh={rehearsal_metrics.get('tool_candidate_refresh_rate')} source_coverage={rehearsal_metrics.get('source_target_coverage_rate')} over_limit={rehearsal_metrics.get('over_limit_count')}`",
-            f"- tool_creation: `required={tool_creation.get('required')} proposals={tool_creation.get('proposal_count')} quality_pass={tool_creation_metrics.get('quality_pass_rate')} eval_plan={tool_creation_metrics.get('eval_plan_rate')} expected_edge={tool_creation_metrics.get('expected_edge_rate')}`",
+            f"- tool_creation: `required={tool_creation.get('required')} proposals={tool_creation.get('proposal_count')} frontier={tool_creation.get('frontier_proposal_count')} quality_pass={tool_creation_metrics.get('quality_pass_rate')} eval_plan={tool_creation_metrics.get('eval_plan_rate')} expected_edge={tool_creation_metrics.get('expected_edge_rate')}`",
             f"- failed_gates: `{', '.join(c.get('failed_gates') or []) or 'none'}`",
             "",
             str(c.get("interpretation") or ""),
@@ -1798,6 +1803,27 @@ def _json_dict(raw: Any) -> dict[str, Any]:
         except Exception:
             return {}
     return {}
+
+
+def _frontier_tool_proposal_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return current proposal leaves after repair iterations.
+
+    Low-grade parent proposals should remain auditable, but scale gating should
+    judge the current frontier the system would hand to tool builders.
+    """
+    parent_ids = {
+        str(row.get("parent_proposal_id") or "")
+        for row in rows
+        if str(row.get("parent_proposal_id") or "").strip()
+    }
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        row_id = str(row.get("id") or "")
+        status = str(row.get("status") or "").lower()
+        if row_id in parent_ids or status == "superseded":
+            continue
+        out.append(row)
+    return out
 
 
 def _write_json(path: Path, data: Any) -> None:
