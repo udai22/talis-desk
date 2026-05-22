@@ -1,0 +1,125 @@
+{
+  "allowed_next_step": "live_1000_scout_ramp",
+  "apply_mode": "monotonic_patch",
+  "generated_at": "2026-05-22T17:49:58.385260+00:00",
+  "geometry_replication_targets": [
+    {
+      "cell_key": "TST|structural|microstructure|",
+      "route_directive": "widen_scouts",
+      "source_work_order_id": "lso_geometry_replication",
+      "trade_scream_score": 0.6798
+    },
+    {
+      "cell_key": "NIL|intraday|polymarket|",
+      "route_directive": "widen_scouts",
+      "source_work_order_id": "lso_geometry_replication",
+      "trade_scream_score": 0.6441
+    },
+    {
+      "cell_key": "MEME|1w|factor|",
+      "route_directive": "widen_scouts",
+      "source_work_order_id": "lso_geometry_replication",
+      "trade_scream_score": 0.6415
+    },
+    {
+      "cell_key": "ILV|intraday|sentiment|",
+      "route_directive": "widen_scouts",
+      "source_work_order_id": "lso_geometry_replication",
+      "trade_scream_score": 0.6436
+    },
+    {
+      "cell_key": "BCH|1m|on_chain|source_health_gap",
+      "route_directive": "verify_now",
+      "source_work_order_id": "lso_geometry_replication",
+      "trade_scream_score": 0.6346
+    },
+    {
+      "cell_key": "JELLY|1m|microstructure|",
+      "route_directive": "widen_scouts",
+      "source_work_order_id": "lso_geometry_replication",
+      "trade_scream_score": 0.6263
+    }
+  ],
+  "intent": "Apply live-100 learning as a monotonic seed policy patch for the next evaluator-gated ramp.",
+  "market_evolve_experiment_policy": {
+    "active_evolution_arms": [
+      "harness_repair_arm",
+      "source_freshness_gap_arm",
+      "node_intelligence_promotion_arm",
+      "geometry_replication_arm",
+      "market_evolve_policy_arena"
+    ],
+    "keep_matched_control_candidate_pairs": true,
+    "min_pairs_for_100_plus_scouts": 20,
+    "promote_only_on_evaluator_positive_delta": true
+  },
+  "policy_id": "lrp_cycle_live_scout_canary_20260522t174212z_100",
+  "prompt_repair_modes": [
+    "hypothesis_string_consistency",
+    "gap_string_instead_of_empty",
+    "evidence_ref_hard_gate",
+    "stale_data_gap_prompt",
+    "node_contract_upgrade"
+  ],
+  "quality_flags": [],
+  "ramp_success_requirements": [
+    "provider_error_rate <= 0.02",
+    "success_rate >= 0.90",
+    "duplicate_hypothesis_rate <= 0.20",
+    "low_prompt_quality_rate <= 0.05",
+    "json_unparseable_rate == 0 or scout_json_retry_success covers every miss",
+    "invented_tool_persist_rate == 0",
+    "top_geometry_confirmation_rate improves on frontier/tension cells",
+    "scheduled production remains blocked until two independent 1,000-scout shadow runs pass repeatability gates"
+  ],
+  "repair_work_order_ids": [
+    "lso_json_unparseable_scout_harness",
+    "lso_invented_tools_tool_harness",
+    "lso_empty_hypothesis_prompt_policy",
+    "lso_missing_information_strings_prompt_policy",
+    "lso_missing_evidence_refs_source_router",
+    "lso_stale_date_directionality_source_router",
+    "lso_adversarial_quarantine_adversarial_reviewer",
+    "lso_node_not_promoted_node_intelligence",
+    "lso_geometry_replication",
+    "lso_market_evolve_arena"
+  ],
+  "requires_explicit_spend_authorization": true,
+  "schema_version": "talis_live_scout_ramp_policy_v1",
+  "seed_payload_patch": {
+    "max_evidence_tools_min": 6,
+    "max_tool_iterations": 2,
+    "preserve_missing_tool_as_proposal": true,
+    "prompt_contract_pressure": "strict",
+    "prompt_min_information_strings": 2,
+    "prompt_require_evidence_refs": true,
+    "prompt_require_kill_signal": true,
+    "prompt_require_mechanism": true,
+    "quarantine_before_verifier_spend": true,
+    "source_family_targets_append": [
+      "event_feed",
+      "hydromancer",
+      "market_timeseries",
+      "our_hl_node",
+      "our_node",
+      "parallel_web",
+      "source_health"
+    ],
+    "stale_evidence_becomes_gap_string": true,
+    "suggested_tool_allowlist_only": true,
+    "tool_candidate_limit_min": 12
+  },
+  "source": "live_scout_learning_report",
+  "source_cycle_id": "cycle_live_scout_canary_20260522T174212Z",
+  "watch_metrics": [
+    "accepted_unique_high_quality_coverage_per_dollar_delta",
+    "empty_hypothesis_with_strings_rate",
+    "invented_tool_persist_rate",
+    "json_unparseable_rate",
+    "missing_evidence_refs_rate",
+    "missing_information_strings_rate",
+    "quarantine_to_repair_route_rate",
+    "stale_directionality_flag_rate",
+    "top_geometry_confirmation_rate"
+  ]
+}

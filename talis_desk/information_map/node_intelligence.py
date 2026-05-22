@@ -828,6 +828,8 @@ def _source_family(ev: dict[str, Any], result: dict[str, Any]) -> str:
         str(result.get("action") or ""),
         str(result.get("source") or ""),
     ]).lower()
+    if any(tok in text for tok in ("farm_grok_x_alpha", "grok", "x_search", "xai", "twitter", "x.com")):
+        return "grok_x_alpha"
     if "hydromancer" in text or any(k in result for k in ("leaders", "builder", "fills_sample")):
         return "hydromancer"
     if (

@@ -157,6 +157,34 @@ def test_launch_gate_surfaces_native_tool_repair_harness():
     assert "<b>4</b>" in html
 
 
+def test_launch_gate_preserves_native_tool_repair_on_next_ramp_command():
+    live = _live_pass_report(n_scouts=10)
+    live["tool_creation_contract_repair"] = {
+        "enabled": True,
+        "status": "pass",
+        "repair_limit": 321,
+    }
+    report = build_launch_gate_report(
+        deterministic_report=_deterministic_report(),
+        live_report=live,
+        tournament_report={
+            "promotion_decision": {
+                "decision": "promote_to_100_scout_ramp",
+                "ready_for_live_100": True,
+                "ready_for_live_1000": False,
+                "ready_for_scheduled_production": False,
+                "reason": "10-scout canary passed.",
+            }
+        },
+        allow_live_spend=True,
+    )
+
+    command = report["decision"]["next_command"]
+    assert "--live-scouts 100" in command
+    assert "--repair-tool-proposal-contracts" in command
+    assert "--tool-proposal-repair-limit 321" in command
+
+
 def test_launch_gate_blocks_when_deterministic_market_evolve_readiness_fails():
     deterministic = _deterministic_report()
     deterministic["readiness"]["status"] = "fail"

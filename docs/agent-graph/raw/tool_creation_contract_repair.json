@@ -1,0 +1,119 @@
+{
+  "after": {
+    "frontier_proposal_count": 202,
+    "metrics": {
+      "avg_quality_score": 1.0,
+      "eval_plan_rate": 1.0,
+      "expected_edge_rate": 1.0,
+      "promotion_gate_rate": 1.0,
+      "quality_pass_rate": 1.0,
+      "would_change_decision_rate": 1.0
+    },
+    "proposal_count": 202,
+    "status_counts": {
+      "proposed": 202
+    },
+    "top_quality_flags": [],
+    "top_tools": [
+      {
+        "count": 76,
+        "tool_name": "hydromancer_actor_quality_bulk"
+      },
+      {
+        "count": 42,
+        "tool_name": "hl_node_reject_burst_reader"
+      },
+      {
+        "count": 42,
+        "tool_name": "hl_node_stream_reader"
+      },
+      {
+        "count": 38,
+        "tool_name": "wallet_route_state_monitor"
+      },
+      {
+        "count": 1,
+        "tool_name": "live_tradeable_universe_source_health"
+      },
+      {
+        "count": 1,
+        "tool_name": "source_health_citations"
+      },
+      {
+        "count": 1,
+        "tool_name": "mempool_pending_intent"
+      },
+      {
+        "count": 1,
+        "tool_name": "source_family_context_expander"
+      }
+    ]
+  },
+  "before": {
+    "frontier_proposal_count": 202,
+    "metrics": {
+      "avg_quality_score": 1.0,
+      "eval_plan_rate": 1.0,
+      "expected_edge_rate": 1.0,
+      "promotion_gate_rate": 1.0,
+      "quality_pass_rate": 1.0,
+      "would_change_decision_rate": 1.0
+    },
+    "proposal_count": 202,
+    "status_counts": {
+      "proposed": 202
+    },
+    "top_quality_flags": [],
+    "top_tools": [
+      {
+        "count": 76,
+        "tool_name": "hydromancer_actor_quality_bulk"
+      },
+      {
+        "count": 42,
+        "tool_name": "hl_node_reject_burst_reader"
+      },
+      {
+        "count": 42,
+        "tool_name": "hl_node_stream_reader"
+      },
+      {
+        "count": 38,
+        "tool_name": "wallet_route_state_monitor"
+      },
+      {
+        "count": 1,
+        "tool_name": "live_tradeable_universe_source_health"
+      },
+      {
+        "count": 1,
+        "tool_name": "source_health_citations"
+      },
+      {
+        "count": 1,
+        "tool_name": "mempool_pending_intent"
+      },
+      {
+        "count": 1,
+        "tool_name": "source_family_context_expander"
+      }
+    ]
+  },
+  "cycle_id": "cycle_live_scout_canary_20260522T174212Z",
+  "enabled": true,
+  "failed_gates": [],
+  "gates": {
+    "tool_contract_eval_plan_rate_ge_0_85": true,
+    "tool_contract_expected_edge_rate_ge_0_60": true,
+    "tool_contract_frontier_quality_ge_0_70": true,
+    "tool_contract_would_change_decision_rate_ge_0_60": true
+  },
+  "generated_at": "2026-05-22T17:49:56.903732+00:00",
+  "limit": 500,
+  "quality_flags": [],
+  "repairs": [],
+  "repairs_created": 0,
+  "required": true,
+  "schema_version": "talis_tool_creation_contract_repair_v1",
+  "status": "pass"
+}

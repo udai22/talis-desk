@@ -586,7 +586,7 @@ def _next_ramp_policy(
     max_tool_iterations = 2 if source_gap_pressure or quarantine_pressure else 1
     max_evidence_tools = 6 if source_gap_pressure or node_pressure else 4
     tool_candidate_limit = 12 if source_gap_pressure or node_pressure else 10
-    source_targets = ["source_health", "parallel_web"]
+    source_targets = ["source_health", "parallel_web", "grok_x_alpha"]
     if node_pressure:
         source_targets.extend(["hydromancer", "our_node", "our_hl_node"])
     if source_gap_pressure:

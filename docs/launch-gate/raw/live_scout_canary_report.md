@@ -2,13 +2,13 @@
 
 - status: `pass`
 - mode: `live_provider_cost_capped`
-- cycle: `cycle_live100_20260522_live_100`
+- cycle: `cycle_live_scout_canary_20260522T174212Z`
 - scouts: `100`
 - cost_cap_usd: `1.0`
-- estimated_cost_usd: `0.35944`
+- estimated_cost_usd: `0.64944`
 - success_rate: `0.93`
-- avg_strings_per_scout: `2.92`
-- information_strings: `292`
+- avg_strings_per_scout: `2.91`
+- information_strings: `291`
 
 ## Gates
 
@@ -25,6 +25,20 @@
 - PASS `synthesis_promoted`
 - PASS `geometry_cells_created`
 - PASS `self_healing_no_failures`
+
+## Tool Creation Contract Repair
+
+- enabled: `True`
+- status: `pass`
+- repairs_created: `0`
+- frontier_proposals: `202`
+- quality_pass_rate: `1.0`
+- eval_plan_rate: `1.0`
+- expected_edge_rate: `1.0`
+- PASS `tool_contract_frontier_quality_ge_0_70`
+- PASS `tool_contract_eval_plan_rate_ge_0_85`
+- PASS `tool_contract_expected_edge_rate_ge_0_60`
+- PASS `tool_contract_would_change_decision_rate_ge_0_60`
 
 ## Decision
 

@@ -80,22 +80,30 @@ LENS_TOOL_TERMS: dict[str, list[str]] = {
         "wallet", "whale", "flow", "onchain", "leaderboard", "address",
         "cluster", "unstake", "staking", "deposit", "withdrawal",
         "hydromancer", "pnl", "clearinghouse", "builder", "reject",
+        "grok", "x_search", "twitter", "screenshot", "social alpha",
     ],
-    "sentiment": ["news", "sentiment", "headline", "gdelt", "social"],
+    "sentiment": [
+        "news", "sentiment", "headline", "gdelt", "social", "grok",
+        "x_search", "twitter", "x.com", "mindshare", "reply", "thread",
+    ],
     "rotation": ["rotation", "relative", "rrg", "flow", "sector"],
     "factor": ["factor", "return", "beta", "momentum", "quality"],
     "vol_surface": ["vol", "variance", "skew", "surface"],
-    "catalyst": ["event", "calendar", "earnings", "filing", "catalyst"],
+    "catalyst": [
+        "event", "calendar", "earnings", "filing", "catalyst", "grok",
+        "x_search", "twitter", "thread", "reply", "screenshot",
+    ],
     "filing": ["sec", "edgar", "filing", "10-k", "13f", "financial"],
-    "polymarket": ["polymarket", "prediction", "event", "probability"],
-    "anomaly": ["anomaly", "outlier", "scan", "novelty"],
+    "polymarket": ["polymarket", "prediction", "event", "probability", "grok", "x_search", "twitter"],
+    "anomaly": ["anomaly", "outlier", "scan", "novelty", "grok", "x_search", "twitter", "social alpha"],
     "on_chain": [
         "onchain", "wallet", "chain", "token", "holder", "unstake",
         "staking", "unlock", "validator", "deposit", "withdrawal",
         "hydromancer", "clearinghouse", "builder", "reject",
+        "grok", "x_search", "twitter", "reply", "thread", "screenshot",
     ],
     "money_velocity": ["m2", "velocity", "liquidity", "fed", "flow"],
-    "structural": ["source_library", "framework", "cycle", "structural"],
+    "structural": ["source_library", "framework", "cycle", "structural", "grok", "x_search", "twitter"],
 }
 
 BIAS_MODES: list[str] = [
@@ -104,6 +112,7 @@ BIAS_MODES: list[str] = [
 ]
 
 ALPHA_GEOMETRY_ACTION_TOOL_URI = "tic://tool/talis_native/plan_alpha_geometry_actions@v1"
+GROK_X_ALPHA_TOOL_URI = "tic://tool/talis_native/farm_grok_x_alpha@v1"
 
 
 @dataclass
@@ -957,6 +966,26 @@ def narrow_tools_for_seed(seed: SeedCell, k: Optional[int] = None) -> list[str]:
             ))
         )
     )
+    grok_x_slice = (
+        seed.lens in {
+            "sentiment",
+            "catalyst",
+            "polymarket",
+            "anomaly",
+            "on_chain",
+            "smart_money",
+            "structural",
+            "microstructure",
+        }
+        or "grok_x_alpha" in source_family_targets
+        or any(tok in str(seed.theme or "").lower() for tok in (
+            "twitter",
+            "x.com",
+            "grok",
+            "mindshare",
+            "social alpha",
+        ))
+    )
     scored: list[tuple[float, str]] = []
     for r in rows:
         uri = str(r["tool_uri"])
@@ -988,6 +1017,8 @@ def narrow_tools_for_seed(seed: SeedCell, k: Optional[int] = None) -> list[str]:
             score += 2.0
         if shape_guided_slice and uri == ALPHA_GEOMETRY_ACTION_TOOL_URI:
             score += 20.0
+        if grok_x_slice and uri == GROK_X_ALPHA_TOOL_URI:
+            score += 7.0
         if str(r["kind"] or "") == "learned":
             for target in source_family_targets:
                 if target in hay:

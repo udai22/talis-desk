@@ -179,6 +179,20 @@ DATA_SURFACES: tuple[DataSurface, ...] = (
         source_family="web",
     ),
     DataSurface(
+        key="grok_x_social_alpha",
+        title="Grok/X social alpha",
+        role="Who is noticing early",
+        question="Do X posts, reply chains, images, or informed handles reveal pre-consensus market pressure?",
+        example_tools=("tic://tool/talis_native/farm_grok_x_alpha@v1",),
+        edge_types=(
+            "x_post -> actor",
+            "actor -> claim",
+            "claim -> attention_delta",
+            "attention_delta -> market_pressure",
+        ),
+        source_family="grok_x_alpha",
+    ),
+    DataSurface(
         key="prediction_markets",
         title="Prediction markets",
         role="What odds imply",
@@ -355,6 +369,15 @@ def _evidence_matches(surface: DataSurface, item: dict[str, Any]) -> bool:
         return "semantic_search" in uri or "recent_news" in uri or "filing" in summary or "social" in summary or "post" in summary
     if key == "parallel_web_attention":
         return "parallel_search" in uri or "web_search" in uri or "perplexity" in uri or "search_result" in summary
+    if key == "grok_x_social_alpha":
+        return any(token in uri or token in source or token in summary for token in (
+            "farm_grok_x_alpha",
+            "grok_x_alpha",
+            "x_search",
+            "xai",
+            "twitter",
+            "x.com",
+        ))
     if key == "prediction_markets":
         return "polymarket" in uri or "hl_outcomes" in uri or "outcome" in summary or "probability" in summary
     if key == "options_vol_derivatives":
@@ -403,6 +426,12 @@ def _connection_edges(touches: tuple[DataSurfaceTouch, ...], *, entity: str) -> 
         edges.append("builder -> node_flow_quality")
     if {"parallel_web_attention", "filings_news_social"} <= touched:
         edges.append("web_attention -> primary_source_crosscheck")
+    if {"grok_x_social_alpha", "market_state"} <= touched:
+        edges.append("x_attention -> market_state_pressure")
+    if {"grok_x_social_alpha", "hydromancer_actor_graph"} <= touched:
+        edges.append("x_actor -> wallet_actor_crosscheck")
+    if {"grok_x_social_alpha", "parallel_web_attention"} <= touched:
+        edges.append("x_attention -> open_web_contradiction")
     if {"prediction_markets", "filings_news_social"} <= touched:
         edges.append("prediction_market -> news_disagreement")
     if {"options_vol_derivatives", "event_feed"} <= touched:
@@ -465,6 +494,27 @@ def _connection_expansions(
             suggested_tools=("tic://tool/parallel/parallel_search@v1", "tic://tool/perplexity/web_search@v1"),
             expected_edge="claim -> source_diversity -> contradiction_check",
             priority="medium",
+        ))
+    if "grok_x_social_alpha" not in touched_keys and lens in {
+        "sentiment",
+        "catalyst",
+        "polymarket",
+        "anomaly",
+        "on_chain",
+        "smart_money",
+        "structural",
+        "microstructure",
+    }:
+        expansions.append(ConnectionExpansion(
+            title="Farm Grok/X social alpha",
+            why=(
+                "X is the fastest attention layer. Grok should look for credible handles, "
+                "screenshots, reply-chain confirmations or denials, and early narrative pressure."
+            ),
+            target_surface_key="grok_x_social_alpha",
+            suggested_tools=("tic://tool/talis_native/farm_grok_x_alpha@v1",),
+            expected_edge="x_post -> actor_quality -> claim -> repricing_pressure",
+            priority="high" if lens in {"sentiment", "catalyst", "on_chain", "smart_money"} else "medium",
         ))
     if "prediction_markets" not in touched_keys and lens in {"polymarket", "catalyst", "sentiment"}:
         expansions.append(ConnectionExpansion(

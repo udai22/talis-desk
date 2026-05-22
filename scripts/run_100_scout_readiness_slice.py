@@ -1102,6 +1102,8 @@ def _cell_key(seed: SeedCell) -> str:
 
 def _source_family(uri: str) -> str:
     text = uri.lower()
+    if any(tok in text for tok in ("farm_grok_x_alpha", "grok", "x_search", "xai", "twitter", "x.com")):
+        return "grok_x_alpha"
     if "hydromancer" in text:
         return "hydromancer"
     if "jarvis" in text or "node" in text or "reject" in text:

@@ -330,6 +330,10 @@ def _normalize_source_families(raw: Any) -> list[str]:
         "hl_node": "our_node",
         "web_attention": "parallel_web",
         "market_microstructure": "market_timeseries",
+        "grok_x": "grok_x_alpha",
+        "x_search": "grok_x_alpha",
+        "twitter": "grok_x_alpha",
+        "social_alpha": "grok_x_alpha",
     }
     out = []
     for item in _string_list(raw):
@@ -340,6 +344,8 @@ def _normalize_source_families(raw: Any) -> list[str]:
 
 def _source_family_for_uri(uri: str) -> str:
     text = str(uri or "").lower()
+    if any(tok in text for tok in ("farm_grok_x_alpha", "grok", "x_search", "xai", "twitter", "x.com")):
+        return "grok_x_alpha"
     if "hydromancer" in text:
         return "hydromancer"
     if "parallel" in text or "perplexity" in text:

@@ -1,0 +1,465 @@
+{
+  "application": {
+    "applied_seed_count": 100,
+    "geometry_annotated_seed_count": 2,
+    "policy_id": "lrp_cycle_live_scout_canary_20260522t173621z_10",
+    "quality_flags": [],
+    "repair_work_order_ids": [
+      "lso_json_unparseable_scout_harness",
+      "lso_invented_tools_tool_harness",
+      "lso_node_not_promoted_node_intelligence",
+      "lso_geometry_replication",
+      "lso_market_evolve_arena"
+    ],
+    "schema_version": "live_scout_ramp_policy_application_v1",
+    "seed_count": 100,
+    "source_family_targets_added": [
+      "hydromancer",
+      "our_hl_node",
+      "our_node",
+      "parallel_web",
+      "source_health"
+    ],
+    "status": "applied",
+    "tool_candidate_added_count": 100,
+    "tool_candidate_refreshed_seed_count": 100,
+    "watch_metrics": [
+      "accepted_unique_high_quality_coverage_per_dollar_delta",
+      "invented_tool_persist_rate",
+      "json_unparseable_rate",
+      "top_geometry_confirmation_rate"
+    ]
+  },
+  "baseline": {
+    "avg_tool_candidates": 10.72,
+    "source_family_counts": {
+      "astrology": 6,
+      "event_feed": 53,
+      "hydromancer": 47,
+      "market_timeseries": 100,
+      "our_node": 56,
+      "parallel_web": 24,
+      "prediction_market": 8,
+      "source_health": 100,
+      "tool_atlas": 99
+    }
+  },
+  "candidate": {
+    "avg_tool_candidates": 11.72,
+    "source_family_counts": {
+      "astrology": 6,
+      "event_feed": 58,
+      "hydromancer": 47,
+      "market_timeseries": 100,
+      "our_node": 59,
+      "parallel_web": 24,
+      "prediction_market": 8,
+      "source_health": 100,
+      "tool_atlas": 100
+    }
+  },
+  "decision": "policy_can_gate_live_spend",
+  "gates": {
+    "candidate_menu_not_smaller": true,
+    "policy_attached_all": true,
+    "repair_ids_attached_all": true,
+    "source_target_coverage": true,
+    "strict_contract_all": true,
+    "tool_overbreadth_ok": true,
+    "tool_refresh_all": true,
+    "watch_metrics_attached_all": true
+  },
+  "metrics": {
+    "candidate_tool_delta_avg": 1.0,
+    "over_limit_count": 0,
+    "policy_attached_rate": 1.0,
+    "repair_ids_attached_rate": 1.0,
+    "source_target_coverage_rate": 1.0,
+    "strict_contract_rate": 1.0,
+    "tool_candidate_added_count": 100,
+    "tool_candidate_refresh_rate": 1.0,
+    "watch_metrics_attached_rate": 1.0
+  },
+  "policy_id": "lrp_cycle_live_scout_canary_20260522t173621z_10",
+  "quality_flags": [],
+  "sample_deltas": [
+    {
+      "added_tools": [
+        "tic://tool/builtin/analyze_microstructure@v1",
+        "tic://tool/builtin/compare_vehicle_flow_to_af_baseline@v1"
+      ],
+      "baseline_tool_count": 10,
+      "candidate_tool_count": 12,
+      "entity": "kFLOKI",
+      "horizon": "1d",
+      "lens": "factor",
+      "removed_tools": [],
+      "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0000__mexp_pair_31cbf9b730ae_control",
+      "source_families": [
+        "market_timeseries",
+        "our_node",
+        "source_health",
+        "tool_atlas"
+      ]
+    },
+    {
+      "added_tools": [
+        "tic://tool/builtin/analyze_microstructure@v1",
+        "tic://tool/builtin/compare_vehicle_flow_to_af_baseline@v1"
+      ],
+      "baseline_tool_count": 10,
+      "candidate_tool_count": 12,
+      "entity": "kFLOKI",
+      "horizon": "1d",
+      "lens": "factor",
+      "removed_tools": [],
+      "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0000__mexp_pair_31cbf9b730ae_candidate",
+      "source_families": [
+        "market_timeseries",
+        "our_node",
+        "source_health",
+        "tool_atlas"
+      ]
+    },
+    {
+      "added_tools": [
+        "tic://tool/builtin/describe_entity@v1",
+        "tic://tool/talis_native/plan_alpha_geometry_actions@v1"
+      ],
+      "baseline_tool_count": 10,
+      "candidate_tool_count": 12,
+      "entity": "WIF",
+      "horizon": "1q",
+      "lens": "catalyst",
+      "removed_tools": [],
+      "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0001__mexp_pair_025cca9ce0d5_control",
+      "source_families": [
+        "event_feed",
+        "hydromancer",
+        "market_timeseries",
+        "parallel_web",
+        "source_health",
+        "tool_atlas"
+      ]
+    },
+    {
+      "added_tools": [],
+      "baseline_tool_count": 12,
+      "candidate_tool_count": 12,
+      "entity": "WIF",
+      "horizon": "1q",
+      "lens": "catalyst",
+      "removed_tools": [],
+      "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0001__mexp_pair_025cca9ce0d5_candidate",
+      "source_families": [
+        "event_feed",
+        "hydromancer",
+        "market_timeseries",
+        "parallel_web",
+        "source_health",
+        "tool_atlas"
+      ]
+    },
+    {
+      "added_tools": [
+        "tic://tool/builtin/find_related_wallets@v1",
+        "tic://tool/builtin/get_noob_wallets@v1"
+      ],
+      "baseline_tool_count": 10,
+      "candidate_tool_count": 12,
+      "entity": "ETHFI",
+      "horizon": "intraday",
+      "lens": "on_chain",
+      "removed_tools": [],
+      "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0002__mexp_pair_79a0a3d0a033_control",
+      "source_families": [
+        "hydromancer",
+        "market_timeseries",
+        "our_node",
+        "source_health",
+        "tool_atlas"
+      ]
+    },
+    {
+      "added_tools": [],
+      "baseline_tool_count": 12,
+      "candidate_tool_count": 12,
+      "entity": "ETHFI",
+      "horizon": "intraday",
+      "lens": "on_chain",
+      "removed_tools": [],
+      "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0002__mexp_pair_79a0a3d0a033_candidate",
+      "source_families": [
+        "hydromancer",
+        "market_timeseries",
+        "our_node",
+        "source_health",
+        "tool_atlas"
+      ]
+    },
+    {
+      "added_tools": [
+        "tic://tool/builtin/query_claims_by_entity@v1",
+        "tic://tool/perplexity/web_search@v1"
+      ],
+      "baseline_tool_count": 10,
+      "candidate_tool_count": 12,
+      "entity": "DYDX",
+      "horizon": "1w",
+      "lens": "sentiment",
+      "removed_tools": [],
+      "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0003__mexp_pair_40a2bf6566fd_control",
+      "source_families": [
+        "event_feed",
+        "market_timeseries",
+        "parallel_web",
+        "source_health",
+        "tool_atlas"
+      ]
+    },
+    {
+      "added_tools": [],
+      "baseline_tool_count": 12,
+      "candidate_tool_count": 12,
+      "entity": "DYDX",
+      "horizon": "1w",
+      "lens": "sentiment",
+      "removed_tools": [],
+      "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0003__mexp_pair_40a2bf6566fd_candidate",
+      "source_families": [
+        "event_feed",
+        "market_timeseries",
+        "parallel_web",
+        "source_health",
+        "tool_atlas"
+      ]
+    },
+    {
+      "added_tools": [
+        "tic://tool/builtin/find_related_wallets@v1",
+        "tic://tool/builtin/get_noob_wallets@v1"
+      ],
+      "baseline_tool_count": 10,
+      "candidate_tool_count": 12,
+      "entity": "GRIFFAIN",
+      "horizon": "1q",
+      "lens": "on_chain",
+      "removed_tools": [],
+      "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0004__mexp_pair_6be5f2c91248_control",
+      "source_families": [
+        "hydromancer",
+        "market_timeseries",
+        "our_node",
+        "source_health",
+        "tool_atlas"
+      ]
+    },
+    {
+      "added_tools": [],
+      "baseline_tool_count": 12,
+      "candidate_tool_count": 12,
+      "entity": "GRIFFAIN",
+      "horizon": "1q",
+      "lens": "on_chain",
+      "removed_tools": [],
+      "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0004__mexp_pair_6be5f2c91248_candidate",
+      "source_families": [
+        "hydromancer",
+        "market_timeseries",
+        "our_node",
+        "source_health",
+        "tool_atlas"
+      ]
+    },
+    {
+      "added_tools": [
+        "tic://tool/builtin/get_microstructure_state@v1",
+        "tic://tool/builtin/get_noob_wallets@v1"
+      ],
+      "baseline_tool_count": 10,
+      "candidate_tool_count": 12,
+      "entity": "CELO",
+      "horizon": "1q",
+      "lens": "rotation",
+      "removed_tools": [],
+      "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0005__mexp_pair_89ff883a0ac9_control",
+      "source_families": [
+        "market_timeseries",
+        "our_node",
+        "source_health",
+        "tool_atlas"
+      ]
+    },
+    {
+      "added_tools": [],
+      "baseline_tool_count": 12,
+      "candidate_tool_count": 12,
+      "entity": "CELO",
+      "horizon": "1q",
+      "lens": "rotation",
+      "removed_tools": [],
+      "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0005__mexp_pair_89ff883a0ac9_candidate",
+      "source_families": [
+        "market_timeseries",
+        "our_node",
+        "source_health",
+        "tool_atlas"
+      ]
+    },
+    {
+      "added_tools": [],
+      "baseline_tool_count": 8,
+      "candidate_tool_count": 8,
+      "entity": "XAI",
+      "horizon": "1d",
+      "lens": "anomaly",
+      "removed_tools": [],
+      "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0006__mexp_pair_0435ac620261_control",
+      "source_families": [
+        "event_feed",
+        "hydromancer",
+        "market_timeseries",
+        "source_health",
+        "tool_atlas"
+      ]
+    },
+    {
+      "added_tools": [],
+      "baseline_tool_count": 8,
+      "candidate_tool_count": 8,
+      "entity": "XAI",
+      "horizon": "1d",
+      "lens": "anomaly",
+      "removed_tools": [],
+      "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0006__mexp_pair_0435ac620261_candidate",
+      "source_families": [
+        "event_feed",
+        "hydromancer",
+        "market_timeseries",
+        "source_health",
+        "tool_atlas"
+      ]
+    },
+    {
+      "added_tools": [
+        "tic://tool/builtin/find_related_wallets@v1",
+        "tic://tool/builtin/get_noob_wallets@v1"
+      ],
+      "baseline_tool_count": 10,
+      "candidate_tool_count": 12,
+      "entity": "BCH",
+      "horizon": "1m",
+      "lens": "on_chain",
+      "removed_tools": [],
+      "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0007__mexp_pair_220b9046d11d_control",
+      "source_families": [
+        "hydromancer",
+        "market_timeseries",
+        "our_node",
+        "source_health",
+        "tool_atlas"
+      ]
+    },
+    {
+      "added_tools": [],
+      "baseline_tool_count": 12,
+      "candidate_tool_count": 12,
+      "entity": "BCH",
+      "horizon": "1m",
+      "lens": "on_chain",
+      "removed_tools": [],
+      "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0007__mexp_pair_220b9046d11d_candidate",
+      "source_families": [
+        "hydromancer",
+        "market_timeseries",
+        "our_node",
+        "source_health",
+        "tool_atlas"
+      ]
+    },
+    {
+      "added_tools": [
+        "tic://tool/agent_native/find_confluence@v1",
+        "tic://tool/hydromancer/get_wallet_pnl_summary@v1"
+      ],
+      "baseline_tool_count": 10,
+      "candidate_tool_count": 12,
+      "entity": "SUPER",
+      "horizon": "1d",
+      "lens": "smart_money",
+      "removed_tools": [],
+      "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0008__mexp_pair_bf9980011b58_control",
+      "source_families": [
+        "hydromancer",
+        "market_timeseries",
+        "our_node",
+        "source_health",
+        "tool_atlas"
+      ]
+    },
+    {
+      "added_tools": [],
+      "baseline_tool_count": 12,
+      "candidate_tool_count": 12,
+      "entity": "SUPER",
+      "horizon": "1d",
+      "lens": "smart_money",
+      "removed_tools": [],
+      "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0008__mexp_pair_bf9980011b58_candidate",
+      "source_families": [
+        "hydromancer",
+        "market_timeseries",
+        "our_node",
+        "source_health",
+        "tool_atlas"
+      ]
+    },
+    {
+      "added_tools": [
+        "tic://tool/builtin/query_anomalies_active@v1",
+        "tic://tool/builtin/regime_analog_search@v1"
+      ],
+      "baseline_tool_count": 10,
+      "candidate_tool_count": 12,
+      "entity": "ZEREBRO",
+      "horizon": "1w",
+      "lens": "vol_surface",
+      "removed_tools": [],
+      "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0009__mexp_pair_b42d5fe24a09_control",
+      "source_families": [
+        "event_feed",
+        "market_timeseries",
+        "our_node",
+        "source_health",
+        "tool_atlas"
+      ]
+    },
+    {
+      "added_tools": [],
+      "baseline_tool_count": 12,
+      "candidate_tool_count": 12,
+      "entity": "ZEREBRO",
+      "horizon": "1w",
+      "lens": "vol_surface",
+      "removed_tools": [],
+      "seed_id": "seed_cycle_live_scout_canary_20260522T174212Z_T_0009__mexp_pair_b42d5fe24a09_candidate",
+      "source_families": [
+        "event_feed",
+        "market_timeseries",
+        "our_node",
+        "source_health",
+        "tool_atlas"
+      ]
+    }
+  ],
+  "schema_version": "live_scout_ramp_policy_rehearsal_v1",
+  "score": 1.0,
+  "seed_count": 100,
+  "status": "pass",
+  "target_source_family_hits": {
+    "hydromancer": 47,
+    "our_node": 59,
+    "parallel_web": 24,
+    "source_health": 100
+  }
+}

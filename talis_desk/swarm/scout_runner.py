@@ -1187,6 +1187,8 @@ def _source_family_for_candidate(row: dict[str, Any]) -> str:
         str(row.get("description") or ""),
         str(row.get("provider") or ""),
     ]).lower()
+    if any(tok in text for tok in ("farm_grok_x_alpha", "grok", "x_search", "xai", "twitter", "x.com")):
+        return "grok_x_alpha"
     if any(tok in text for tok in ("hl_", "hyperliquid", "funding", "perp", "l4", "coinalyze", "pyth", "coingecko")):
         return "crypto_market_microstructure"
     if any(tok in text for tok in ("hydromancer", "wallet", "whale", "nansen", "onchain", "stablecoin", "dex")):
@@ -1215,24 +1217,26 @@ def _source_family_route_score(family: str, seed: SeedCell) -> float:
     asset_crypto = str(seed.entity or "").upper() in {"BTC", "ETH", "SOL", "HYPE"}
     weights: dict[str, dict[str, float]] = {
         "macro": {"macro_official": 3.0, "real_economy_alt": 1.4, "news_social_attention": 0.8},
-        "microstructure": {"crypto_market_microstructure": 3.0, "options_vol": 1.0},
+        "microstructure": {"crypto_market_microstructure": 3.0, "options_vol": 1.0, "grok_x_alpha": 0.8},
         "options_flow": {"options_vol": 3.2, "crypto_market_microstructure": 0.8},
         "vol_surface": {"options_vol": 3.2, "crypto_market_microstructure": 0.8},
-        "smart_money": {"onchain_wallet_actor": 3.2, "crypto_market_microstructure": 1.6, "news_social_attention": 0.6},
-        "on_chain": {"onchain_wallet_actor": 3.2, "crypto_market_microstructure": 1.8, "news_social_attention": 0.8},
-        "sentiment": {"news_social_attention": 3.0, "prediction_markets": 1.2},
-        "catalyst": {"equity_fundamental_filings": 2.2, "news_social_attention": 2.0, "prediction_markets": 1.0},
+        "smart_money": {"onchain_wallet_actor": 3.2, "crypto_market_microstructure": 1.6, "grok_x_alpha": 1.7, "news_social_attention": 0.6},
+        "on_chain": {"onchain_wallet_actor": 3.2, "crypto_market_microstructure": 1.8, "grok_x_alpha": 1.5, "news_social_attention": 0.8},
+        "sentiment": {"grok_x_alpha": 3.4, "news_social_attention": 3.0, "prediction_markets": 1.2},
+        "catalyst": {"equity_fundamental_filings": 2.2, "grok_x_alpha": 2.4, "news_social_attention": 2.0, "prediction_markets": 1.0},
         "filing": {"equity_fundamental_filings": 3.2, "regulatory_innovation_gov": 0.8},
-        "polymarket": {"prediction_markets": 3.2, "news_social_attention": 1.4},
+        "polymarket": {"prediction_markets": 3.2, "grok_x_alpha": 1.8, "news_social_attention": 1.4},
         "rotation": {"macro_official": 1.4, "crypto_market_microstructure": 1.0, "news_social_attention": 0.8},
         "factor": {"equity_fundamental_filings": 1.8, "macro_official": 1.0},
         "money_velocity": {"macro_official": 2.2, "onchain_wallet_actor": 1.8},
-        "structural": {"regulatory_innovation_gov": 1.8, "real_economy_alt": 1.6, "macro_official": 1.2},
-        "anomaly": {"celestial_cycles": 1.2, "news_social_attention": 1.4, "crypto_market_microstructure": 1.0},
+        "structural": {"regulatory_innovation_gov": 1.8, "real_economy_alt": 1.6, "grok_x_alpha": 1.3, "macro_official": 1.2},
+        "anomaly": {"grok_x_alpha": 1.8, "celestial_cycles": 1.2, "news_social_attention": 1.4, "crypto_market_microstructure": 1.0},
     }
     score = weights.get(lens, {}).get(family, 0.0)
     if asset_crypto and family in {"crypto_market_microstructure", "onchain_wallet_actor"}:
         score += 0.8
+    if asset_crypto and family == "grok_x_alpha" and lens in {"sentiment", "catalyst", "on_chain", "smart_money", "anomaly"}:
+        score += 0.6
     if family == "celestial_cycles" and lens in {"structural", "macro", "anomaly"}:
         score += 0.8
     return score
@@ -1307,6 +1311,15 @@ def _infer_tool_args(uri: str, seed: SeedCell) -> Optional[dict[str, Any]]:
         if isinstance(payload.get("routing_thresholds"), dict):
             args["routing_thresholds"] = payload["routing_thresholds"]
         return args
+    if slug == "farm_grok_x_alpha":
+        return {
+            "entity": seed.entity,
+            "horizon": seed.horizon,
+            "lens": seed.lens,
+            "query": _seed_query(seed),
+            "max_candidates": 8,
+            "allow_live": os.environ.get("TALIS_ALLOW_LIVE_GROK_X_ALPHA") == "1",
+        }
     if slug == "query_events_recent":
         if seed.lens == "catalyst":
             event_types = ["earnings", "filing", "macro_release", "news"]
@@ -1816,6 +1829,8 @@ def _filter_fulfilled_tool_requests(
 
 def _source_family_from_request(tool_name: str, tool_uri: str, purpose: str) -> str:
     text = " ".join([tool_name, tool_uri, purpose]).lower()
+    if any(tok in text for tok in ("farm_grok_x_alpha", "grok", "x_search", "xai", "twitter", "x.com")):
+        return "grok_x_alpha"
     if any(tok in text for tok in ("hydromancer", "wallet", "whale", "builder", "clearinghouse")):
         return "hydromancer"
     if any(tok in text for tok in ("mempool", "pending", "router")):

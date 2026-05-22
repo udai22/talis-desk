@@ -1,6 +1,6 @@
 # Live Scout Learning Report
 
-The live run earned `promote_to_1000_scout_ramp` with average prompt quality 0.862 and 15/100 scouts carrying at least one repair signal. The system should treat the next scale step as an evaluator-gated ramp, not production; the main repair pockets are node_not_promoted, empty_hypothesis, missing_evidence_refs.
+The live run earned `promote_to_1000_scout_ramp` with average prompt quality 0.862 and 11/100 scouts carrying at least one repair signal. The system should treat the next scale step as an evaluator-gated ramp, not production; the main repair pockets are node_not_promoted, empty_hypothesis, missing_information_strings.
 
 ## Scorecard
 
@@ -8,11 +8,11 @@ The live run earned `promote_to_1000_scout_ramp` with average prompt quality 0.8
 - provider_calls: `100`
 - completed: `93`
 - success_rate: `0.93`
-- estimated_cost_usd: `0.35944`
-- strings: `292`
-- geometry_cells: `79`
-- avg_prompt_quality: `0.8622`
-- weak_scout_count: `15`
+- estimated_cost_usd: `0.64944`
+- strings: `291`
+- geometry_cells: `80`
+- avg_prompt_quality: `0.8615`
+- weak_scout_count: `11`
 
 ## Tournament
 
@@ -22,14 +22,14 @@ The live run earned `promote_to_1000_scout_ramp` with average prompt quality 0.8
 
 ## Failure Modes
 
-- `node_not_promoted` count=52: Node payloads are captured but need stronger actor/source coverage before promotion into trade strings.
-- `empty_hypothesis` count=19: Keep strict pressure: if strings exist, hypothesis must summarize the best valid string.
-- `missing_evidence_refs` count=4: Strings without provided refs should become tool_requests or be rejected by prompt quality.
-- `adversarial_quarantine` count=4: Quarantined strings should route to source repair or independent scout replication before verifier spend.
-- `missing_information_strings` count=3: Stale/thin data should become a low-conviction gap string with evidence refs, not an empty packet.
+- `node_not_promoted` count=57: Node payloads are captured but need stronger actor/source coverage before promotion into trade strings.
+- `empty_hypothesis` count=21: Keep strict pressure: if strings exist, hypothesis must summarize the best valid string.
+- `missing_information_strings` count=4: Stale/thin data should become a low-conviction gap string with evidence refs, not an empty packet.
 - `invented_tools` count=2: Suggested tools are filtered against allowed_tool_candidates before persistence.
-- `stale_date_directionality` count=2: Stale evidence should map source-health gaps instead of directional trade claims.
-- `json_unparseable` count=1: One fallback-model JSON repair is now attempted before a non-calendar scout is dropped.
+- `missing_evidence_refs` count=1: Strings without provided refs should become tool_requests or be rejected by prompt quality.
+- `stale_date_directionality` count=1: Stale evidence should map source-health gaps instead of directional trade claims.
+- `adversarial_quarantine` count=1: Quarantined strings should route to source repair or independent scout replication before verifier spend.
+- `json_unparseable` count=0: One fallback-model JSON repair is now attempted before a non-calendar scout is dropped.
 
 ## Evolution Arms
 
@@ -59,9 +59,9 @@ The live run earned `promote_to_1000_scout_ramp` with average prompt quality 0.8
 
 ## Executable Ramp Policy
 
-- policy_id: `lrp_cycle_live100_20260522_live_100_100`
+- policy_id: `lrp_cycle_live_scout_canary_20260522t174212z_100`
 - seed_patch: `{"max_evidence_tools_min": 6, "max_tool_iterations": 2, "preserve_missing_tool_as_proposal": true, "prompt_contract_pressure": "strict", "prompt_min_information_strings": 2, "prompt_require_evidence_refs": true, "prompt_require_kill_signal": true, "prompt_require_mechanism": true, "quarantine_before_verifier_spend": true, "source_family_targets_append": ["event_feed", "hydromancer", "market_timeseries", "our_hl_node", "our_node", "parallel_web", "source_health"], "stale_evidence_becomes_gap_string": true, "suggested_tool_allowlist_only": true, "tool_candidate_limit_min": 12}`
-- ramp_policy_artifact: `/tmp/talis-live100-20260522/live_canary/prompt_outputs/live_scout_ramp_policy.json`
+- ramp_policy_artifact: `/private/var/folders/rq/2m7m487n3nl33jy9q_r7lzn00000gn/T/talis-scout-system-launch-20260522T174209Z/live_canary/prompt_outputs/live_scout_ramp_policy.json`
 
 ## Next Run
 

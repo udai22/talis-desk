@@ -25,8 +25,10 @@ from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.responses import StreamingResponse
+
+from .agent_graph import artifact_path, build_agent_graph_state
 
 
 # ---------------------------------------------------------------------------
@@ -69,7 +71,7 @@ DAILY_COST_CAP = 100.0  # $100 daily cap
 DESK_TZ = ZoneInfo("America/New_York")
 
 INDEX_HTML = Path(__file__).parent / "index.html"
-SCOUT_HTML = Path(__file__).parent / "scouts.html"
+AGENT_GRAPH_HTML = Path(__file__).parent / "agent_graph.html"
 
 app = FastAPI(
     title="Talis Desk Monitor",
@@ -821,7 +823,7 @@ def _panel_brier(conn: sqlite3.Connection) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# Scout Inspector data
+# Scout/agent graph data
 # ---------------------------------------------------------------------------
 
 def _latest_scout_cycle(conn: sqlite3.Connection, manifest: Optional[dict] = None) -> Optional[str]:
@@ -2169,13 +2171,32 @@ async def home() -> FileResponse:
 
 
 @app.get("/scouts")
-async def scouts_page() -> FileResponse:
-    return FileResponse(str(SCOUT_HTML), media_type="text/html")
+async def scouts_page():
+    return RedirectResponse(url="/agent-graph", status_code=308)
+
+
+@app.get("/agent-graph")
+async def agent_graph_page() -> FileResponse:
+    return FileResponse(str(AGENT_GRAPH_HTML), media_type="text/html")
 
 
 @app.get("/api/state")
 async def api_state() -> JSONResponse:
     return JSONResponse(get_state())
+
+
+@app.get("/api/agent-graph")
+async def api_agent_graph() -> JSONResponse:
+    return JSONResponse(build_agent_graph_state())
+
+
+@app.get("/api/agent-graph/artifact/{artifact_name}")
+async def api_agent_graph_artifact(artifact_name: str):
+    path = artifact_path(artifact_name)
+    if path is None:
+        return JSONResponse({"error": "artifact_not_found", "artifact": artifact_name}, status_code=404)
+    media_type = "text/markdown" if path.suffix == ".md" else "application/json" if path.suffix == ".json" else "text/plain"
+    return FileResponse(str(path), media_type=media_type)
 
 
 @app.get("/api/scouts")

@@ -818,6 +818,7 @@ def _launch_decision(
     next_live_scouts: int,
 ) -> dict[str, Any]:
     ramp_policy_arg = _ramp_policy_command_arg(live_report)
+    tool_repair_arg = _tool_contract_repair_command_arg(live_report)
     if not deterministic_ready:
         return {
             "status": "blocked_deterministic_readiness",
@@ -877,6 +878,7 @@ def _launch_decision(
             "next_command": (
                 "PYTHONPATH=. python scripts/run_scout_system_launch_gate.py "
                 f"--allow-live-spend --live-scouts 1000 --live-cost-cap-usd 5.00 --live-concurrency 8 --max-tool-iterations 1{ramp_policy_arg}"
+                f"{tool_repair_arg}"
             ),
         }
     if tournament_decision.get("ready_for_live_100"):
@@ -889,6 +891,7 @@ def _launch_decision(
             "next_command": (
                 "PYTHONPATH=. python scripts/run_scout_system_launch_gate.py "
                 f"--allow-live-spend --live-scouts 100 --live-cost-cap-usd 1.00 --live-concurrency 4 --max-tool-iterations 1{ramp_policy_arg}"
+                f"{tool_repair_arg}"
             ),
         }
     return {
@@ -912,6 +915,18 @@ def _ramp_policy_command_arg(live_report: dict[str, Any]) -> str:
     if not policy_path:
         return ""
     return " --ramp-policy " + shlex.quote(policy_path)
+
+
+def _tool_contract_repair_command_arg(live_report: dict[str, Any]) -> str:
+    repair = live_report.get("tool_creation_contract_repair")
+    if not isinstance(repair, dict) or not repair.get("enabled"):
+        return ""
+    limit = repair.get("repair_limit") or repair.get("tool_proposal_repair_limit") or 500
+    try:
+        limit_int = max(1, int(limit))
+    except Exception:
+        limit_int = 500
+    return f" --repair-tool-proposal-contracts --tool-proposal-repair-limit {limit_int}"
 
 
 def _proof_ladder(

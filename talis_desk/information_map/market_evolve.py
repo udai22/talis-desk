@@ -4896,6 +4896,8 @@ def _family_from_ref(ref: str) -> str:
     text = str(ref or "").lower()
     if not text:
         return ""
+    if any(tok in text for tok in ("farm_grok_x_alpha", "grok", "x_search", "xai", "twitter", "x.com")):
+        return "grok_x_alpha"
     if "hydromancer" in text or "wallet" in text or "builder" in text:
         return "hydromancer"
     if "hl_node" in text or "our_hl_node" in text or "reject" in text or "node" in text:

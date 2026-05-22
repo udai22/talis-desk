@@ -1,0 +1,1260 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Talis Desk - Agent Graph</title>
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f5f5f7;
+    --panel: rgba(255, 255, 255, 0.92);
+    --panel-2: rgba(0, 0, 0, 0.035);
+    --panel-3: rgba(0, 0, 0, 0.055);
+    --edge: rgba(0, 0, 0, 0.08);
+    --edge-2: rgba(0, 0, 0, 0.18);
+    --text: #1d1d1f;
+    --muted: #6e6e73;
+    --muted-2: #86868b;
+    --blue: #0a84ff;
+    --green: #30d158;
+    --yellow: #ffd60a;
+    --orange: #ff9f0a;
+    --red: #ff453a;
+    --violet: #bf5af2;
+    --cyan: #64d2ff;
+    --radius: 18px;
+    --radius-sm: 12px;
+    --shadow: 0 1px 0 rgba(255,255,255,0.75) inset, 0 26px 70px rgba(0,0,0,0.08);
+  }
+  * { box-sizing: border-box; letter-spacing: 0; }
+  html, body {
+    margin: 0;
+    min-height: 100%;
+    background:
+      linear-gradient(180deg, #fbfbfd 0%, #f5f5f7 36%, #eeeeef 100%);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Inter, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background:
+      linear-gradient(rgba(0,0,0,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,0,0,0.018) 1px, transparent 1px);
+    background-size: 72px 72px;
+    mask-image: linear-gradient(to bottom, black, transparent 72%);
+    -webkit-mask-image: linear-gradient(to bottom, black, transparent 72%);
+  }
+  button, input, select {
+    font: inherit;
+    color: inherit;
+  }
+  button { -webkit-tap-highlight-color: transparent; }
+  a { color: inherit; text-decoration: none; }
+  .shell {
+    width: min(1760px, 100%);
+    margin: 0 auto;
+    padding: 18px 22px 22px;
+  }
+  .topbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 16px;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .eyebrow {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 650;
+    text-transform: uppercase;
+    margin-bottom: 7px;
+  }
+  h1 {
+    margin: 0;
+    font-size: clamp(34px, 5vw, 68px);
+    line-height: 0.92;
+    font-weight: 780;
+  }
+  .subtitle {
+    max-width: 860px;
+    margin: 11px 0 0;
+    color: var(--muted);
+    font-size: 16px;
+    line-height: 1.45;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--edge);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(26px) saturate(145%);
+    -webkit-backdrop-filter: blur(26px) saturate(145%);
+  }
+  .card {
+    background: var(--panel-2);
+    border: 1px solid var(--edge);
+    border-radius: var(--radius-sm);
+  }
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  .control {
+    min-height: 36px;
+    padding: 8px 11px;
+    border: 1px solid var(--edge);
+    border-radius: 12px;
+    background: rgba(255,255,255,0.78);
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    cursor: pointer;
+    color: #1d1d1f;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.95) inset, 0 8px 22px rgba(0,0,0,.045);
+  }
+  .control:hover { background: rgba(255,255,255,0.96); }
+  .control svg { width: 16px; height: 16px; stroke-width: 1.8; }
+  select.control { padding-right: 26px; }
+  .grid {
+    display: grid;
+    grid-template-columns: 336px minmax(0, 1fr) 404px;
+    gap: 14px;
+    align-items: start;
+  }
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .stat {
+    min-height: 86px;
+    padding: 13px;
+  }
+  .cortex-strip {
+    display: grid;
+    grid-template-columns: minmax(280px, 1.1fr) minmax(280px, .9fr) minmax(260px, .75fr);
+    gap: 10px;
+    margin: 0 0 14px;
+  }
+  .cortex-card {
+    padding: 14px;
+  }
+  .cortex-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(188px, 1fr));
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .cortex-item {
+    border: 1px solid var(--edge);
+    border-radius: 14px;
+    background: linear-gradient(180deg, rgba(255,255,255,.86), rgba(255,255,255,.58));
+    padding: 10px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .cortex-item:hover {
+    border-color: rgba(10,132,255,.54);
+    background: rgba(255,255,255,.96);
+  }
+  .label {
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+    font-weight: 620;
+    text-transform: uppercase;
+  }
+  .value {
+    margin-top: 8px;
+    font-size: 28px;
+    line-height: 1;
+    font-weight: 740;
+    font-variant-numeric: tabular-nums;
+  }
+  .detail {
+    margin-top: 7px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.3;
+  }
+  .left, .right {
+    height: calc(100vh - 184px);
+    min-height: 660px;
+    overflow: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0,0,0,.16) transparent;
+  }
+  .left::-webkit-scrollbar, .right::-webkit-scrollbar, pre::-webkit-scrollbar { width: 7px; height: 7px; }
+  .left::-webkit-scrollbar-thumb, .right::-webkit-scrollbar-thumb, pre::-webkit-scrollbar-thumb {
+    background: rgba(0,0,0,.16);
+    border-radius: 999px;
+  }
+  .graph-panel {
+    height: calc(100vh - 184px);
+    min-height: 660px;
+    position: relative;
+    overflow: hidden;
+  }
+  .graph-panel::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      linear-gradient(rgba(0,0,0,0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,0,0,0.024) 1px, transparent 1px);
+    background-size: 52px 52px;
+    opacity: .32;
+  }
+  .graph-panel::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 48%, rgba(0,0,0,.035) 100%);
+  }
+  .panel-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 14px 11px;
+    border-bottom: 1px solid var(--edge);
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: rgba(255,255,255,.86);
+    backdrop-filter: blur(22px) saturate(145%);
+    -webkit-backdrop-filter: blur(22px) saturate(145%);
+  }
+  .panel-title {
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .agents {
+    padding: 10px;
+    display: grid;
+    gap: 8px;
+  }
+  .agent {
+    width: 100%;
+    text-align: left;
+    padding: 12px;
+    border: 1px solid var(--edge);
+    border-radius: 14px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.80), rgba(255,255,255,0.52));
+    cursor: pointer;
+  }
+  .agent:hover, .agent.active {
+    border-color: rgba(10,132,255,0.60);
+    background: linear-gradient(180deg, rgba(10,132,255,0.14), rgba(10,132,255,0.045));
+    box-shadow: 0 0 0 1px rgba(10,132,255,0.08), 0 16px 42px rgba(0,0,0,.07);
+  }
+  .agent-top {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 9px;
+    align-items: center;
+  }
+  .dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 999px;
+    background: var(--muted);
+  }
+  .dot.complete { background: var(--green); box-shadow: 0 0 14px rgba(48,209,88,.55); }
+  .dot.weak { background: var(--yellow); box-shadow: 0 0 14px rgba(255,214,10,.50); }
+  .dot.error { background: var(--red); box-shadow: 0 0 14px rgba(255,69,58,.55); }
+  .dot.running { background: var(--blue); box-shadow: 0 0 16px rgba(10,132,255,.65); animation: pulse 1.6s ease-in-out infinite; }
+  .dot.queued { background: var(--muted); opacity: .55; }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: .55; }
+    50% { transform: scale(1.4); opacity: 1; }
+  }
+  .agent-name {
+    min-width: 0;
+    font-size: 13px;
+    font-weight: 680;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .score {
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 8px;
+  }
+  .chip {
+    max-width: 100%;
+    padding: 4px 7px;
+    border: 1px solid var(--edge);
+    border-radius: 999px;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    background: rgba(255,255,255,0.62);
+  }
+  .agent-thesis {
+    margin-top: 9px;
+    color: rgba(29,29,31,.84);
+    font-size: 12px;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .progress {
+    height: 4px;
+    margin-top: 10px;
+    border-radius: 999px;
+    background: rgba(0,0,0,0.07);
+    overflow: hidden;
+  }
+  .progress > span {
+    display: block;
+    height: 100%;
+    width: 0%;
+    border-radius: 999px;
+    background: var(--blue);
+  }
+  .graph-tools {
+    position: absolute;
+    z-index: 3;
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    pointer-events: none;
+  }
+  .graph-tools > * { pointer-events: auto; }
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    max-width: 680px;
+  }
+  .legend .chip {
+    background: rgba(255,255,255,.78);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+  }
+  svg#graph {
+    width: 100%;
+    height: 100%;
+    display: block;
+    position: relative;
+    z-index: 1;
+  }
+  .edge {
+    stroke: rgba(0,0,0,0.10);
+    stroke-width: 1;
+  }
+  .edge.active {
+    stroke: rgba(10,132,255,0.8);
+    stroke-width: 2;
+  }
+  .node text {
+    fill: rgba(29,29,31,.86);
+    font-size: 10px;
+    paint-order: stroke;
+    stroke: rgba(255,255,255,.84);
+    stroke-width: 5px;
+    pointer-events: none;
+  }
+  .node circle {
+    stroke: rgba(255,255,255,.88);
+    stroke-width: 1;
+    cursor: pointer;
+  }
+  .node.active circle {
+    stroke: #1d1d1f;
+    stroke-width: 2;
+    filter: drop-shadow(0 8px 18px rgba(10,132,255,.34));
+  }
+  .node.hub text {
+    font-size: 11px;
+    fill: rgba(29,29,31,.92);
+  }
+  .node.dim { opacity: .20; }
+  .edge.dim { opacity: .10; }
+  .right {
+    padding: 16px;
+  }
+  .inspector-title {
+    font-size: 23px;
+    line-height: 1.1;
+    margin: 4px 0 8px;
+    font-weight: 760;
+    overflow-wrap: anywhere;
+  }
+  .inspector-text {
+    color: var(--muted);
+    line-height: 1.5;
+    font-size: 14px;
+  }
+  .section {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--edge);
+  }
+  .section h3 {
+    margin: 0 0 9px;
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  .report-grid {
+    display: grid;
+    gap: 8px;
+  }
+  .report-link {
+    display: block;
+    padding: 10px;
+    border: 1px solid var(--edge);
+    border-radius: 12px;
+    background: linear-gradient(180deg, rgba(255,255,255,.82), rgba(255,255,255,.56));
+  }
+  .report-link:hover { border-color: var(--edge-2); background: rgba(255,255,255,.96); }
+  .report-title {
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .report-desc {
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.35;
+  }
+  .story {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .story-step {
+    min-height: 88px;
+    padding: 11px;
+  }
+  .story-step .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  pre {
+    margin: 0;
+    padding: 11px;
+    max-height: 260px;
+    overflow: auto;
+    border-radius: 12px;
+    background: rgba(0,0,0,.045);
+    border: 1px solid var(--edge);
+    color: rgba(29,29,31,.88);
+    font-family: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+    font-size: 11px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .search {
+    width: 100%;
+    margin-top: 10px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid var(--edge);
+    background: rgba(255,255,255,.72);
+    outline: none;
+  }
+  .search:focus { border-color: rgba(10,132,255,.65); }
+  .stat, .agent, .report-link, .control {
+    transition: transform 180ms ease, background 180ms ease, border-color 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
+  }
+  .agent:active, .control:active { transform: scale(.985); }
+  .empty {
+    padding: 30px 16px;
+    color: var(--muted);
+    text-align: center;
+  }
+  @media (max-width: 1180px) {
+    .grid { grid-template-columns: 1fr; }
+    .left, .right, .graph-panel { height: auto; min-height: 520px; }
+    .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .cortex-strip { grid-template-columns: 1fr; }
+    .story { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 680px) {
+    .shell { padding: 14px; }
+    .topbar { grid-template-columns: 1fr; align-items: start; }
+    .toolbar { justify-content: flex-start; }
+    .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .stat { min-height: 82px; }
+    .value { font-size: 26px; }
+    .graph-panel { min-height: 620px; }
+    .story { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<main class="shell" id="app">
+  <header class="topbar">
+    <div>
+      <div class="eyebrow">Talis live scout layer</div>
+      <h1>Agent Graph</h1>
+      <p class="subtitle">The market-sensing layer as one spatial instrument: agents, slices, sources, tools, strings, repairs, and budget gates moving in the same field.</p>
+    </div>
+    <div class="toolbar">
+      <button class="control" id="refreshBtn" aria-label="Refresh"><i data-lucide="rotate-cw"></i><span>Refresh</span></button>
+      <button class="control" id="pauseBtn" aria-label="Pause"><i data-lucide="pause"></i><span>Pause</span></button>
+      <select class="control" id="kindFilter" aria-label="Filter graph nodes">
+        <option value="all">All nodes</option>
+        <option value="agent">Agents</option>
+        <option value="cell">Cells</option>
+        <option value="source">Sources</option>
+        <option value="tool">Tools</option>
+        <option value="string">Strings</option>
+        <option value="situational">Situational</option>
+        <option value="proposal">Tool proposals</option>
+        <option value="report">Reports</option>
+      </select>
+    </div>
+  </header>
+
+  <section class="stats" id="stats"></section>
+  <section class="cortex-strip" id="cortexStrip"></section>
+
+  <section class="grid">
+    <aside class="left panel">
+      <div class="panel-head">
+        <div>
+          <div class="panel-title">Agents</div>
+          <div class="label" id="agentCount">Waiting for run</div>
+        </div>
+        <div class="dot running" id="liveDot"></div>
+      </div>
+      <div style="padding: 0 10px 10px;">
+        <input class="search" id="agentSearch" placeholder="Filter agents, cells, flags" />
+      </div>
+      <div class="agents" id="agents"></div>
+    </aside>
+
+    <section class="graph-panel panel">
+      <div class="graph-tools">
+        <div class="legend" id="legend"></div>
+        <div class="toolbar">
+          <button class="control" id="fitBtn" aria-label="Refit graph"><i data-lucide="maximize-2"></i><span>Fit</span></button>
+          <button class="control" id="storyBtn" aria-label="Jump to story"><i data-lucide="layers-3"></i><span>Story</span></button>
+        </div>
+      </div>
+      <svg id="graph" role="img" aria-label="Agent information graph"></svg>
+    </section>
+
+    <aside class="right panel" id="inspector"></aside>
+  </section>
+
+  <section class="story" id="story"></section>
+</main>
+
+<script>
+const colors = {
+  run: '#f5f5f7',
+  agent: '#0a84ff',
+  cell: '#64d2ff',
+  source: '#30d158',
+  tool: '#ffd60a',
+  string: '#bf5af2',
+  situational: '#0071e3',
+  proposal: '#ff9f0a',
+  report: '#ff453a'
+};
+
+const state = {
+  data: null,
+  selected: null,
+  selectedAgentId: null,
+  paused: false,
+  kindFilter: 'all',
+  query: '',
+  simulation: null,
+  svg: null,
+  link: null,
+  node: null,
+  width: 0,
+  height: 0
+};
+
+const $ = (id) => document.getElementById(id);
+
+async function boot() {
+  $('refreshBtn').addEventListener('click', () => load(true));
+  $('pauseBtn').addEventListener('click', () => {
+    state.paused = !state.paused;
+    $('pauseBtn').innerHTML = state.paused
+      ? '<i data-lucide="play"></i><span>Resume</span>'
+      : '<i data-lucide="pause"></i><span>Pause</span>';
+    refreshIcons();
+  });
+  $('kindFilter').addEventListener('change', (e) => {
+    state.kindFilter = e.target.value;
+    renderGraph();
+  });
+  $('agentSearch').addEventListener('input', (e) => {
+    state.query = e.target.value.toLowerCase();
+    renderAgents();
+  });
+  $('fitBtn').addEventListener('click', fitGraph);
+  $('storyBtn').addEventListener('click', () => $('story').scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
+  await load(true);
+  setInterval(() => {
+    if (!state.paused) load(false);
+  }, isApiMode() ? 2500 : 7000);
+}
+
+function isApiMode() {
+  return location.protocol !== 'file:' && !location.pathname.includes('/agent-graph/');
+}
+
+async function load(force) {
+  const urls = isApiMode()
+    ? ['/api/agent-graph']
+    : ['agent_graph_state.json', './agent_graph_state.json'];
+  let next = null;
+  for (const url of urls) {
+    try {
+      const r = await fetch(url + (url.includes('?') ? '&' : '?') + 't=' + Date.now(), { cache: 'no-store' });
+      if (r.ok) {
+        next = await r.json();
+        break;
+      }
+    } catch (e) {}
+  }
+  if (!next) {
+    next = { status: 'waiting', summary: {}, agents: [], nodes: [], edges: [], reports: [], timeline: [] };
+  }
+  state.data = next;
+  if (!state.selected || force) {
+    state.selected = (next.agents || [])[0] || (next.nodes || [])[0] || null;
+    state.selectedAgentId = state.selected && state.selected.index !== undefined ? state.selected.id : null;
+  } else {
+    const agents = next.agents || [];
+    const nodes = next.nodes || [];
+    state.selected = agents.find(a => a.id === state.selected.id) || nodes.find(n => n.id === state.selected.id) || state.selected;
+  }
+  renderAll();
+}
+
+function renderAll() {
+  renderStats();
+  renderCortex();
+  renderAgents();
+  renderLegend();
+  renderGraph();
+  renderInspector();
+  renderStory();
+  refreshIcons();
+}
+
+function renderCortex() {
+  const s = state.data?.summary || {};
+  const cadence = state.data?.cadence_policy || {};
+  const full = cadence.full_pipeline || {};
+  const sentinel = cadence.always_on_flash || {};
+  const watchers = state.data?.situational_agents || s.situational_awareness_agents || [];
+  const upward = s.upward_pressure_candidates || [];
+  $('cortexStrip').innerHTML = `
+    <div class="cortex-card panel">
+      <div class="label">Situational Cortex</div>
+      <div class="inspector-title" style="font-size:21px;margin-top:6px">Whole-board awareness before more spend</div>
+      <div class="detail">${esc(s.promotion_reason || 'The cortex reads the run geometry, pressure pockets, source gaps, tool health, and budget gate before directing the next scout wave.')}</div>
+      <div class="cortex-grid">
+        ${watchers.map(w => `
+          <button class="cortex-item" onclick="selectNodeById('situational:${escAttr(w.id)}')">
+            <div class="agent-top">
+              <span class="dot ${escAttr(w.status === 'clear' ? 'complete' : w.status === 'watch' ? 'weak' : 'running')}"></span>
+              <div class="agent-name">${esc(w.label || w.id)}</div>
+              <div class="score">${pct(w.score)}</div>
+            </div>
+            <div class="detail">${esc(w.summary || w.directive || '')}</div>
+          </button>
+        `).join('') || '<div class="detail">No situational agents loaded yet.</div>'}
+      </div>
+    </div>
+    <div class="cortex-card panel">
+      <div class="label">Pre-Price Pressure</div>
+      <div class="inspector-title" style="font-size:21px;margin-top:6px">Signals that deserve attention before consensus</div>
+      <div class="cortex-grid">
+        ${upward.slice(0, 4).map(c => `
+          <button class="cortex-item" onclick="selectAgentById('${escAttr(c.agent_id)}')">
+            <div class="agent-top">
+              <span class="dot complete"></span>
+              <div class="agent-name">${esc(c.entity || 'UNKNOWN')} / ${esc(c.horizon || '')}</div>
+              <div class="score">${pct(c.score)}</div>
+            </div>
+            <div class="detail">${esc(c.why || 'Early upward repricing candidate.')}</div>
+          </button>
+        `).join('') || '<div class="detail">No upward-pressure candidates crossed the current threshold.</div>'}
+      </div>
+    </div>
+    <div class="cortex-card panel">
+      <div class="label">Operating Cadence</div>
+      <div class="inspector-title" style="font-size:21px;margin-top:6px">Daily brief plus always-on memory</div>
+      <div class="detail">${esc((cadence.daily_brief_contract || {}).operator_promise || 'Full passes create the brief; sentinel scouts keep the map warm between them.')}</div>
+      <div class="cortex-grid">
+        <div class="cortex-item">
+          <div class="agent-top">
+            <span class="dot complete"></span>
+            <div class="agent-name">Full Pipeline</div>
+            <div class="score">2x/day</div>
+          </div>
+          <div class="detail">${esc(full.purpose || 'Brief-grade scout, synthesis, verifier, specialist, evolution, and composition pass.')}</div>
+        </div>
+        <div class="cortex-item">
+          <div class="agent-top">
+            <span class="dot running"></span>
+            <div class="agent-name">Flash Sentinel</div>
+            <div class="score">${esc(String(sentinel.interval_minutes || 5))}m</div>
+          </div>
+          <div class="detail">${esc(sentinel.purpose || 'Cheap rolling scouts compare information against price and attention until a trigger deserves more budget.')}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function refreshIcons() {
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function renderStats() {
+  const s = state.data?.summary || {};
+  const cards = [
+    ['Decision', pretty(s.decision || state.data?.status || 'waiting'), s.allowed_next_step || 'human gate'],
+    ['Agents', `${s.agents_complete || 0}/${s.agents_requested || s.agents_seen || 0}`, `${s.agents_weak || 0} weak · ${s.agents_error || 0} error`],
+    ['Upward', fmt(s.upward_pressure_count || 0), `max pressure ${pct(s.max_upward_pressure_score)}`],
+    ['Early', fmt(s.early_signal_count || 0), `max attention ${pct(s.max_early_signal_score)}`],
+    ['Strings', fmt(s.strings), `${fmt2(s.avg_strings_per_scout)} per scout`],
+    ['Graph', `${fmt(s.nodes)} / ${fmt(s.edges)}`, `${fmt(s.tool_count)} tools`],
+    ['Quality', pct(s.success_rate), `${money(s.cost_usd)} · dup ${pct(s.duplicate_hypothesis_rate)}`],
+  ];
+  $('stats').innerHTML = cards.map(([label, value, detail]) => `
+    <div class="stat card">
+      <div class="label">${esc(label)}</div>
+      <div class="value">${esc(value)}</div>
+      <div class="detail">${esc(detail || '')}</div>
+    </div>
+  `).join('');
+  $('agentCount').textContent = `${(state.data?.agents || []).length} visible agents`;
+  $('liveDot').className = 'dot ' + (((state.data?.summary || {}).agents_running || 0) ? 'running' : 'complete');
+}
+
+function renderAgents() {
+  const rows = (state.data?.agents || []).filter(a => {
+    if (!state.query) return true;
+    return JSON.stringify([a.index, a.entity, a.horizon, a.lens, a.bias_mode, a.theme, a.quality_flags, a.hypothesis]).toLowerCase().includes(state.query);
+  });
+  $('agents').innerHTML = rows.length ? rows.map(a => `
+    <button class="agent ${state.selected && state.selected.id === a.id ? 'active' : ''}" data-id="${escAttr(a.id)}">
+      <div class="agent-top">
+        <span class="dot ${escAttr(a.status || 'queued')}"></span>
+        <div class="agent-name">${String(a.index).padStart(3, '0')} · ${esc(a.entity)} / ${esc(a.horizon)} / ${esc(a.lens)}</div>
+        <div class="score">${a.confidence == null ? '-' : pct(a.confidence)}</div>
+      </div>
+      <div class="chips">
+        <span class="chip">${esc(a.status || 'queued')}</span>
+        <span class="chip">up ${pct(upwardPressureScore(a))}</span>
+        <span class="chip">early ${pct(a.early_signal_score)}</span>
+        <span class="chip">${esc((a.directional_pressure || {}).direction || 'direction?')}</span>
+        <span class="chip">${esc(a.bias_mode || 'bias')}</span>
+        <span class="chip">${esc((a.market_evolve || {}).experiment_arm || 'arm?')}</span>
+        <span class="chip">${fmt((a.information_strings || []).length)} strings</span>
+      </div>
+      <div class="agent-thesis">${esc(a.hypothesis || a.rationale || 'No conclusion yet. The agent may still be running or emitted map-learning only.')}</div>
+      <div class="progress"><span style="width:${agentProgress(a)}%; background:${statusColor(a.status)}"></span></div>
+    </button>
+  `).join('') : '<div class="empty">No agents yet. Start a scout run and this lane will begin filling in.</div>';
+  document.querySelectorAll('.agent').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-id');
+      const found = (state.data.agents || []).find(a => a.id === id);
+      select(found);
+    });
+  });
+}
+
+function renderLegend() {
+  const kinds = ['agent', 'cell', 'source', 'tool', 'string', 'situational', 'proposal', 'report'];
+  $('legend').innerHTML = kinds.map(k => `<span class="chip"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${colors[k]};margin-right:6px"></span>${esc(pretty(k))}</span>`).join('');
+}
+
+function renderGraph() {
+  const svg = d3.select('#graph');
+  const box = $('graph').getBoundingClientRect();
+  const width = Math.max(320, box.width);
+  const height = Math.max(480, box.height);
+  state.width = width;
+  state.height = height;
+  svg.attr('viewBox', [0, 0, width, height]);
+  svg.selectAll('*').remove();
+
+  let nodes = (state.data?.nodes || []).map(d => ({ ...d }));
+  let edges = (state.data?.edges || []).map(d => ({ ...d }));
+  if (state.kindFilter !== 'all') {
+    const keep = new Set(nodes.filter(n => n.kind === state.kindFilter || n.kind === 'run').map(n => n.id));
+    edges.forEach(e => {
+      if (keep.has(e.source) || keep.has(e.target)) {
+        keep.add(e.source);
+        keep.add(e.target);
+      }
+    });
+    nodes = nodes.filter(n => keep.has(n.id));
+    edges = edges.filter(e => keep.has(e.source) && keep.has(e.target));
+  }
+  if (!nodes.length) {
+    svg.append('text')
+      .attr('x', width / 2)
+      .attr('y', height / 2)
+      .attr('text-anchor', 'middle')
+      .attr('fill', 'rgba(29,29,31,.58)')
+      .text('Waiting for agent graph state');
+    return;
+  }
+
+  const idSet = new Set(nodes.map(n => n.id));
+  edges = edges.filter(e => idSet.has(e.source) && idSet.has(e.target));
+  const degree = new Map();
+  edges.forEach(e => {
+    degree.set(e.source, (degree.get(e.source) || 0) + 1);
+    degree.set(e.target, (degree.get(e.target) || 0) + 1);
+  });
+
+  const link = svg.append('g')
+    .selectAll('line')
+    .data(edges)
+    .join('line')
+    .attr('class', 'edge');
+
+  const node = svg.append('g')
+    .selectAll('g')
+    .data(nodes)
+    .join('g')
+    .attr('class', d => 'node' + (isActiveNode(d) ? ' active' : ''))
+    .call(d3.drag()
+      .on('start', dragstarted)
+      .on('drag', dragged)
+      .on('end', dragended));
+
+  node.append('circle')
+    .attr('r', d => radius(d, degree.get(d.id) || 0))
+    .attr('fill', d => colors[d.kind] || '#8e8e93')
+    .attr('fill-opacity', d => d.kind === 'string' ? .86 : .78)
+    .on('click', (_, d) => select(d));
+
+  node.append('text')
+    .attr('x', d => radius(d, degree.get(d.id) || 0) + 5)
+    .attr('y', 4)
+    .text(d => labelText(d, degree.get(d.id) || 0));
+
+  state.simulation?.stop();
+  state.simulation = d3.forceSimulation(nodes)
+    .force('link', d3.forceLink(edges).id(d => d.id).distance(d => linkDistance(d)).strength(.42))
+    .force('charge', d3.forceManyBody().strength(d => d.kind === 'run' ? -700 : -90))
+    .force('center', d3.forceCenter(width / 2, height / 2))
+    .force('x', d3.forceX(d => kindX(d.kind, width)).strength(.10))
+    .force('y', d3.forceY(d => kindY(d.kind, height)).strength(.08))
+    .force('collide', d3.forceCollide(d => radius(d, degree.get(d.id) || 0) + 9))
+    .on('tick', () => {
+      link
+        .attr('x1', d => d.source.x)
+        .attr('y1', d => d.source.y)
+        .attr('x2', d => d.target.x)
+        .attr('y2', d => d.target.y)
+        .attr('class', d => 'edge' + (isActiveEdge(d) ? ' active' : '') + (shouldDimEdge(d) ? ' dim' : ''));
+      node
+        .attr('transform', d => `translate(${clamp(d.x, 16, width - 16)},${clamp(d.y, 54, height - 18)})`)
+        .attr('class', d => 'node' + (isActiveNode(d) ? ' active' : '') + (showNodeLabel(d, degree.get(d.id) || 0) ? ' hub' : '') + (shouldDimNode(d) ? ' dim' : ''));
+    });
+
+  function dragstarted(event, d) {
+    if (!event.active) state.simulation.alphaTarget(0.3).restart();
+    d.fx = d.x;
+    d.fy = d.y;
+  }
+  function dragged(event, d) {
+    d.fx = event.x;
+    d.fy = event.y;
+  }
+  function dragended(event, d) {
+    if (!event.active) state.simulation.alphaTarget(0);
+    d.fx = null;
+    d.fy = null;
+  }
+}
+
+function fitGraph() {
+  state.simulation?.alpha(0.55).restart();
+}
+
+function select(item) {
+  state.selected = item;
+  state.selectedAgentId = item && item.index !== undefined ? item.id : null;
+  renderAgents();
+  renderGraph();
+  renderInspector();
+}
+
+function renderInspector() {
+  const item = state.selected;
+  if (!item) {
+    $('inspector').innerHTML = '<div class="empty">Select an agent, string, source, tool, or report.</div>';
+    return;
+  }
+  if (item.index !== undefined) {
+    renderAgentInspector(item);
+  } else {
+    renderNodeInspector(item);
+  }
+}
+
+function renderAgentInspector(a) {
+  const strings = a.information_strings || [];
+  const evidence = a.tool_evidence || [];
+  const reports = state.data?.reports || [];
+  $('inspector').innerHTML = `
+    <div class="label">Scout ${String(a.index).padStart(3, '0')} · ${esc(a.status || '')}</div>
+    <div class="inspector-title">${esc(a.entity)} / ${esc(a.horizon)} / ${esc(a.lens)}</div>
+    <div class="chips">
+      <span class="chip">${esc(a.bias_mode)}</span>
+      <span class="chip">${esc(a.theme)}</span>
+      <span class="chip">${esc((a.market_evolve || {}).experiment_arm || 'market evolve')}</span>
+      <span class="chip">${esc(a.provider || 'provider?')}</span>
+      <span class="chip">${esc(a.model_used || 'model?')}</span>
+      <span class="chip">up ${pct(upwardPressureScore(a))}</span>
+      <span class="chip">early ${pct(a.early_signal_score)}</span>
+    </div>
+    <div class="section">
+      <h3>Directional Repricing Pressure</h3>
+      <div class="inspector-text">${directionalPressureCopy(a)}</div>
+    </div>
+    <div class="section">
+      <h3>Early Signal Lens</h3>
+      <div class="inspector-text">${earlySignalCopy(a)}</div>
+    </div>
+    <div class="section">
+      <h3>What It Concluded</h3>
+      <div class="inspector-text">${esc(a.hypothesis || 'No promoted hypothesis. This scout either returned map-learning strings or correctly refused a weak slice.')}</div>
+      <div class="detail">${esc(a.rationale || '')}</div>
+    </div>
+    <div class="section">
+      <h3>Information Strings</h3>
+      ${strings.length ? strings.map(s => `
+        <div class="card" style="padding:11px;margin-bottom:8px">
+          <div style="font-weight:700">${esc(s.title || 'Untitled string')}</div>
+          <div class="inspector-text" style="margin-top:5px">${esc(s.thesis || '')}</div>
+          <div class="chips">
+            <span class="chip">conv ${pct(s.conviction)}</span>
+            <span class="chip">novel ${pct(s.novelty_score)}</span>
+            <span class="chip">crowded ${pct(s.crowdedness)}</span>
+          </div>
+        </div>
+      `).join('') : '<div class="detail">No strings captured for this scout yet.</div>'}
+    </div>
+    <div class="section">
+      <h3>Tool And Evidence Surface</h3>
+      <div class="chips">${[...(a.allowed_tools || []), ...(a.suggested_tools || [])].slice(0, 18).map(t => `<span class="chip">${esc(shortTool(t))}</span>`).join('') || '<span class="chip">none</span>'}</div>
+      <div style="margin-top:10px">${evidence.slice(0, 6).map(e => `
+        <div class="report-link">
+          <div class="report-title">${esc(shortTool(e.tool_uri || e.tool || 'tool'))}</div>
+          <div class="report-desc">${esc(e.error ? 'error: ' + e.error : 'ok')} ${e.cost_usd != null ? ' · ' + money(e.cost_usd) : ''}</div>
+        </div>
+      `).join('')}</div>
+    </div>
+    <div class="section">
+      <h3>Prompt And Raw Output</h3>
+      <details>
+        <summary class="report-link"><div class="report-title">Open captured prompt</div><div class="report-desc">System prompt, user packet, and model text for this scout.</div></summary>
+        <pre>${esc((a.prompt || {}).system || '')}\n\n--- USER ---\n${esc((a.prompt || {}).user || '')}\n\n--- MODEL ---\n${esc((a.prompt || {}).model_text || '')}</pre>
+      </details>
+    </div>
+    <div class="section">
+      <h3>Detailed Reports</h3>
+      <div class="report-grid">${reports.map(reportLink).join('')}</div>
+    </div>
+  `;
+}
+
+function renderNodeInspector(n) {
+  const relatedAgents = relatedAgentRows(n).slice(0, 10);
+  $('inspector').innerHTML = `
+    <div class="label">${esc(pretty(n.kind || 'node'))}</div>
+    <div class="inspector-title">${esc(n.label || n.id)}</div>
+    <div class="chips">
+      <span class="chip">${esc(n.id || '')}</span>
+      <span class="chip">weight ${fmt2(n.weight || 1)}</span>
+      ${n.status ? `<span class="chip">${esc(n.status)}</span>` : ''}
+    </div>
+    <div class="section">
+      <h3>Why This Node Matters</h3>
+      <div class="inspector-text">${nodeExplanation(n)}</div>
+    </div>
+    <div class="section">
+      <h3>Related Agents</h3>
+      ${relatedAgents.length ? relatedAgents.map(a => `
+        <button class="agent" style="margin-bottom:8px" onclick="selectAgentById('${escAttr(a.id)}')">
+          <div class="agent-top">
+            <span class="dot ${escAttr(a.status || 'queued')}"></span>
+            <div class="agent-name">${String(a.index).padStart(3, '0')} · ${esc(a.entity)} / ${esc(a.horizon)} / ${esc(a.lens)}</div>
+            <div class="score">${pct(a.confidence)}</div>
+          </div>
+        </button>
+      `).join('') : '<div class="detail">No directly linked agent rows in the loaded graph.</div>'}
+    </div>
+    <div class="section">
+      <h3>Detailed Reports</h3>
+      <div class="report-grid">${(state.data?.reports || []).map(reportLink).join('')}</div>
+    </div>
+    <div class="section">
+      <h3>Raw Node</h3>
+      <pre>${esc(JSON.stringify(n, null, 2))}</pre>
+    </div>
+  `;
+}
+
+window.selectAgentById = function(id) {
+  const a = (state.data?.agents || []).find(x => x.id === id);
+  if (a) select(a);
+};
+
+window.selectNodeById = function(id) {
+  const n = (state.data?.nodes || []).find(x => x.id === id);
+  if (n) select(n);
+};
+
+function renderStory() {
+  const rows = state.data?.timeline || [];
+  $('story').innerHTML = rows.map(step => `
+    <div class="story-step card">
+      <div class="status"><span class="dot ${storyStatus(step.status)}"></span>${esc(pretty(step.status || 'pending'))}</div>
+      <div style="font-weight:740;margin-top:8px">${esc(step.label)}</div>
+      <div class="detail">${esc(step.detail || '')}</div>
+    </div>
+  `).join('');
+}
+
+function reportLink(r) {
+  return `<a class="report-link" href="${escAttr(r.href)}" target="_blank" rel="noreferrer">
+    <div class="report-title">${esc(r.title || r.filename)}</div>
+    <div class="report-desc">${esc(r.description || r.filename)}</div>
+  </a>`;
+}
+
+function relatedAgentRows(n) {
+  if (!n) return [];
+  const edges = state.data?.edges || [];
+  const agentIds = new Set();
+  edges.forEach(e => {
+    if (e.source === n.id && String(e.target).startsWith('agent:')) agentIds.add(String(e.target).slice(6));
+    if (e.target === n.id && String(e.source).startsWith('agent:')) agentIds.add(String(e.source).slice(6));
+  });
+  return (state.data?.agents || []).filter(a => agentIds.has(a.id));
+}
+
+function isActiveNode(d) {
+  if (!state.selected) return false;
+  if (state.selected.index !== undefined) return d.id === 'agent:' + state.selected.id;
+  return d.id === state.selected.id;
+}
+
+function isActiveEdge(e) {
+  if (!state.selected) return false;
+  const id = state.selected.index !== undefined ? 'agent:' + state.selected.id : state.selected.id;
+  const s = typeof e.source === 'object' ? e.source.id : e.source;
+  const t = typeof e.target === 'object' ? e.target.id : e.target;
+  return s === id || t === id;
+}
+
+function shouldDimNode(d) {
+  if (!state.selected) return false;
+  const id = state.selected.index !== undefined ? 'agent:' + state.selected.id : state.selected.id;
+  if (d.id === id) return false;
+  return !(state.data?.edges || []).some(e => (e.source === id && e.target === d.id) || (e.target === id && e.source === d.id));
+}
+
+function shouldDimEdge(e) {
+  if (!state.selected) return false;
+  return !isActiveEdge(e);
+}
+
+function nodeExplanation(n) {
+  const text = {
+    run: 'The root of the run. Every agent is spawned from this budget-gated slice.',
+    agent: 'A single scout call: one market cell, one prompt contract, bounded tool affordances, one returned packet.',
+    cell: 'The deterministic market slice: entity, horizon, lens, bias, and theme before the model sees anything.',
+    source: 'A data family made available to the scout. If this is sparse, the map is telling the cortex where coverage is thin.',
+    tool: 'A concrete callable surface or proposed capability. Tool density and tool diversity are part of the intelligence substrate.',
+    string: 'A stored information string: causal thesis, mechanism, expected outcome, kill signal, and scores.',
+    situational: 'A whole-board overseer. It reads the geometry, pressure, blind spots, tool health, and budget gates, then points attention toward the next useful scouts.',
+    proposal: 'An agent-created tool proposal. The repair harness grades whether it is evaluator-grade before scale.',
+    report: 'A higher-order report that turns many scout events into a gate, policy, or next action.'
+  };
+  return text[n.kind] || 'A graph object emitted by the scout layer.';
+}
+
+function earlySignalCopy(a) {
+  const score = pct(a.early_signal_score);
+  const families = [...new Set([...(a.source_families || []), ...(a.source_family_targets || [])])]
+    .filter(f => ['our_node', 'our_hl_node', 'hydromancer', 'parallel_web', 'mempool', 'grok_x', 'x_search', 'twitter'].some(k => String(f).includes(k)))
+    .slice(0, 4)
+    .join(', ');
+  const strings = a.information_strings || [];
+  const best = strings.length ? strings.reduce((m, s) => Number(s.novelty_score || 0) > Number(m.novelty_score || 0) ? s : m, strings[0]) : null;
+  const base = `Early score ${score}. This is an attention score, not a trade call: it asks whether the shape deserves more budget before the move becomes obvious.`;
+  const signal = best
+    ? ` Best string is ${pct(best.novelty_score)} novel and ${pct(best.crowdedness)} crowded.`
+    : ' No strong string yet, so the system should either repair the slice or refuse the signal.';
+  const source = families ? ` Source footprint: ${families}.` : ' Source footprint is still thin.';
+  return base + signal + source;
+}
+
+function directionalPressureCopy(a) {
+  const p = a.directional_pressure || {};
+  const direction = pretty(p.direction || 'unknown');
+  const score = pct(p.score);
+  const hits = [
+    ...(p.up_hits || []).map(x => 'up: ' + x),
+    ...(p.down_hits || []).map(x => 'down: ' + x),
+  ].slice(0, 5).join(', ');
+  const why = p.why ? ` ${p.why}.` : '';
+  const terms = hits ? ` Cues: ${hits}.` : ' No directional vocabulary dominated yet.';
+  return `Direction ${direction}, pressure ${score}. This is the VVV lens: is information flow implying repricing before price has fully moved?${why}${terms}`;
+}
+
+function upwardPressureScore(a) {
+  const p = a.directional_pressure || {};
+  return p.direction === 'up' ? p.score : 0;
+}
+
+function labelText(d, degree) {
+  if (!showNodeLabel(d, degree)) return '';
+  const label = String(d.label || d.id || '');
+  return label.length > 34 ? label.slice(0, 33) + '…' : label;
+}
+
+function showNodeLabel(d, degree) {
+  if (isActiveNode(d)) return true;
+  if (!state.selected && ['run', 'report', 'source', 'situational'].includes(d.kind)) return true;
+  if (state.selected && !shouldDimNode(d) && ['cell', 'source', 'tool', 'string', 'situational', 'report'].includes(d.kind)) return true;
+  if (['run', 'report', 'situational'].includes(d.kind)) return true;
+  if (d.kind === 'source' && degree >= 10) return true;
+  if (d.kind === 'tool' && degree >= 16) return true;
+  if (d.kind === 'cell' && degree >= 5) return true;
+  return false;
+}
+
+function agentProgress(a) {
+  if (a.status === 'complete') return 100;
+  if (a.status === 'weak') return 100;
+  if (a.status === 'error') return 100;
+  if (a.status === 'running') return 62;
+  return 15;
+}
+
+function radius(d, degree) {
+  const base = { run: 16, agent: 8, cell: 10, source: 9, tool: 7, string: 8, situational: 13, proposal: 6, report: 10 }[d.kind] || 7;
+  return Math.min(24, base + Math.sqrt(Math.max(0, degree)) * 1.7 + Math.sqrt(Math.max(0, d.weight || 0)) * .45);
+}
+
+function linkDistance(d) {
+  const k = d.kind || '';
+  if (k === 'spawned') return 96;
+  if (k === 'emitted') return 62;
+  if (k === 'fed') return 78;
+  return 86;
+}
+
+function kindX(kind, width) {
+  const map = { run: .50, cell: .16, source: .20, agent: .44, situational: .54, tool: .68, string: .80, proposal: .74, report: .88 };
+  return width * (map[kind] || .50);
+}
+
+function kindY(kind, height) {
+  const map = { run: .50, cell: .24, source: .64, agent: .46, situational: .22, tool: .33, string: .64, proposal: .79, report: .18 };
+  return height * (map[kind] || .50);
+}
+
+function statusColor(status) {
+  return { complete: 'var(--green)', weak: 'var(--yellow)', error: 'var(--red)', running: 'var(--blue)', queued: 'var(--muted)' }[status] || 'var(--muted)';
+}
+
+function storyStatus(status) {
+  if (String(status).includes('pass') || status === 'complete') return 'complete';
+  if (String(status).includes('fail') || status === 'error') return 'error';
+  if (String(status).includes('locked')) return 'queued';
+  return 'weak';
+}
+
+function shortTool(uri) {
+  return String(uri || '').split('/').pop().split('@')[0].replaceAll('_', ' ');
+}
+
+function pretty(s) {
+  return String(s || '').replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function fmt(v) {
+  if (v == null || Number.isNaN(Number(v))) return '-';
+  return Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Number(v));
+}
+
+function fmt2(v) {
+  if (v == null || Number.isNaN(Number(v))) return '-';
+  return Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(Number(v));
+}
+
+function pct(v) {
+  if (v == null || Number.isNaN(Number(v))) return '-';
+  return Math.round(Number(v) * 100) + '%';
+}
+
+function money(v) {
+  if (v == null || Number.isNaN(Number(v))) return '-';
+  return '$' + Number(v).toFixed(2);
+}
+
+function clamp(v, lo, hi) {
+  return Math.max(lo, Math.min(hi, v || 0));
+}
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
+
+function escAttr(s) { return esc(s).replace(/`/g, '&#96;'); }
+
+boot();
+</script>
+</body>
+</html>

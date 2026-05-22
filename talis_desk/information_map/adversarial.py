@@ -193,6 +193,8 @@ def _source_family(item: dict[str, Any]) -> str:
     result = item.get("result") if isinstance(item.get("result"), dict) else {}
     source = str(result.get("source") or item.get("source") or "").lower()
     text = " ".join([uri, source, str(item.get("summary") or "").lower()])
+    if any(tok in text for tok in ("farm_grok_x_alpha", "grok", "x_search", "xai", "twitter", "x.com")):
+        return "grok_x_alpha"
     if "hydromancer" in text or "wallet" in text or "builder" in text:
         return "hydromancer"
     if "hl_reject" in text or "our_hl_node" in text:
