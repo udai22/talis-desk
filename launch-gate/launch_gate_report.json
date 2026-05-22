@@ -26,7 +26,7 @@
     "ready_for_live_1000": true,
     "status": "pass"
   },
-  "generated_at": "2026-05-22T15:50:40.187593+00:00",
+  "generated_at": "2026-05-22T17:09:13.791962+00:00",
   "launch_viewer_index": "/Users/udaikhattar/talis-desk/docs/launch-gate/index.html",
   "live": {
     "cycle_id": "cycle_live100_20260522_live_100",
@@ -659,11 +659,12 @@
         ]
       },
       "next_run": {
-        "allowed_next_step": "live_1000_scout_ramp",
-        "operator_note": "The 1,000 ramp is allowed by tournament evidence, but scheduled production remains blocked until two independent 1,000-scout shadow runs pass repeatability gates.",
+        "allowed_next_step": "tool_creation_quality_repair_100",
+        "operator_note": "Scale is blocked by tournament until tool proposal contracts pass in a fresh live repair slice.",
         "pre_1000_gate": {
-          "blocking_before_1000": [],
-          "interpretation": "The 1,000 ramp may run only as an explicitly authorized experiment. The listed repair metrics must be watched; passing the ramp does not schedule production.",
+          "blocking_before_1000": true,
+          "decision": "blocked_by_tournament",
+          "interpretation": "Blocked until tool creation quality repair passes in a fresh 100-scout live slice.",
           "must_watch_metrics": [
             "accepted_unique_high_quality_coverage_per_dollar_delta",
             "empty_hypothesis_with_strings_rate",
@@ -685,14 +686,14 @@
             "top_geometry_confirmation_rate improves on frontier/tension cells",
             "scheduled production remains blocked until two independent 1,000-scout shadow runs pass repeatability gates"
           ],
-          "ready_for_authorized_1000": true,
+          "ready_for_authorized_1000": false,
           "red_failure_modes_from_prior_ramp": [
             "invented_tools",
             "json_unparseable"
           ],
           "scheduled_production_allowed": false
         },
-        "recommended_command": "PYTHONPATH=. python scripts/run_scout_system_launch_gate.py --allow-live-spend --live-scouts 1000 --live-cost-cap-usd 5.00 --live-concurrency 8 --max-tool-iterations 1 --ramp-policy LIVE_PROMPT_OUTPUT_DIR/live_scout_ramp_policy.json",
+        "recommended_command": "PYTHONPATH=. python scripts/run_scout_system_launch_gate.py --allow-live-spend --live-scouts 100 --live-cost-cap-usd 1.00 --live-concurrency 4 --max-tool-iterations 1 --ramp-policy /Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_ramp_policy.json",
         "requires_explicit_spend_authorization": true,
         "watch_before_promoting": [
           "invented_tools",
@@ -700,13 +701,9 @@
         ]
       },
       "pre_1000_gate": {
-        "blocking_before_1000": [
-          "tool_creation_quality_pass_rate_ge_0_70",
-          "tool_creation_eval_plan_rate_ge_0_85",
-          "tool_creation_expected_edge_rate_ge_0_60",
-          "tool_creation_would_change_decision_rate_ge_0_60"
-        ],
-        "interpretation": "The old learning report opened the ramp, but the stricter tournament now blocks 1,000 until tool creation quality is repaired.",
+        "blocking_before_1000": true,
+        "decision": "blocked_by_tournament",
+        "interpretation": "Blocked until tool creation quality repair passes in a fresh 100-scout live slice.",
         "must_watch_metrics": [
           "accepted_unique_high_quality_coverage_per_dollar_delta",
           "empty_hypothesis_with_strings_rate",
@@ -1252,7 +1249,7 @@
       },
       "source_live_report": "/tmp/talis-live100-20260522/live_canary/prompt_outputs/live_scout_canary_report.json",
       "source_tournament_report": "/tmp/talis-live100-20260522/tournament/live_scout_tournament_report.json",
-      "summary": "The live run earned `promote_to_1000_scout_ramp` with average prompt quality 0.862 and 15/100 scouts carrying at least one repair signal. The system should treat the next scale step as an evaluator-gated ramp, not production; the main repair pockets are node_not_promoted, empty_hypothesis, missing_evidence_refs.",
+      "summary": "The live 100-scout run produced useful scout strings, but the tournament now blocks scale because the agent-created tool proposals did not yet carry evaluator-grade graph edges, expected information value, and fixture plans. A no-spend repair replay converts the current backlog into gradeable child proposals; the next paid step is a fresh 100-scout repair run, not a 1,000-scout ramp.",
       "top_geometry_actions": [
         {
           "action": "replicate_with_independent_scouts",
@@ -15584,6 +15581,49 @@
       "stdout": "LIVE_SCOUT_TOURNAMENT_DECISION=promote_to_1000_scout_ramp\nLIVE_SCOUT_TOURNAMENT_READY_FOR_100=True\nLIVE_SCOUT_TOURNAMENT_REPORT_JSON=/private/tmp/talis-live100-20260522/tournament/live_scout_tournament_report.json\nLIVE_SCOUT_TOURNAMENT_REPORT_MD=/private/tmp/talis-live100-20260522/tournament/live_scout_tournament_report.md\n"
     }
   ],
+  "tool_creation_repair_replay": {
+    "after": {
+      "avg_quality_score": 1.0,
+      "eval_failed_count": 0,
+      "eval_failed_rate": 0.0,
+      "eval_plan_rate": 1.0,
+      "expected_edge_rate": 1.0,
+      "promotion_gate_rate": 1.0,
+      "quality_pass_rate": 1.0,
+      "runtime_adapter_backlog_count": 0,
+      "runtime_adapter_backlog_rate": 0.0,
+      "would_change_decision_rate": 1.0
+    },
+    "before": {
+      "avg_quality_score": 0.6711,
+      "eval_failed_count": 0,
+      "eval_failed_rate": 0.0,
+      "eval_plan_rate": 0.4127,
+      "expected_edge_rate": 0.0212,
+      "promotion_gate_rate": 1.0,
+      "quality_pass_rate": 0.0212,
+      "runtime_adapter_backlog_count": 0,
+      "runtime_adapter_backlog_rate": 0.0,
+      "would_change_decision_rate": 0.0212
+    },
+    "failed_tool_gates_after": [],
+    "failed_tool_gates_before": [
+      "tool_creation_quality_pass_rate_ge_0_70",
+      "tool_creation_eval_plan_rate_ge_0_85",
+      "tool_creation_expected_edge_rate_ge_0_60",
+      "tool_creation_would_change_decision_rate_ge_0_60"
+    ],
+    "frontier_proposal_count": 189,
+    "kind": "no_spend_tool_creation_contract_repair_replay",
+    "note": "This replay used a copied DB and no paid scout calls. It proves the repair loop can convert vague tool proposals into evaluator-grade frontier contracts, but does not authorize a 1,000-scout ramp until a fresh live 100 repair run produces this quality natively.",
+    "parent_rows_superseded": 185,
+    "repair_db": "/private/tmp/talis-tool-creation-repair-20260522/desk-live-canary-tool-repair.db",
+    "repair_report": "/private/tmp/talis-tool-creation-repair-20260522/tool_creation_contract_repair.json",
+    "repairs_created": 185,
+    "scale_authority": "fresh_live_repair_required",
+    "source_cycle_id": "cycle_live100_20260522_live_100",
+    "source_db": "/private/tmp/talis-live100-20260522/live_canary/desk-live-canary.db"
+  },
   "tournament": {
     "decision": "no_promotion",
     "failed_gates": [
@@ -15605,11 +15645,13 @@
         "tool_creation_expected_edge_rate_ge_0_60",
         "tool_creation_would_change_decision_rate_ge_0_60"
       ],
+      "frontier_proposal_count": 189,
       "gates": {
         "tool_creation_db_observed": true,
         "tool_creation_eval_failed_rate_le_0_25": true,
         "tool_creation_eval_plan_rate_ge_0_85": false,
         "tool_creation_expected_edge_rate_ge_0_60": false,
+        "tool_creation_frontier_rows_observed": true,
         "tool_creation_proposal_rows_observed": true,
         "tool_creation_quality_pass_rate_ge_0_70": false,
         "tool_creation_runtime_adapter_backlog_rate_le_0_50": true,
@@ -15622,7 +15664,7 @@
         "eval_plan_rate": 0.4127,
         "expected_edge_rate": 0.0212,
         "promotion_gate_rate": 1.0,
-        "quality_pass_rate": 0.4127,
+        "quality_pass_rate": 0.0212,
         "runtime_adapter_backlog_count": 0,
         "runtime_adapter_backlog_rate": 0.0,
         "would_change_decision_rate": 0.0212
@@ -15635,6 +15677,18 @@
         "proposed": 189
       },
       "top_quality_flags": [
+        {
+          "count": 185,
+          "flag": "missing_expected_edge"
+        },
+        {
+          "count": 185,
+          "flag": "missing_expected_info_value"
+        },
+        {
+          "count": 185,
+          "flag": "missing_would_change_decision"
+        },
         {
           "count": 111,
           "flag": "missing_eval_plan"
