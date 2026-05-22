@@ -2239,18 +2239,127 @@ def _render_cohesive_story(
         story=story,
         first_string=first_string,
     )
+    live_canary = _artifact_json(data, "live_scout_canary")
+    live_tournament = _artifact_json(data, "live_scout_tournament")
+    tournament_decision = (
+        live_tournament.get("promotion_decision")
+        if isinstance(live_tournament.get("promotion_decision"), dict)
+        else {}
+    )
+    canary_metrics = (
+        live_canary.get("metrics")
+        if isinstance(live_canary.get("metrics"), dict)
+        else {}
+    )
+    canary_scouts = (
+        canary_metrics.get("scouts")
+        if isinstance(canary_metrics.get("scouts"), dict)
+        else {}
+    )
+    canary_info = (
+        canary_metrics.get("information_map")
+        if isinstance(canary_metrics.get("information_map"), dict)
+        else {}
+    )
+    canary_geometry = (
+        canary_metrics.get("geometry")
+        if isinstance(canary_metrics.get("geometry"), dict)
+        else {}
+    )
+    canary_atlas = (
+        canary_metrics.get("atlas")
+        if isinstance(canary_metrics.get("atlas"), dict)
+        else {}
+    )
+    canary_preflight = (
+        live_canary.get("preflight")
+        if isinstance(live_canary.get("preflight"), dict)
+        else {}
+    )
+    canary_universe = (
+        canary_preflight.get("market_universe")
+        if isinstance(canary_preflight.get("market_universe"), dict)
+        else {}
+    )
+    promoted_ids = set(tournament_decision.get("promoted_candidate_ids") or [])
+    tournament_candidates = [
+        row
+        for row in (live_tournament.get("candidates") or [])
+        if isinstance(row, dict)
+    ]
+    promoted_candidates = [
+        row
+        for row in tournament_candidates
+        if row.get("candidate_id") in promoted_ids
+    ]
+    repeated_strings = sum(
+        int(((row.get("map_effect") or {}).get("information_strings") or 0))
+        for row in promoted_candidates
+    )
+    repeated_geometry = sum(
+        int(((row.get("map_effect") or {}).get("geometry_cells") or 0))
+        for row in promoted_candidates
+    )
+    ready_for_shadow_schedule = bool(tournament_decision.get("ready_for_scheduled_production"))
+    hero_eyebrow = (
+        "Repeat-proven 1,000-scout shadow layer"
+        if ready_for_shadow_schedule
+        else "Layer 1 run, with real inputs"
+    )
+    hero_title = (
+        "The scout layer is ready for guarded shadow production."
+        if ready_for_shadow_schedule
+        else "One scout run, decoded."
+    )
+    hero_lede = (
+        (
+            "Two independent 1,000-scout runs turned live market slices into "
+            f"{repeated_strings:,} information strings and {repeated_geometry:,} geometry cells. "
+            "This page shows the full machine, then drills into one real packet so the system is legible from first principles."
+        )
+        if ready_for_shadow_schedule and repeated_strings and repeated_geometry
+        else "Follow the actual data packet from market slice to tool receipts, model output, persistent map memory, geometry, and the next research instruction."
+    )
+    hero_what_this_is = (
+        "A repeat-proven first-layer market-sensing system: 1,000 narrow scouts per shadow run, with trade execution disabled."
+        if ready_for_shadow_schedule
+        else "A first-layer scout: one narrow research cell, not a finished trade call."
+    )
+    hero_what_it_saw = (
+        (
+            f"{canary_universe.get('entity_count') or 0} live-market entities, "
+            f"{canary_atlas.get('tools') or 0} approved tools, {canary_atlas.get('sources') or 0} sources, plus node/Hydromancer surfaces."
+        )
+        if ready_for_shadow_schedule
+        else "A timestamped cell, selected atlas tools, four receipts, and prior map context."
+    )
+    decision_name = str(tournament_decision.get("decision") or "unknown")
+    decision_label = (
+        "scheduled shadow candidate"
+        if decision_name == "promote_to_scheduled_production_candidate"
+        else decision_name.replace("_", " ")
+    )
+    hero_what_happened = (
+        (
+            f"{canary_scouts.get('completed') or 0}/{live_canary.get('n_scouts_requested') or 0} scouts completed in the latest run; "
+            f"{canary_info.get('string_count') or 0:,} strings; {canary_geometry.get('cell_count') or 0:,} geometry cells; tournament said: "
+            f"{decision_label}."
+        )
+        if ready_for_shadow_schedule
+        else f"{layer_pass}/{layer_total} layers passed. {len(touched_surfaces)}/{data_substrate.total_surfaces} data surfaces touched. Geometry said: {route}."
+    )
     return f"""
       <div class="storyline">
         <section class="story-hero">
           <div class="hero-copy">
-            <div class="eyebrow"><span class="dot"></span> Layer 1 run, with real inputs</div>
-            <h1>One scout run, decoded.</h1>
-            <p>Follow the actual data packet from market slice to tool receipts, model output, persistent map memory, geometry, and the next research instruction.</p>
+            <div class="eyebrow"><span class="dot"></span> {html.escape(hero_eyebrow)}</div>
+            <h1>{html.escape(hero_title)}</h1>
+            <p>{html.escape(hero_lede)}</p>
           </div>
           <aside class="hero-proof">
-            <div class="moment"><span>What this is</span><strong>A first-layer scout: one narrow research cell, not a finished trade call.</strong></div>
-            <div class="moment"><span>What it saw</span><strong>A timestamped cell, selected atlas tools, four receipts, and prior map context.</strong></div>
-            <div class="moment"><span>What happened</span><strong>{layer_pass}/{layer_total} layers passed. {len(touched_surfaces)}/{data_substrate.total_surfaces} data surfaces touched. Geometry said: {html.escape(route)}.</strong></div>
+            <div class="moment"><span>What this is</span><strong>{html.escape(hero_what_this_is)}</strong></div>
+            <div class="moment"><span>What it saw</span><strong>{html.escape(hero_what_it_saw)}</strong></div>
+            <div class="moment"><span>What happened</span><strong>{html.escape(hero_what_happened)}</strong></div>
           </aside>
         </section>
 
@@ -2258,7 +2367,7 @@ def _render_cohesive_story(
           <div class="chapter-head">
             <div class="chapter-label">00a / whole system map</div>
             <h2>Before the scout, here is the machine it belongs to.</h2>
-            <p>The run is one packet moving through a broader intelligence system: intake, tools, prompt lab, scout swarm, graph memory, attention gate, geometry, verifier/tool builders, and the user surface. Green-edged cards were touched by this smoke; the rest are production surfaces the same architecture is designed to route into.</p>
+            <p>The page starts with the whole system, then follows one real packet through the layer. Intake, tools, prompt lab, scout swarm, graph memory, attention gate, geometry, verifier/tool builders, and the user surface are shown together so the run feels like a designed machine, not a pile of JSON.</p>
           </div>
           <div class="system-board">
             <div class="system-strip">{system_map_html}</div>
@@ -3552,12 +3661,23 @@ def _render_live_scout_tournament_chapter(*, data: dict[str, Any]) -> str:
     quality = winner.get("quality") if isinstance(winner.get("quality"), dict) else {}
     sample = winner.get("sample") if isinstance(winner.get("sample"), dict) else {}
     map_effect = winner.get("map_effect") if isinstance(winner.get("map_effect"), dict) else {}
+    if decision.get("ready_for_scheduled_production"):
+        next_call_copy = (
+            "The next paid call is the guarded scheduled shadow-production job below: "
+            "hard caps, full audit capture, and no trade execution."
+        )
+    elif decision.get("ready_for_live_1000"):
+        next_call_copy = (
+            "The next paid call is the approved 1,000-scout ramp below; scheduled production remains blocked until repeatability is proven."
+        )
+    else:
+        next_call_copy = "The next paid calls should be these repair arms until one earns the next ramp."
     return f"""
         <section class="chapter">
           <div class="chapter-head">
             <div class="chapter-label">00h / live tournament gate</div>
             <h2>The system now grades which live ramp it has earned.</h2>
-            <p>This is the evaluator-guided evolution step: live reports become candidates, candidates are scored on reliability, latency, string yield, evidence support, duplicate rate, prompt structure, geometry impact, and self-healing. A wider live run is blocked unless a candidate wins every hard gate.</p>
+            <p>This is the evaluator-guided evolution step: live reports become candidates, candidates are scored on reliability, latency, string yield, evidence support, duplicate rate, prompt structure, geometry impact, and self-healing. A wider live run is allowed only when the candidate wins every hard gate.</p>
           </div>
           <div class="score-tape">
             <div><strong>{html.escape(str(decision.get("decision") or "unknown"))}</strong><small>promotion decision</small></div>
@@ -3587,7 +3707,7 @@ def _render_live_scout_tournament_chapter(*, data: dict[str, Any]) -> str:
           </article>
           <article class="workbench-panel" style="margin-top:10px">
             <h3>Next evolution arms</h3>
-            <p>{html.escape("The next paid call is the approved ramp below; scheduled production stays blocked." if decision.get("ready_for_live_1000") else "The next paid calls should be these repair arms until one earns the next ramp.")}</p>
+            <p>{html.escape(next_call_copy)}</p>
             <div class="output-grid" style="margin-top:10px">{plan_cards}</div>
           </article>
         </section>
