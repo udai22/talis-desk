@@ -64,10 +64,13 @@ from talis_desk.swarm.scout_runner import (
     run_scouts,
 )
 from talis_desk.swarm.seed_generator import (
+    ALPHA_GEOMETRY_ACTION_TOOL_URI,
     DEFAULT_ENTITIES,
+    INFORMATION_PERFUSION_TOOL_URI,
     SeedCell,
     generate_information_perfusion_seeds,
     generate_seeds,
+    narrow_tools_for_seed,
 )
 from talis_desk.tool_atlas import (
     load_analysis_tool_proposals,
@@ -527,6 +530,11 @@ def _parse_args() -> argparse.Namespace:
         help="Optional previous cycle id to read information_perfusion routes from.",
     )
     parser.add_argument(
+        "--control-proof-metrics",
+        default="",
+        help="Comma-separated falsification/proof metrics the cadence wants this scout slice to observe.",
+    )
+    parser.add_argument(
         "--repair-tool-proposal-contracts",
         action="store_true",
         help=(
@@ -568,6 +576,7 @@ def _generate_control_aware_live_seeds(
         decision=str(args.control_decision or ""),
         allowed_next_step=str(args.control_allowed_next_step or ""),
     )
+    proof_metrics = _control_proof_metrics(args)
     perfusion_seeds: list[SeedCell] = []
     if objective:
         perfusion_seeds = generate_information_perfusion_seeds(
@@ -591,16 +600,28 @@ def _generate_control_aware_live_seeds(
             theme_share=args.theme_share,
         )
     seeds = [_prepare_live_seed(seed, args=args) for seed in [*perfusion_seeds, *broad_seeds]]
+    if proof_metrics:
+        seeds = [
+            _annotate_seed_for_missing_proof_metrics(
+                seed,
+                proof_metrics=proof_metrics,
+                decision=str(args.control_decision or ""),
+                allowed_next_step=str(args.control_allowed_next_step or ""),
+            )
+            for seed in seeds
+        ]
     report = {
         "schema_version": "talis_live_control_seed_routing_v1",
         "cycle_id": cycle_id,
         "control_decision": str(args.control_decision or ""),
         "control_allowed_next_step": str(args.control_allowed_next_step or ""),
         "perfusion_source_cycle_id": str(args.perfusion_source_cycle_id or ""),
+        "control_proof_metrics": proof_metrics,
         "route_objective": objective or "broad_market_grid",
         "requested_seed_count": int(base_seed_count),
         "perfusion_seed_count": len(perfusion_seeds),
         "broad_seed_count": len(broad_seeds),
+        "proof_metric_seed_count": len(seeds) if proof_metrics else 0,
         "status": "perfusion_routed" if perfusion_seeds else "broad_market_grid",
         "quality_flags": (
             []
@@ -620,6 +641,95 @@ def _control_perfusion_objective(*, decision: str, allowed_next_step: str) -> st
     if "perfusion_pressure" in text:
         return "pressure"
     return ""
+
+
+def _control_proof_metrics(args: argparse.Namespace) -> list[str]:
+    raw = str(getattr(args, "control_proof_metrics", "") or "")
+    out: list[str] = []
+    for part in raw.replace("\n", ",").split(","):
+        metric = part.strip()
+        if metric and metric not in out:
+            out.append(metric)
+    return out[:12]
+
+
+def _annotate_seed_for_missing_proof_metrics(
+    seed: SeedCell,
+    *,
+    proof_metrics: list[str],
+    decision: str,
+    allowed_next_step: str,
+) -> SeedCell:
+    payload = dict(seed.payload or {})
+    payload["control_decision"] = decision
+    payload["control_allowed_next_step"] = allowed_next_step
+    payload["control_collects_missing_falsification_gate_metrics"] = True
+    payload["control_proof_metrics"] = proof_metrics
+    payload["proof_gate_metric_hints"] = _proof_metric_hints(proof_metrics)
+    payload["prompt_contract_pressure"] = "raise"
+    payload["max_tool_iterations"] = max(2, int(payload.get("max_tool_iterations") or 0))
+    payload["max_evidence_tools"] = max(3, int(payload.get("max_evidence_tools") or 0))
+    payload["tool_candidate_limit"] = max(12, int(payload.get("tool_candidate_limit") or 0))
+    metric_text = " ".join(proof_metrics).lower()
+    explicit_tools: list[str] = []
+    if any(token in metric_text for token in ("price", "outcome", "realized_edge", "direction_hit")):
+        payload["prefer_price_anchor_tools"] = True
+        explicit_tools.append("tic://tool/builtin/query_timeseries@v1")
+    if "perfusion" in metric_text:
+        payload["prefer_information_perfusion_tools"] = True
+        explicit_tools.append(INFORMATION_PERFUSION_TOOL_URI)
+    if any(token in metric_text for token in ("geometry", "fragile", "verify", "scream", "source_independence")):
+        payload["alpha_geometry_route_directive"] = (
+            payload.get("alpha_geometry_route_directive")
+            or "observe_missing_proof_gate"
+        )
+        payload["alpha_geometry_action"] = (
+            payload.get("alpha_geometry_action")
+            or "collect_falsification_gate_metric"
+        )
+        explicit_tools.append(ALPHA_GEOMETRY_ACTION_TOOL_URI)
+    seed.payload = payload
+    refreshed = narrow_tools_for_seed(seed, k=int(payload["tool_candidate_limit"]))
+    payload["tool_candidates"] = _merge_control_tool_candidates(
+        explicit_tools,
+        list(payload.get("tool_candidates") or []),
+        refreshed,
+        k=int(payload["tool_candidate_limit"]),
+    )
+    seed.payload = payload
+    return seed
+
+
+def _proof_metric_hints(proof_metrics: list[str]) -> list[dict[str, str]]:
+    hints: list[dict[str, str]] = []
+    for metric in proof_metrics[:12]:
+        key = metric.removeprefix("candidate_").removeprefix("control_")
+        hint = "collect_evidence_for_metric"
+        if any(token in key for token in ("price", "outcome", "realized_edge", "direction_hit")):
+            hint = "attach_before_after_price_or_outcome_observation"
+        elif "perfusion" in key:
+            hint = "refresh_information_perfusion_cell_metrics"
+        elif any(token in key for token in ("fragile", "geometry", "verify", "scream", "source_independence")):
+            hint = "refresh_alpha_geometry_cell_metrics"
+        elif "tool" in key:
+            hint = "exercise_tool_proposal_or_learned_tool_eval"
+        hints.append({"metric": metric, "hint": hint})
+    return hints
+
+
+def _merge_control_tool_candidates(*groups: list[str], k: int) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for group in groups:
+        for raw in group:
+            uri = str(raw or "").strip()
+            if not uri or uri in seen:
+                continue
+            seen.add(uri)
+            out.append(uri)
+            if len(out) >= k:
+                return out
+    return out
 
 
 def _prepare_live_seed(seed: SeedCell, *, args: argparse.Namespace) -> SeedCell:

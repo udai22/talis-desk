@@ -443,6 +443,7 @@ def build_cadence_control_decision(
     memory = scoreboard.get("evolution_memory") if isinstance(scoreboard.get("evolution_memory"), dict) else {}
     next_actions = scoreboard.get("next_actions") if isinstance(scoreboard.get("next_actions"), list) else []
     primary_action = str((next_actions[0] or {}).get("action") or "") if next_actions else ""
+    missing_proof_metrics = _missing_proof_metrics_from_next_actions(next_actions)
     open_experiments = int(counts.get("open_experiments") or 0)
     candidate_count = int(counts.get("candidate_programs") or 0)
     result_window = int(counts.get("result_window") or 0)
@@ -469,6 +470,16 @@ def build_cadence_control_decision(
         blocks_wider_spend = True
         why = "A candidate or hard gate failed; preserve the failure as repair signal before widening spend."
         flags.append("hard_gate_or_candidate_failure_blocks_scale")
+    elif missing_proof_metrics:
+        decision = "collect_missing_proof_gate_metrics"
+        allowed_next_step = "proof_gate_metric_sentinel"
+        recommended_scouts = max(16, min(96, open_experiments * 16 or 24))
+        why = (
+            "A candidate beat measured score gates, but hard-experiment proof "
+            "metrics were not observed. Run a focused sentinel that observes "
+            "the missing falsification-gate metrics before counting a win."
+        )
+        flags.append("hard_experiment_proof_gate_metrics_missing")
     elif status == "experiment_running":
         decision = "collect_experiment_evidence"
         allowed_next_step = "paired_evolution_sentinel"
@@ -648,6 +659,7 @@ def build_cadence_control_decision(
         "best_score_delta_recent": memory.get("best_score_delta_recent"),
         "information_price_loop": _control_price_loop_payload(price_loop),
         "information_perfusion": _control_perfusion_payload(perfusion),
+        "missing_proof_metrics": missing_proof_metrics,
         "quality_flags": sorted(set(flags)),
     }
 
@@ -691,7 +703,8 @@ def _control_decision_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
 def _attach_control_seed_routing(plan: CadenceRunPlan, control_decision: dict[str, Any]) -> None:
     decision = str(control_decision.get("decision") or "")
     allowed_next_step = str(control_decision.get("allowed_next_step") or "")
-    if not _control_decision_requests_seed_routing(decision, allowed_next_step):
+    proof_metrics = _control_proof_metrics(control_decision)
+    if not _control_decision_requests_seed_routing(decision, allowed_next_step, proof_metrics):
         return
     source_cycle = ""
     perfusion = control_decision.get("information_perfusion")
@@ -708,16 +721,45 @@ def _attach_control_seed_routing(plan: CadenceRunPlan, control_decision: dict[st
         ])
         if source_cycle:
             command.command.extend(["--perfusion-source-cycle-id", source_cycle])
+        if proof_metrics:
+            command.command.extend(["--control-proof-metrics", ",".join(proof_metrics)])
         command.expected_artifacts["control_seed_routing"] = str(
             Path(plan.artifact_dir) / "live_canary" / "prompt_outputs" / "live_scout_control_seed_routing.json"
         )
         plan.notes.append("seed_routing=control_decision")
+        if proof_metrics:
+            plan.notes.append("proof_gate_metrics=" + ",".join(proof_metrics))
         break
 
 
-def _control_decision_requests_seed_routing(decision: str, allowed_next_step: str) -> bool:
+def _control_decision_requests_seed_routing(
+    decision: str,
+    allowed_next_step: str,
+    proof_metrics: list[str] | None = None,
+) -> bool:
     text = f"{decision} {allowed_next_step}".lower()
-    return "perfusion_" in text
+    return "perfusion_" in text or bool(proof_metrics)
+
+
+def _missing_proof_metrics_from_next_actions(next_actions: list[Any]) -> list[str]:
+    out: list[str] = []
+    for action in next_actions:
+        if not isinstance(action, dict):
+            continue
+        if str(action.get("action") or "") != "collect_missing_falsification_gate_metrics":
+            continue
+        out.extend(_string_list(action.get("metrics")))
+    return _dedupe_strings(out)[:12]
+
+
+def _control_proof_metrics(control_decision: dict[str, Any]) -> list[str]:
+    if not isinstance(control_decision, dict):
+        return []
+    metrics = _string_list(control_decision.get("missing_proof_metrics"))
+    recommended = control_decision.get("recommended_next_run")
+    if isinstance(recommended, dict):
+        metrics.extend(_string_list(recommended.get("missing_proof_metrics")))
+    return _dedupe_strings(metrics)[:12]
 
 
 def _control_decision_requires_live_spend(
@@ -732,6 +774,7 @@ def _control_decision_requires_live_spend(
         return True
     return decision in {
         "collect_experiment_evidence",
+        "collect_missing_proof_gate_metrics",
         "continue_candidate_experiment",
         "perfusion_latch_repair_sentinel",
         "perfusion_pressure_requests_sentinel",
@@ -1062,6 +1105,18 @@ def _string_list(raw: Any) -> list[str]:
     if not isinstance(raw, list):
         return []
     return [str(item) for item in raw if item not in (None, "")]
+
+
+def _dedupe_strings(values: list[str]) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        s = str(value or "").strip()
+        if not s or s in seen:
+            continue
+        seen.add(s)
+        out.append(s)
+    return out
 
 
 def _sentinel_commands(

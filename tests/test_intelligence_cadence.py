@@ -134,6 +134,44 @@ def test_cadence_control_decision_turns_open_experiments_into_paired_scout_step(
     assert "open_experiment_without_result_window" in decision["quality_flags"]
 
 
+def test_cadence_control_decision_routes_missing_proof_gate_metrics() -> None:
+    decision = build_cadence_control_decision(
+        mode="sentinel_tick",
+        allow_live_spend=False,
+        scoreboard={
+            "id": "score_proof_pending",
+            "status": "experiment_running",
+            "counts": {
+                "open_experiments": 1,
+                "candidate_programs": 1,
+                "result_window": 1,
+            },
+            "evolution_memory": {"best_score_delta_recent": 0.17},
+            "hard_experiment_gate_summary": {
+                "triggered": 0,
+                "not_observed": 1,
+                "not_observed_metrics": ["candidate_fragile_verify_rate"],
+            },
+            "next_actions": [
+                {
+                    "action": "collect_missing_falsification_gate_metrics",
+                    "metrics": ["candidate_fragile_verify_rate", "candidate_avg_realized_edge_score"],
+                }
+            ],
+        },
+    )
+
+    assert decision["decision"] == "collect_missing_proof_gate_metrics"
+    assert decision["allowed_next_step"] == "proof_gate_metric_sentinel"
+    assert decision["recommended_next_run"]["scouts"] == 16
+    assert decision["recommended_next_run"]["requires_allow_live_spend"] is True
+    assert decision["missing_proof_metrics"] == [
+        "candidate_fragile_verify_rate",
+        "candidate_avg_realized_edge_score",
+    ]
+    assert "hard_experiment_proof_gate_metrics_missing" in decision["quality_flags"]
+
+
 def test_cadence_control_decision_blocks_scale_on_repair_state() -> None:
     decision = build_cadence_control_decision(
         mode="full",
@@ -456,6 +494,46 @@ def test_followup_plan_wires_perfusion_control_into_next_scout_slice(tmp_path: P
         "live_scout_control_seed_routing.json"
     )
     assert "seed_routing=control_decision" in plan.notes
+
+
+def test_followup_plan_wires_missing_proof_metrics_into_next_scout_slice(tmp_path: Path) -> None:
+    report_path = tmp_path / "report.json"
+    report_path.write_text(json.dumps({
+        "control_decision": {
+            "schema_version": "talis_cadence_control_decision_v1",
+            "decision": "collect_missing_proof_gate_metrics",
+            "allowed_next_step": "proof_gate_metric_sentinel",
+            "source_scoreboard_id": "score_proof_pending",
+            "blocks_wider_spend": False,
+            "missing_proof_metrics": [
+                "candidate_fragile_verify_rate",
+                "candidate_avg_realized_edge_score",
+            ],
+            "recommended_next_run": {
+                "mode": "sentinel_tick",
+                "scouts": 16,
+                "requires_allow_live_spend": True,
+            },
+        },
+    }))
+
+    plan = build_followup_plan_from_report(
+        report_path=report_path,
+        artifact_dir=tmp_path / "next",
+        cycle_id="cycle_follow_proof",
+        allow_live_spend=False,
+    )
+
+    command = plan.commands[0].command
+    assert _arg_after(command, "--control-decision") == "collect_missing_proof_gate_metrics"
+    assert _arg_after(command, "--control-allowed-next-step") == "proof_gate_metric_sentinel"
+    assert _arg_after(command, "--control-proof-metrics") == (
+        "candidate_fragile_verify_rate,candidate_avg_realized_edge_score"
+    )
+    assert plan.commands[0].expected_artifacts["control_seed_routing"].endswith(
+        "live_scout_control_seed_routing.json"
+    )
+    assert "proof_gate_metrics=candidate_fragile_verify_rate,candidate_avg_realized_edge_score" in plan.notes
 
 
 def test_followup_plan_respects_control_block_even_if_spend_requested(tmp_path: Path) -> None:

@@ -327,6 +327,42 @@ def test_live_canary_routes_control_decision_into_perfusion_seeds(tmp_path):
     assert all(seed.payload["max_tool_iterations"] == 3 for seed in seeds)
 
 
+def test_live_canary_annotates_missing_proof_metric_seed_slice(tmp_path):
+    store = reset_desk_store_for_test(tmp_path / "desk.db")
+    args = Namespace(
+        control_decision="collect_missing_proof_gate_metrics",
+        control_allowed_next_step="proof_gate_metric_sentinel",
+        control_proof_metrics="candidate_fragile_verify_rate,candidate_avg_realized_edge_score",
+        perfusion_source_cycle_id="",
+        seed_rng=11,
+        theme_share=0.0,
+        prompt_variant="",
+        max_tool_iterations=1,
+    )
+
+    seeds, report = _generate_control_aware_live_seeds(
+        args=args,
+        cycle_id="cycle_live_proof_gate",
+        conn=store.conn,
+        universe_entities=["HYPE", "BTC"],
+        base_seed_count=3,
+    )
+
+    assert report["route_objective"] == "broad_market_grid"
+    assert report["proof_metric_seed_count"] == 3
+    assert report["control_proof_metrics"] == [
+        "candidate_fragile_verify_rate",
+        "candidate_avg_realized_edge_score",
+    ]
+    assert all(seed.payload["control_collects_missing_falsification_gate_metrics"] is True for seed in seeds)
+    assert all(seed.payload["control_proof_metrics"] == report["control_proof_metrics"] for seed in seeds)
+    assert all(seed.payload["max_tool_iterations"] == 2 for seed in seeds)
+    assert all(seed.payload["max_evidence_tools"] >= 3 for seed in seeds)
+    assert all(seed.payload["tool_candidate_limit"] >= 12 for seed in seeds)
+    assert all("tic://tool/talis_native/plan_alpha_geometry_actions@v1" in seed.payload["tool_candidates"] for seed in seeds)
+    assert all("tic://tool/builtin/query_timeseries@v1" in seed.payload["tool_candidates"] for seed in seeds)
+
+
 def test_market_evolve_exploits_perfusion_pressure_when_price_has_not_absorbed(tmp_path):
     store = reset_desk_store_for_test(tmp_path / "desk.db")
     persist_information_strings(
