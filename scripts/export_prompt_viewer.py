@@ -46,6 +46,9 @@ FILENAMES = {
     "market_map_self_healing": "market_map_self_healing.json",
     "market_map_self_healing_dispatch": "market_map_self_healing_dispatch.json",
     "market_map_self_healing_worker": "market_map_self_healing_worker.json",
+    "live_scout_canary": "live_scout_canary_report.json",
+    "live_scout_canary_outputs": "live_scout_canary_outputs.json",
+    "live_scout_canary_seeds": "live_scout_canary_seeds.json",
     "scout_100_readiness": "100_scout_readiness_report.json",
     "scout_100_outputs": "100_scout_outputs.json",
     "scout_100_seeds": "100_scout_seeds.json",
@@ -200,8 +203,33 @@ def _read_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _slim_embedded_data(data: dict[str, Any]) -> dict[str, Any]:
+    """Keep the phone page fast while preserving full raw files in run.json."""
+    artifacts = data.get("artifacts") if isinstance(data.get("artifacts"), dict) else {}
+    slim = dict(data)
+    slim["artifacts"] = {
+        key: _slim_artifact_for_page(value)
+        for key, value in artifacts.items()
+        if isinstance(value, dict)
+    }
+    return slim
+
+
+def _slim_artifact_for_page(artifact: dict[str, Any], *, max_text: int = 12000) -> dict[str, Any]:
+    out = dict(artifact)
+    text = str(out.get("text") or "")
+    if len(text) > max_text:
+        out["text"] = (
+            text[:max_text]
+            + "\n\n... truncated in embedded page data. Open run.json or the source artifact for the full audit trail. ..."
+        )
+        out["json"] = None
+        out["truncated_for_page"] = True
+    return out
+
+
 def render_html(data: dict[str, Any]) -> str:
-    blob = json.dumps(data, ensure_ascii=True)
+    blob = json.dumps(_slim_embedded_data(data), ensure_ascii=True)
     report = data.get("report") or {}
     layers = report.get("layers") or []
     summary = _monitor_summary(data)
@@ -236,6 +264,9 @@ def render_html(data: dict[str, Any]) -> str:
         _render_panel("selfheal", "Self-Healing Plan", data, "market_map_self_healing"),
         _render_panel("selfhealdispatch", "Self-Healing Tasks", data, "market_map_self_healing_dispatch"),
         _render_panel("selfhealworker", "Self-Healing Worker", data, "market_map_self_healing_worker"),
+        _render_panel("livecanary", "Live Scout Canary", data, "live_scout_canary"),
+        _render_panel("livecanaryout", "Live Canary Outputs", data, "live_scout_canary_outputs"),
+        _render_panel("livecanaryseeds", "Live Canary Seeds", data, "live_scout_canary_seeds"),
         _render_panel("scout100", "100 Scout Readiness", data, "scout_100_readiness"),
         _render_panel("scout100out", "100 Scout Outputs", data, "scout_100_outputs"),
         _render_panel("scout100seeds", "100 Scout Seeds", data, "scout_100_seeds"),
@@ -1946,6 +1977,7 @@ def _render_cohesive_story(
     governor_html = _render_market_map_governor_chapter(data=data)
     self_healing_html = _render_self_healing_chapter(data=data)
     scout_100_html = _render_100_scout_readiness_chapter(data=data)
+    live_canary_html = _render_live_scout_canary_chapter(data=data)
     touched_surfaces = [row for row in data_substrate.touched if row.touched]
     untouched_surfaces = [row for row in data_substrate.touched if not row.touched]
     data_surface_html = "".join(
@@ -2154,6 +2186,8 @@ def _render_cohesive_story(
 
         {scout_100_html}
 
+        {live_canary_html}
+
         {swipe_deck_html}
 
         <section class="chapter">
@@ -2333,6 +2367,12 @@ Layer 1 is not allowed to say: "I generally feel bullish or bearish."</pre>
               <button data-tab="universe">Universe</button>
               <button data-tab="governor">Governor</button>
               <button data-tab="selfheal">Self-Heal</button>
+              <button data-tab="livecanary">Live Canary</button>
+              <button data-tab="livecanaryout">Live Outputs</button>
+              <button data-tab="livecanaryseeds">Live Seeds</button>
+              <button data-tab="scout100">100 Scouts</button>
+              <button data-tab="scout100out">100 Outputs</button>
+              <button data-tab="scout100seeds">100 Seeds</button>
               <button data-tab="coverage">Coverage</button>
             </div>
             {raw_panels}
@@ -3248,6 +3288,101 @@ def _render_100_scout_readiness_chapter(*, data: dict[str, Any]) -> str:
             <p>{html.escape(str((report.get("next_live_gate") or {}).get("why") or "This proves orchestration, not live provider quality."))}</p>
             <p><strong>Next:</strong> {html.escape(str((report.get("next_live_gate") or {}).get("recommendation") or ""))}</p>
           </article>
+        </section>
+    """
+
+
+def _render_live_scout_canary_chapter(*, data: dict[str, Any]) -> str:
+    report = _artifact_json(data, "live_scout_canary")
+    if not report:
+        return """
+        <section class="chapter">
+          <div class="chapter-head">
+            <div class="chapter-label">00g / live-provider canary</div>
+            <h2>The live canary has not been run yet.</h2>
+            <p>Run <code>scripts/run_live_scout_canary.py --n-scouts 10 --cost-cap-usd 0.10 --allow-live-spend</code> from the same prompt-output directory to test provider quality without opening the full spend valve.</p>
+          </div>
+        </section>
+        """
+    verdict = report.get("verdict") if isinstance(report.get("verdict"), dict) else {}
+    metrics = report.get("metrics") if isinstance(report.get("metrics"), dict) else {}
+    scouts = metrics.get("scouts") if isinstance(metrics.get("scouts"), dict) else {}
+    info = metrics.get("information_map") if isinstance(metrics.get("information_map"), dict) else {}
+    geometry = metrics.get("geometry") if isinstance(metrics.get("geometry"), dict) else {}
+    preflight = report.get("preflight") if isinstance(report.get("preflight"), dict) else {}
+    transcript = report.get("transcript_summary") if isinstance(report.get("transcript_summary"), dict) else {}
+    scale = report.get("scale_decision") if isinstance(report.get("scale_decision"), dict) else {}
+    gates = verdict.get("gates") if isinstance(verdict.get("gates"), dict) else {}
+    gate_cards = "".join(
+        '<article class="output-panel">'
+        f'<span>{"pass" if ok else "fail"}</span>'
+        f'<h3>{html.escape(str(name).replace("_", " "))}</h3>'
+        f'<p>{html.escape("Clean enough for this gate." if ok else "Do not increase spend until this is repaired.")}</p>'
+        '</article>'
+        for name, ok in list(gates.items())[:12]
+    )
+    if not gate_cards:
+        gate_cards = '<article class="output-panel"><span>blocked</span><h3>No live gates yet.</h3><p>The canary produced a preflight report, but no provider calls were made.</p></article>'
+    preflight_cards = "".join(
+        '<div>'
+        f'<strong>{html.escape("yes" if ok else "no")}</strong>'
+        f'<small>{html.escape(label)}</small>'
+        '</div>'
+        for label, ok in [
+            ("tic root", preflight.get("tic_root_ok")),
+            ("provider import", preflight.get("provider_import_ok")),
+            ("tool atlas", preflight.get("tool_atlas_ok")),
+            ("market universe", preflight.get("market_universe_ok")),
+        ]
+    )
+    preview = {
+        "mode": report.get("mode"),
+        "status": verdict.get("status"),
+        "failed_gates": verdict.get("failed_gates"),
+        "scale_decision": scale,
+        "preflight": {
+            "tic_root_ok": preflight.get("tic_root_ok"),
+            "provider_import_ok": preflight.get("provider_import_ok"),
+            "tool_atlas": preflight.get("tool_atlas"),
+            "market_universe": preflight.get("market_universe"),
+        },
+        "metrics": {
+            "scouts": scouts,
+            "information_map": info,
+            "geometry": {
+                "cell_count": geometry.get("cell_count"),
+                "routing_queue_count": geometry.get("routing_queue_count"),
+            },
+            "transcript": transcript,
+        },
+    }
+    return f"""
+        <section class="chapter">
+          <div class="chapter-head">
+            <div class="chapter-label">00g / live-provider canary</div>
+            <h2>The last gate before paid scale is the tiny live canary.</h2>
+            <p>The 100-scout rehearsal proved mechanics with an offline shim. This gate calls the real provider under a hard cap, records the exact prompts and responses, and refuses to call 1,000 scouts until provider quality, evidence, storage, and geometry stay clean.</p>
+          </div>
+          <div class="score-tape">
+            <div><strong>{html.escape(str(verdict.get("status") or "unknown"))}</strong><small>live canary status</small></div>
+            <div><strong>{html.escape(str(scouts.get("completed") or 0))}/{html.escape(str(report.get("n_scouts_requested") or 0))}</strong><small>scouts completed</small></div>
+            <div><strong>${html.escape(str(scouts.get("total_cost_usd_estimate", 0)))}</strong><small>estimated model/tool spend</small></div>
+            <div><strong>{html.escape(str(info.get("string_count") or 0))}</strong><small>live strings stored</small></div>
+            <div><strong>{html.escape(str(transcript.get("call_count") or 0))}</strong><small>provider calls captured</small></div>
+            <div><strong>{html.escape(str(geometry.get("cell_count") or 0))}</strong><small>geometry cells</small></div>
+          </div>
+          <article class="workbench-panel" style="margin-top:10px">
+            <h3>Provider and data preflight</h3>
+            <p>The canary checks the live model import, the local TIC substrate, the approved tool atlas, and the market universe before a single model token is bought.</p>
+            <div class="score-tape" style="margin-top:10px">{preflight_cards}</div>
+          </article>
+          <article class="workbench-panel" style="margin-top:10px">
+            <h3>Scale decision</h3>
+            <p><strong>{html.escape(str(scale.get("decision") or "do_not_scale_yet"))}</strong></p>
+            <p>{html.escape(str(scale.get("next_step") or verdict.get("interpretation") or ""))}</p>
+            <pre class="prompt-slice">{html.escape(json.dumps(preview, indent=2, sort_keys=True, ensure_ascii=True, default=str))}</pre>
+          </article>
+          <div class="output-grid" style="margin-top:10px">{gate_cards}</div>
         </section>
     """
 
@@ -4989,6 +5124,13 @@ def _render_panel(panel_id: str, title: str, data: dict[str, Any], key: str, *, 
     content = artifact.get("text") or ""
     if artifact.get("kind") == "json" and artifact.get("json") is not None:
         content = json.dumps(artifact["json"], indent=2, sort_keys=True)
+    full_len = len(content)
+    if full_len > 60000:
+        content = (
+            content[:60000]
+            + f"\n\n... trimmed for mobile display after 60000 of {full_len} characters. "
+            "Open run.json or the source artifact for the full audit trail. ..."
+        )
     return f"""
       <article class="panel {'active' if active else ''}" data-panel="{html.escape(panel_id)}">
         <div class="panel-head">

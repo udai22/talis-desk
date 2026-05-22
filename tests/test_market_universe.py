@@ -179,6 +179,27 @@ def test_market_map_governor_ranks_gaps_and_builds_llm_context(monkeypatch) -> N
     )
 
 
+def test_market_map_governor_handles_empty_alpha_geometry_context(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TALIS_DISABLE_HL_META", "1")
+    _reset_hl_catalog()
+    store = reset_desk_store_for_test(tmp_path / "desk.db")
+    get_schema_version(store.conn)
+
+    plan = build_market_map_governor_plan(
+        cycle_id="cycle_empty_geometry_governor",
+        conn=store.conn,
+        scout_budget=4,
+        max_ranked_gaps=4,
+        max_seed_cells=2,
+        use_llm=False,
+    )
+
+    geometry_context = plan["alpha_geometry_context"]
+    assert geometry_context["status"] in {"empty", "ready"}
+    assert isinstance(geometry_context["route_directives"], list)
+    assert isinstance(geometry_context["action_plan"].get("actions"), list)
+
+
 def test_frontier_llm_governor_sees_geometry_and_promotes_gated_seed(monkeypatch) -> None:
     monkeypatch.setenv("TALIS_DISABLE_HL_META", "1")
     _reset_hl_catalog()

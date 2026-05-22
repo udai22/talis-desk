@@ -495,6 +495,7 @@ def _geometry_context(
 
     rows: list[dict[str, Any]] = []
     source = "persisted"
+    directives: list[dict[str, Any]] = []
     try:
         rows = load_alpha_geometry(cycle_id=cycle_id, limit=48, conn=conn)
     except Exception:
@@ -532,6 +533,26 @@ def _geometry_context(
             ]
             global_metrics = snapshot.global_metrics
             quality_flags = snapshot.quality_flags
+            directives = [
+                {
+                    "cell_key": row.get("cell_key"),
+                    "entity": row.get("entity"),
+                    "theme": row.get("theme"),
+                    "horizon": row.get("horizon"),
+                    "lens": row.get("lens"),
+                    "route_directive": row.get("route_directive"),
+                    "trade_scream_score": row.get("trade_scream_score"),
+                    "verifier_readiness": row.get("verifier_readiness"),
+                    "why": (
+                        f"{row.get('route_directive')}: scream={_float(row.get('trade_scream_score'), default=0.0):.2f}, "
+                        f"ready={_float(row.get('verifier_readiness'), default=0.0):.2f}."
+                    ),
+                    "metrics": row.get("metrics") or {},
+                    "quality_flags": row.get("quality_flags") or [],
+                }
+                for row in rows
+                if str(row.get("route_directive") or "observe") != "observe"
+            ][:12]
         except Exception as exc:
             return {
                 "status": "unavailable",
