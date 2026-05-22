@@ -129,6 +129,10 @@ DEFAULT_MARKET_EVOLVE_GENOME: dict[str, Any] = {
         "cortex_task_completion_rate": 0.05,
         "cortex_shape_observation_rate": 0.05,
         "cortex_followup_execution_rate": 0.03,
+        "outcome_observed_rate": 0.04,
+        "outcome_direction_hit_rate": 0.10,
+        "outcome_threshold_hit_rate": 0.08,
+        "avg_realized_edge_score": 0.08,
         "fragility_penalty": 0.12,
         "fragile_verify_penalty": 0.09,
         "high_signal_observe_penalty": 0.06,
@@ -142,6 +146,7 @@ DEFAULT_MARKET_EVOLVE_GENOME: dict[str, Any] = {
         "cortex_task_failure_penalty": 0.06,
         "cortex_task_pending_penalty": 0.03,
         "cortex_shape_blocked_followup_penalty": 0.03,
+        "outcome_unobserved_penalty": 0.05,
     },
 }
 
@@ -1269,6 +1274,11 @@ def collect_market_evolve_metrics(
         experiment_arm=experiment_arm,
         seed_scoped=bool(scoped_seed_ids),
     )
+    outcome_stats = _information_price_outcome_stats(
+        db,
+        cycle_id=cycle_id,
+        seed_ids=scoped_seed_ids or None,
+    )
 
     denominator_scouts = max(1.0, float(scout_count or string_count or 1))
     metrics = {
@@ -1315,6 +1325,7 @@ def collect_market_evolve_metrics(
         "learned_tool_usage_per_scout": _clamp01(float(learned_tool_stats["successes"]) / denominator_scouts),
         **governor_stats,
         **cortex_task_stats,
+        **outcome_stats,
         "verifier_pass_rate": float(votes.get("pass", 0)) / max(1.0, float(total_votes)),
         "verifier_fail_rate": float(votes.get("fail", 0)) / max(1.0, float(total_votes)),
         "verifier_abstain_rate": float(votes.get("abstain", 0) + votes.get("needs_review", 0)) / max(1.0, float(total_votes)),
@@ -1372,6 +1383,10 @@ def score_market_evolve_metrics(
         + _w(weights, "cortex_task_completion_rate") * _clamp01(metrics.get("cortex_task_completion_rate", 0.0))
         + _w(weights, "cortex_shape_observation_rate") * _clamp01(metrics.get("cortex_shape_observation_rate", 0.0))
         + _w(weights, "cortex_followup_execution_rate") * _clamp01(metrics.get("cortex_followup_execution_rate", 0.0))
+        + _w(weights, "outcome_observed_rate") * _clamp01(metrics.get("outcome_observed_rate", 0.0))
+        + _w(weights, "outcome_direction_hit_rate") * _clamp01(metrics.get("outcome_direction_hit_rate", 0.0))
+        + _w(weights, "outcome_threshold_hit_rate") * _clamp01(metrics.get("outcome_threshold_hit_rate", 0.0))
+        + _w(weights, "avg_realized_edge_score") * _clamp01(metrics.get("avg_realized_edge_score", 0.0))
     )
     penalty = (
         _w(weights, "fragility_penalty") * _clamp01(metrics.get("avg_fragility", 0.0))
@@ -1387,6 +1402,7 @@ def score_market_evolve_metrics(
         + _w(weights, "cortex_task_failure_penalty") * _clamp01(metrics.get("cortex_task_failure_rate", 0.0))
         + _w(weights, "cortex_task_pending_penalty") * _clamp01(metrics.get("cortex_task_pending_rate", 0.0))
         + _w(weights, "cortex_shape_blocked_followup_penalty") * _clamp01(metrics.get("cortex_shape_blocked_followup_rate", 0.0))
+        + _w(weights, "outcome_unobserved_penalty") * (1.0 - _clamp01(metrics.get("outcome_observed_rate", 0.0)))
     )
     return round(_clamp01(positive - penalty), 4)
 
@@ -4206,6 +4222,44 @@ def _cortex_task_matches_market_scope(
     if experiment_arm and str(payload.get("market_evolve_experiment_arm") or "") != str(experiment_arm):
         return False
     return True
+
+
+def _information_price_outcome_stats(
+    conn: sqlite3.Connection,
+    *,
+    cycle_id: str,
+    seed_ids: Optional[list[str]] = None,
+) -> dict[str, float]:
+    zero = {
+        "outcome_eval_count": 0.0,
+        "outcome_observed_count": 0.0,
+        "outcome_observed_rate": 0.0,
+        "outcome_direction_hit_rate": 0.0,
+        "outcome_threshold_hit_rate": 0.0,
+        "avg_realized_edge_score": 0.0,
+        "avg_abs_price_return_pct": 0.0,
+        "avg_signed_return_pct": 0.0,
+        "early_repricing_hit_rate": 0.0,
+    }
+    if not _table_exists(conn, "information_string_outcomes"):
+        return zero
+    try:
+        from .outcomes import summarize_information_price_outcomes
+
+        summary = summarize_information_price_outcomes(
+            cycle_id=cycle_id,
+            seed_ids=seed_ids,
+            conn=conn,
+        )
+    except Exception:
+        return zero
+    out = dict(zero)
+    out.update({
+        key: float(value)
+        for key, value in summary.items()
+        if isinstance(value, (int, float))
+    })
+    return out
 
 
 def _count_table(

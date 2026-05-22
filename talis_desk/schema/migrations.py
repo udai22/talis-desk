@@ -33,7 +33,7 @@ from typing import Callable
 
 
 #: Current schema version. Bump when adding a Migration below.
-SCHEMA_VERSION = 25
+SCHEMA_VERSION = 26
 
 
 # ============================================================================
@@ -875,6 +875,11 @@ _MIGRATIONS: list[Migration] = [
         version=25,
         name="market_evolve_scoreboards",
         forward=lambda c: _m25_market_evolve_scoreboards(c),
+    ),
+    Migration(
+        version=26,
+        name="information_price_outcomes",
+        forward=lambda c: _m26_information_price_outcomes(c),
     ),
 ]
 
@@ -1869,6 +1874,70 @@ def _m25_market_evolve_scoreboards(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_market_evolve_scoreboards_status "
         "ON market_evolve_scoreboards(status, created_at DESC)"
+    )
+
+
+def _m26_information_price_outcomes(conn: sqlite3.Connection) -> None:
+    """v26: close information strings against later market movement."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS price_observations (
+            id TEXT PRIMARY KEY,
+            entity TEXT NOT NULL,
+            observed_at TEXT NOT NULL,
+            price REAL NOT NULL,
+            source TEXT,
+            payload_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL,
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_price_observations_entity_time "
+        "ON price_observations(entity, observed_at)"
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS information_string_outcomes (
+            id TEXT PRIMARY KEY,
+            string_id TEXT NOT NULL,
+            cycle_id TEXT NOT NULL,
+            entity TEXT,
+            expected_direction TEXT NOT NULL,
+            horizon_minutes REAL NOT NULL DEFAULT 0.0,
+            baseline_price REAL,
+            baseline_at TEXT,
+            outcome_price REAL,
+            outcome_at TEXT,
+            price_return_pct REAL NOT NULL DEFAULT 0.0,
+            signed_return_pct REAL NOT NULL DEFAULT 0.0,
+            direction_hit INTEGER NOT NULL DEFAULT 0,
+            threshold_hit INTEGER NOT NULL DEFAULT 0,
+            realized_edge_score REAL NOT NULL DEFAULT 0.0,
+            lead_time_minutes REAL NOT NULL DEFAULT 0.0,
+            evaluator_version TEXT NOT NULL,
+            quality_flags TEXT NOT NULL DEFAULT '[]',
+            created_at TEXT NOT NULL,
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_info_outcomes_cycle "
+        "ON information_string_outcomes(cycle_id, realized_edge_score DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_info_outcomes_string "
+        "ON information_string_outcomes(string_id, created_at DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_info_outcomes_entity_time "
+        "ON information_string_outcomes(entity, outcome_at)"
     )
 
 

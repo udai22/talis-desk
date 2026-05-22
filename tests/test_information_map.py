@@ -115,7 +115,7 @@ from talis_desk.swarm.seed_generator import (
 def test_schema_v24_information_map_tables(tmp_path):
     store = DeskStore(db_path=tmp_path / "desk.db")
     conn = store.conn
-    assert get_schema_version(conn) >= 25
+    assert get_schema_version(conn) >= 26
     tables = {
         r[0]
         for r in conn.execute(
@@ -144,6 +144,8 @@ def test_schema_v24_information_map_tables(tmp_path):
     assert "market_evolve_experiments" in tables
     assert "market_evolve_experiment_results" in tables
     assert "market_evolve_scoreboards" in tables
+    assert "price_observations" in tables
+    assert "information_string_outcomes" in tables
     app_cols = {
         r[1]
         for r in conn.execute("PRAGMA table_info(market_evolve_policy_applications)").fetchall()
