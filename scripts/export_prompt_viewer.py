@@ -414,6 +414,9 @@ def render_html(data: dict[str, Any]) -> str:
       min-width: 0;
       max-width: 100%;
     }}
+    section, article, .storyline, .chapter, .workbench-panel, .workbench-grid, .workbench-grid > div {{
+      min-width: 0;
+    }}
     p, h1, h2, h3, strong, small {{
       overflow-wrap: anywhere;
     }}
@@ -824,6 +827,7 @@ def render_html(data: dict[str, Any]) -> str:
       background: rgba(255,255,255,.052);
       border-radius: 8px;
       padding: 10px;
+      min-width: 0;
     }}
     .workbench-grid span, .evidence-strip span, .brew-panel span, .output-panel span {{
       display: block;
@@ -832,11 +836,17 @@ def render_html(data: dict[str, Any]) -> str:
       font-weight: 900;
       text-transform: uppercase;
       margin-bottom: 6px;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }}
     .workbench-grid strong {{
       display: block;
       font-size: 13px;
       line-height: 1.25;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }}
         .prompt-slice {{
           margin-top: 10px;
