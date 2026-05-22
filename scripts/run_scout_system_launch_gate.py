@@ -19,6 +19,7 @@ import html
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -268,6 +269,8 @@ def build_launch_gate_report(
             "metrics": _live_summary(live_report),
             "prompt_preview": _prompt_preview_summary(live_report),
             "slice_preview": _slice_preview_summary(live_report),
+            "prompt_output_dir": live_report.get("prompt_output_dir") or "",
+            "artifacts": live_report.get("artifacts") or {},
         },
         "tournament": {
             "decision": tournament_decision.get("decision"),
@@ -348,6 +351,7 @@ def export_launch_gate_viewer(
 ) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     _write_text(output_dir / ".nojekyll", "")
+    report["published_artifacts"] = _publish_live_artifacts(report, output_dir=output_dir)
     _write_json(output_dir / "launch_gate_report.json", report)
     _write_text(output_dir / "launch_gate_report.md", render_launch_gate_markdown(report))
     _write_text(output_dir / "index.html", render_launch_gate_html(report))
@@ -377,6 +381,7 @@ def render_launch_gate_html(report: dict[str, Any]) -> str:
         f"<li><span>{html.escape(str(uri))}</span><b>allowed</b></li>"
         for uri in (prompt_preview.get("allowed_tool_candidates") or [])[:8]
     ) or "<li><span>No tool candidates captured</span><b>blocked</b></li>"
+    artifact_rows = _artifact_rows(report)
     next_command = str(decision.get("next_command") or "")
     scout_viewer = str(report.get("viewer_index") or "")
     return f"""<!doctype html>
@@ -559,6 +564,14 @@ def render_launch_gate_html(report: dict[str, Any]) -> str:
         <li><span>User prompt chars</span><b>{html.escape(str(prompt_preview.get("user_prompt_chars") or 0))}</b></li>
         <li><span>Min strings</span><b>{html.escape(str(prompt_preview.get("minimum_information_strings") or "?"))}</b></li>
       </ul>
+    </div>
+  </section>
+
+  <section>
+    <h2>Raw Run Artifacts</h2>
+    <p>These are the live 100-scout files behind the story: report, outputs, transcript, prompt preview, and route sheet. The page explains the system; these let you audit the data.</p>
+    <div class="panel">
+      <ul class="list">{artifact_rows}</ul>
     </div>
   </section>
 
@@ -923,6 +936,69 @@ def _slice_card(row: dict[str, Any]) -> str:
         f'<small>Tools: {html.escape(str(row.get("tool_candidate_count") or 0))} · {html.escape(families)}</small>'
         '</div>'
     )
+
+
+def _publish_live_artifacts(report: dict[str, Any], *, output_dir: Path) -> dict[str, str]:
+    live = report.get("live") if isinstance(report.get("live"), dict) else {}
+    prompt_output_dir = Path(str(live.get("prompt_output_dir") or "")).expanduser()
+    raw_dir = output_dir / "raw"
+    published: dict[str, str] = {}
+    if not prompt_output_dir.exists():
+        return published
+    candidates = {
+        "live_scout_canary_report_json": prompt_output_dir / "live_scout_canary_report.json",
+        "live_scout_canary_report_md": prompt_output_dir / "live_scout_canary_report.md",
+        "live_scout_canary_outputs_json": prompt_output_dir / "live_scout_canary_outputs.json",
+        "live_scout_transcript_json": prompt_output_dir / "live_scout_transcript.json",
+        "live_scout_slice_preview_json": prompt_output_dir / "live_scout_slice_preview.json",
+        "live_scout_prompt_preview_json": prompt_output_dir / "live_scout_prompt_preview.json",
+        "live_scout_preview_system_prompt_md": prompt_output_dir / "live_scout_preview_system_prompt.md",
+        "live_scout_preview_user_prompt_md": prompt_output_dir / "live_scout_preview_user_prompt.md",
+    }
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    for key, src in candidates.items():
+        if not src.exists() or not src.is_file():
+            continue
+        dest = raw_dir / src.name
+        shutil.copyfile(src, dest)
+        published[key] = f"raw/{src.name}"
+    for stage in report.get("stages") or []:
+        if not isinstance(stage, dict):
+            continue
+        artifacts = stage.get("artifacts") if isinstance(stage.get("artifacts"), dict) else {}
+        raw = artifacts.get("LIVE_SCOUT_TOURNAMENT_REPORT_JSON")
+        if not raw:
+            continue
+        src = Path(str(raw)).expanduser()
+        if src.exists() and src.is_file():
+            dest = raw_dir / src.name
+            shutil.copyfile(src, dest)
+            published["live_scout_tournament_report_json"] = f"raw/{src.name}"
+    return published
+
+
+def _artifact_rows(report: dict[str, Any]) -> str:
+    labels = {
+        "live_scout_canary_report_json": "Live canary report",
+        "live_scout_canary_outputs_json": "All scout outputs",
+        "live_scout_transcript_json": "Provider transcript",
+        "live_scout_slice_preview_json": "Route sheet",
+        "live_scout_prompt_preview_json": "First prompt packet",
+        "live_scout_preview_system_prompt_md": "System prompt",
+        "live_scout_preview_user_prompt_md": "User prompt",
+        "live_scout_tournament_report_json": "Tournament report",
+        "live_scout_canary_report_md": "Canary markdown",
+    }
+    artifacts = report.get("published_artifacts") if isinstance(report.get("published_artifacts"), dict) else {}
+    rows: list[str] = []
+    for key, label in labels.items():
+        href = artifacts.get(key)
+        if not href:
+            continue
+        rows.append(
+            f'<li><span>{html.escape(label)}</span><b><a href="{html.escape(str(href))}">open</a></b></li>'
+        )
+    return "".join(rows) or "<li><span>No raw live artifacts published</span><b>local only</b></li>"
 
 
 def _run_stage(name: str, command: list[str], *, repo: Path) -> StageResult:

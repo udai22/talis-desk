@@ -54,6 +54,7 @@
       },
       "tool_atlas_ok": true
     },
+    "prompt_output_dir": "/tmp/talis-live100-20260522/live_canary/prompt_outputs",
     "prompt_preview": {
       "allowed_tool_candidates": [
         "tic://tool/builtin/query_timeseries@v1",
@@ -5572,6 +5573,17 @@
       "summary": "Scheduled shadow production requires repeat 1,000-scout evidence across independent runs."
     }
   ],
+  "published_artifacts": {
+    "live_scout_canary_outputs_json": "raw/live_scout_canary_outputs.json",
+    "live_scout_canary_report_json": "raw/live_scout_canary_report.json",
+    "live_scout_canary_report_md": "raw/live_scout_canary_report.md",
+    "live_scout_preview_system_prompt_md": "raw/live_scout_preview_system_prompt.md",
+    "live_scout_preview_user_prompt_md": "raw/live_scout_preview_user_prompt.md",
+    "live_scout_prompt_preview_json": "raw/live_scout_prompt_preview.json",
+    "live_scout_slice_preview_json": "raw/live_scout_slice_preview.json",
+    "live_scout_tournament_report_json": "raw/live_scout_tournament_report.json",
+    "live_scout_transcript_json": "raw/live_scout_transcript.json"
+  },
   "schema_version": "talis_scout_system_launch_gate_v1",
   "stages": [
     {
