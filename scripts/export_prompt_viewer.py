@@ -47,6 +47,7 @@ FILENAMES = {
     "market_map_self_healing_dispatch": "market_map_self_healing_dispatch.json",
     "market_map_self_healing_worker": "market_map_self_healing_worker.json",
     "live_scout_canary": "live_scout_canary_report.json",
+    "live_scout_tournament": "live_scout_tournament_report.json",
     "live_scout_canary_outputs": "live_scout_canary_outputs.json",
     "live_scout_canary_seeds": "live_scout_canary_seeds.json",
     "scout_100_readiness": "100_scout_readiness_report.json",
@@ -265,6 +266,7 @@ def render_html(data: dict[str, Any]) -> str:
         _render_panel("selfhealdispatch", "Self-Healing Tasks", data, "market_map_self_healing_dispatch"),
         _render_panel("selfhealworker", "Self-Healing Worker", data, "market_map_self_healing_worker"),
         _render_panel("livecanary", "Live Scout Canary", data, "live_scout_canary"),
+        _render_panel("livetournament", "Live Tournament Gate", data, "live_scout_tournament"),
         _render_panel("livecanaryout", "Live Canary Outputs", data, "live_scout_canary_outputs"),
         _render_panel("livecanaryseeds", "Live Canary Seeds", data, "live_scout_canary_seeds"),
         _render_panel("scout100", "100 Scout Readiness", data, "scout_100_readiness"),
@@ -1978,6 +1980,7 @@ def _render_cohesive_story(
     self_healing_html = _render_self_healing_chapter(data=data)
     scout_100_html = _render_100_scout_readiness_chapter(data=data)
     live_canary_html = _render_live_scout_canary_chapter(data=data)
+    live_tournament_html = _render_live_scout_tournament_chapter(data=data)
     touched_surfaces = [row for row in data_substrate.touched if row.touched]
     untouched_surfaces = [row for row in data_substrate.touched if not row.touched]
     data_surface_html = "".join(
@@ -2187,6 +2190,8 @@ def _render_cohesive_story(
         {scout_100_html}
 
         {live_canary_html}
+
+        {live_tournament_html}
 
         {swipe_deck_html}
 
@@ -3383,6 +3388,94 @@ def _render_live_scout_canary_chapter(*, data: dict[str, Any]) -> str:
             <pre class="prompt-slice">{html.escape(json.dumps(preview, indent=2, sort_keys=True, ensure_ascii=True, default=str))}</pre>
           </article>
           <div class="output-grid" style="margin-top:10px">{gate_cards}</div>
+        </section>
+    """
+
+
+def _render_live_scout_tournament_chapter(*, data: dict[str, Any]) -> str:
+    report = _artifact_json(data, "live_scout_tournament")
+    if not report:
+        return """
+        <section class="chapter">
+          <div class="chapter-head">
+            <div class="chapter-label">00h / live tournament gate</div>
+            <h2>The prompt/provider tournament has not been attached yet.</h2>
+            <p>Run <code>scripts/evaluate_live_scout_tournament.py</code> over completed canary reports to decide whether a 100-scout live ramp is allowed.</p>
+          </div>
+        </section>
+        """
+    decision = report.get("promotion_decision") if isinstance(report.get("promotion_decision"), dict) else {}
+    system = report.get("system_performance") if isinstance(report.get("system_performance"), dict) else {}
+    winner = report.get("winner") if isinstance(report.get("winner"), dict) else {}
+    candidates = [c for c in report.get("candidates") or [] if isinstance(c, dict)]
+    plan = [p for p in report.get("next_experiment_plan") or [] if isinstance(p, dict)]
+    candidate_cards = "".join(
+        '<article class="output-panel">'
+        f'<span>{"promote" if c.get("promotion_eligible") else "blocked"}</span>'
+        f'<h3>{html.escape(str(c.get("candidate_id") or "candidate"))}</h3>'
+        f'<p>Score {html.escape(str(c.get("score") or 0))}. {html.escape(str(c.get("interpretation") or ""))}</p>'
+        f'<p><strong>Failed gates:</strong> {html.escape(", ".join(c.get("failed_gates") or []) or "none")}</p>'
+        '</article>'
+        for c in candidates[:4]
+    )
+    plan_cards = "".join(
+        '<article class="output-panel">'
+        f'<span>{html.escape(str(item.get("id") or "next"))}</span>'
+        f'<h3>{html.escape(str(item.get("purpose") or "Next experiment"))}</h3>'
+        f'<p>{html.escape(str(item.get("promotion_rule") or ""))}</p>'
+        f'<pre class="prompt-slice">{html.escape(str(item.get("command") or ""))}</pre>'
+        '</article>'
+        for item in plan[:3]
+    )
+    gates = winner.get("gates") if isinstance(winner.get("gates"), dict) else {}
+    gate_cards = "".join(
+        '<article class="output-panel">'
+        f'<span>{"pass" if ok else "fail"}</span>'
+        f'<h3>{html.escape(str(name).replace("_", " "))}</h3>'
+        f'<p>{html.escape("This gate is clean for the best candidate." if ok else "This is why the tournament refuses scale.")}</p>'
+        '</article>'
+        for name, ok in list(gates.items())[:12]
+    )
+    quality = winner.get("quality") if isinstance(winner.get("quality"), dict) else {}
+    sample = winner.get("sample") if isinstance(winner.get("sample"), dict) else {}
+    map_effect = winner.get("map_effect") if isinstance(winner.get("map_effect"), dict) else {}
+    return f"""
+        <section class="chapter">
+          <div class="chapter-head">
+            <div class="chapter-label">00h / live tournament gate</div>
+            <h2>The system now grades whether it has earned a 100-scout run.</h2>
+            <p>This is the evaluator-guided evolution step: canary reports become candidates, candidates are scored on reliability, latency, string yield, evidence support, duplicate rate, geometry impact, and self-healing. A wider live run is blocked unless a candidate wins every hard gate.</p>
+          </div>
+          <div class="score-tape">
+            <div><strong>{html.escape(str(decision.get("decision") or "unknown"))}</strong><small>promotion decision</small></div>
+            <div><strong>{html.escape("yes" if decision.get("ready_for_live_100") else "no")}</strong><small>ready for 100 scouts</small></div>
+            <div><strong>{html.escape("yes" if decision.get("ready_for_live_1000") else "no")}</strong><small>ready for 1,000 scouts</small></div>
+            <div><strong>{html.escape(str(quality.get("success_rate") or 0))}</strong><small>best success rate</small></div>
+            <div><strong>{html.escape(str(quality.get("provider_error_rate") or 0))}</strong><small>provider error rate</small></div>
+            <div><strong>{html.escape(str(map_effect.get("geometry_cells") or 0))}</strong><small>geometry cells</small></div>
+          </div>
+          <article class="workbench-panel" style="margin-top:10px">
+            <h3>Honest readiness call</h3>
+            <p>{html.escape(str(decision.get("reason") or ""))}</p>
+            <p>{html.escape(str(system.get("summary") or ""))}</p>
+            <pre class="prompt-slice">{html.escape(json.dumps({
+                "winner": winner.get("candidate_id"),
+                "sample": sample,
+                "quality": quality,
+                "map_effect": map_effect,
+                "full_run_boundary": system.get("full_run_boundary"),
+            }, indent=2, sort_keys=True, ensure_ascii=True, default=str))}</pre>
+          </article>
+          <div class="output-grid" style="margin-top:10px">{candidate_cards}</div>
+          <article class="workbench-panel" style="margin-top:10px">
+            <h3>Hard gates on the best candidate</h3>
+            <div class="output-grid" style="margin-top:10px">{gate_cards}</div>
+          </article>
+          <article class="workbench-panel" style="margin-top:10px">
+            <h3>Next evolution arms</h3>
+            <p>The next paid calls should be these tiny arms, not a 100-scout run. If one arm passes the tournament, then it earns the 100-scout ramp.</p>
+            <div class="output-grid" style="margin-top:10px">{plan_cards}</div>
+          </article>
         </section>
     """
 
