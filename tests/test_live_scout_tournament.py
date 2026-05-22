@@ -60,7 +60,59 @@ def test_live_scout_tournament_promotes_clean_hundred_scout_distribution_to_1000
     assert tournament["promotion_decision"]["ready_for_live_1000"] is True
     assert tournament["winner"]["promotion_eligible"] is True
     assert "distribution_success_rate_ge_0_90" in tournament["winner"]["gates"]
+    assert "ramp_policy_rehearsal_status_pass" in tournament["winner"]["gates"]
+    assert "--ramp-policy" in tournament["next_experiment_plan"][0]["command"]
     assert tournament["next_experiment_plan"][0]["id"] == "live_1000_ramp"
+
+
+def test_live_scout_tournament_blocks_hundred_scout_distribution_without_policy_rehearsal(tmp_path):
+    report_path = _write_canary(
+        tmp_path,
+        n_requested=100,
+        success_rate=0.93,
+        transcript_errors=0,
+        duplicate_rate=0.06,
+        completed=93,
+        geometry_cells=100,
+        include_ramp_policy_rehearsal=False,
+    )
+
+    tournament = evaluate_live_scout_tournament([report_path])
+
+    assert tournament["promotion_decision"]["decision"] == "no_promotion"
+    assert tournament["promotion_decision"]["ready_for_live_1000"] is False
+    assert tournament["winner"]["promotion_eligible"] is False
+    assert "ramp_policy_rehearsal_observed" in tournament["winner"]["failed_gates"]
+    assert tournament["next_experiment_plan"][0]["id"] == "ramp_policy_rehearsal_repair"
+
+
+def test_live_scout_tournament_blocks_failed_policy_rehearsal(tmp_path):
+    report_path = _write_canary(
+        tmp_path,
+        n_requested=100,
+        success_rate=0.93,
+        transcript_errors=0,
+        duplicate_rate=0.06,
+        completed=93,
+        geometry_cells=100,
+        ramp_policy_rehearsal_status="fail",
+        ramp_policy_rehearsal_metrics={
+            "tool_candidate_refresh_rate": 0.50,
+            "source_target_coverage_rate": 0.25,
+            "policy_attached_rate": 1.0,
+            "repair_ids_attached_rate": 1.0,
+            "watch_metrics_attached_rate": 1.0,
+            "strict_contract_rate": 1.0,
+            "over_limit_count": 2,
+        },
+    )
+
+    tournament = evaluate_live_scout_tournament([report_path])
+
+    assert tournament["promotion_decision"]["decision"] == "no_promotion"
+    assert "ramp_policy_rehearsal_status_pass" in tournament["winner"]["failed_gates"]
+    assert "ramp_policy_rehearsal_tool_refresh_rate_ge_0_95" in tournament["winner"]["failed_gates"]
+    assert "ramp_policy_rehearsal_over_limit_count_eq_0" in tournament["winner"]["failed_gates"]
 
 
 def test_live_scout_tournament_blocks_hundred_scout_distribution_without_market_evolve_proof(tmp_path):
@@ -324,6 +376,9 @@ def _write_canary(
     tool_error_count: int = 0,
     verdict_status: str | None = None,
     include_market_evolve: bool = True,
+    include_ramp_policy_rehearsal: bool | None = None,
+    ramp_policy_rehearsal_status: str = "pass",
+    ramp_policy_rehearsal_metrics: dict | None = None,
 ) -> Path:
     tmp_path.mkdir(parents=True, exist_ok=True)
     report_path = tmp_path / "live_scout_canary_report.json"
@@ -451,6 +506,51 @@ def _write_canary(
                     "falsification_gates_evaluated": paired_seed_slices > 0,
                     "candidate_promoted_or_continued": False,
                     "quality_flags": [],
+                },
+            }),
+            encoding="utf-8",
+        )
+    if include_ramp_policy_rehearsal is None:
+        include_ramp_policy_rehearsal = n_requested >= 100
+    if include_ramp_policy_rehearsal:
+        policy_path = tmp_path / "live_scout_ramp_policy.json"
+        policy_path.write_text(
+            json.dumps({
+                "schema_version": "talis_live_scout_ramp_policy_v1",
+                "policy_id": "policy_test",
+                "seed_payload_patch": {"prompt_contract_pressure": "strict"},
+                "repair_work_order_ids": ["lso_json_unparseable_scout_harness"],
+            }),
+            encoding="utf-8",
+        )
+        metrics = {
+            "tool_candidate_refresh_rate": 1.0,
+            "source_target_coverage_rate": 1.0,
+            "policy_attached_rate": 1.0,
+            "repair_ids_attached_rate": 1.0,
+            "watch_metrics_attached_rate": 1.0,
+            "strict_contract_rate": 1.0,
+            "over_limit_count": 0,
+            "tool_candidate_added_count": 10,
+            "candidate_tool_delta_avg": 1.0,
+        }
+        if ramp_policy_rehearsal_metrics:
+            metrics.update(ramp_policy_rehearsal_metrics)
+        (tmp_path / "live_scout_ramp_policy_rehearsal.json").write_text(
+            json.dumps({
+                "schema_version": "live_scout_ramp_policy_rehearsal_v1",
+                "status": ramp_policy_rehearsal_status,
+                "decision": (
+                    "policy_can_gate_live_spend"
+                    if ramp_policy_rehearsal_status == "pass"
+                    else "repair_policy_before_live_spend"
+                ),
+                "score": 1.0 if ramp_policy_rehearsal_status == "pass" else 0.4,
+                "metrics": metrics,
+                "target_source_family_hits": {
+                    "hydromancer": 5,
+                    "our_node": 6,
+                    "parallel_web": 4,
                 },
             }),
             encoding="utf-8",

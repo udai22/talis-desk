@@ -1231,6 +1231,7 @@ def _publish_live_artifacts(report: dict[str, Any], *, output_dir: Path) -> dict
         "live_scout_learning_report_md": prompt_output_dir / "live_scout_learning_report.md",
         "live_scout_ramp_policy_json": prompt_output_dir / "live_scout_ramp_policy.json",
         "live_scout_ramp_policy_rehearsal_json": prompt_output_dir / "live_scout_ramp_policy_rehearsal.json",
+        "market_evolve_hard_experiment_json": prompt_output_dir / "market_evolve_hard_experiment.json",
     }
     raw_dir.mkdir(parents=True, exist_ok=True)
     for key, src in candidates.items():
@@ -1243,14 +1244,18 @@ def _publish_live_artifacts(report: dict[str, Any], *, output_dir: Path) -> dict
         if not isinstance(stage, dict):
             continue
         artifacts = stage.get("artifacts") if isinstance(stage.get("artifacts"), dict) else {}
-        raw = artifacts.get("LIVE_SCOUT_TOURNAMENT_REPORT_JSON")
-        if not raw:
-            continue
-        src = Path(str(raw)).expanduser()
-        if src.exists() and src.is_file():
-            dest = raw_dir / src.name
-            shutil.copyfile(src, dest)
-            published["live_scout_tournament_report_json"] = f"raw/{src.name}"
+        for raw_key, published_key in (
+            ("LIVE_SCOUT_TOURNAMENT_REPORT_JSON", "live_scout_tournament_report_json"),
+            ("LIVE_SCOUT_TOURNAMENT_REPORT_MD", "live_scout_tournament_report_md"),
+        ):
+            raw = artifacts.get(raw_key)
+            if not raw:
+                continue
+            src = Path(str(raw)).expanduser()
+            if src.exists() and src.is_file():
+                dest = raw_dir / src.name
+                shutil.copyfile(src, dest)
+                published[published_key] = f"raw/{src.name}"
     return published
 
 
@@ -1267,7 +1272,9 @@ def _artifact_rows(report: dict[str, Any]) -> str:
         "live_scout_learning_report_md": "Learning markdown",
         "live_scout_ramp_policy_json": "Executable ramp policy",
         "live_scout_ramp_policy_rehearsal_json": "Ramp policy rehearsal",
+        "market_evolve_hard_experiment_json": "MarketEvolve hard experiment",
         "live_scout_tournament_report_json": "Tournament report",
+        "live_scout_tournament_report_md": "Tournament markdown",
         "live_scout_canary_report_md": "Canary markdown",
     }
     artifacts = report.get("published_artifacts") if isinstance(report.get("published_artifacts"), dict) else {}

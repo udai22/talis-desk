@@ -7732,7 +7732,9 @@
     "live_scout_ramp_policy_rehearsal_json": "raw/live_scout_ramp_policy_rehearsal.json",
     "live_scout_slice_preview_json": "raw/live_scout_slice_preview.json",
     "live_scout_tournament_report_json": "raw/live_scout_tournament_report.json",
-    "live_scout_transcript_json": "raw/live_scout_transcript.json"
+    "live_scout_tournament_report_md": "raw/live_scout_tournament_report.md",
+    "live_scout_transcript_json": "raw/live_scout_transcript.json",
+    "market_evolve_hard_experiment_json": "raw/market_evolve_hard_experiment.json"
   },
   "schema_version": "talis_scout_system_launch_gate_v1",
   "stages": [

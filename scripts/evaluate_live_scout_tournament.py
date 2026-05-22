@@ -12,6 +12,7 @@ import argparse
 import json
 import math
 import re
+import shlex
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -54,6 +55,13 @@ DEFAULT_THRESHOLDS = {
     "production_max_structural_flag_rate_delta": 0.04,
     "production_min_geometry_cell_ratio": 0.80,
     "production_min_information_string_ratio": 0.80,
+    "ramp_policy_rehearsal_min_tool_candidate_refresh_rate": 0.95,
+    "ramp_policy_rehearsal_min_source_target_coverage_rate": 0.60,
+    "ramp_policy_rehearsal_min_policy_attached_rate": 1.00,
+    "ramp_policy_rehearsal_min_repair_ids_attached_rate": 1.00,
+    "ramp_policy_rehearsal_min_watch_metrics_attached_rate": 1.00,
+    "ramp_policy_rehearsal_min_strict_contract_rate": 1.00,
+    "ramp_policy_rehearsal_max_over_limit_count": 0,
 }
 
 
@@ -94,6 +102,13 @@ def main() -> int:
         "production_max_structural_flag_rate_delta": args.production_max_structural_flag_rate_delta,
         "production_min_geometry_cell_ratio": args.production_min_geometry_cell_ratio,
         "production_min_information_string_ratio": args.production_min_information_string_ratio,
+        "ramp_policy_rehearsal_min_tool_candidate_refresh_rate": args.ramp_policy_rehearsal_min_tool_candidate_refresh_rate,
+        "ramp_policy_rehearsal_min_source_target_coverage_rate": args.ramp_policy_rehearsal_min_source_target_coverage_rate,
+        "ramp_policy_rehearsal_min_policy_attached_rate": args.ramp_policy_rehearsal_min_policy_attached_rate,
+        "ramp_policy_rehearsal_min_repair_ids_attached_rate": args.ramp_policy_rehearsal_min_repair_ids_attached_rate,
+        "ramp_policy_rehearsal_min_watch_metrics_attached_rate": args.ramp_policy_rehearsal_min_watch_metrics_attached_rate,
+        "ramp_policy_rehearsal_min_strict_contract_rate": args.ramp_policy_rehearsal_min_strict_contract_rate,
+        "ramp_policy_rehearsal_max_over_limit_count": args.ramp_policy_rehearsal_max_over_limit_count,
     }
     report_paths = [Path(p).expanduser().resolve() for p in args.reports]
     tournament = evaluate_live_scout_tournament(report_paths, thresholds=thresholds)
@@ -151,6 +166,13 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--production-max-structural-flag-rate-delta", type=float, default=DEFAULT_THRESHOLDS["production_max_structural_flag_rate_delta"])
     parser.add_argument("--production-min-geometry-cell-ratio", type=float, default=DEFAULT_THRESHOLDS["production_min_geometry_cell_ratio"])
     parser.add_argument("--production-min-information-string-ratio", type=float, default=DEFAULT_THRESHOLDS["production_min_information_string_ratio"])
+    parser.add_argument("--ramp-policy-rehearsal-min-tool-candidate-refresh-rate", type=float, default=DEFAULT_THRESHOLDS["ramp_policy_rehearsal_min_tool_candidate_refresh_rate"])
+    parser.add_argument("--ramp-policy-rehearsal-min-source-target-coverage-rate", type=float, default=DEFAULT_THRESHOLDS["ramp_policy_rehearsal_min_source_target_coverage_rate"])
+    parser.add_argument("--ramp-policy-rehearsal-min-policy-attached-rate", type=float, default=DEFAULT_THRESHOLDS["ramp_policy_rehearsal_min_policy_attached_rate"])
+    parser.add_argument("--ramp-policy-rehearsal-min-repair-ids-attached-rate", type=float, default=DEFAULT_THRESHOLDS["ramp_policy_rehearsal_min_repair_ids_attached_rate"])
+    parser.add_argument("--ramp-policy-rehearsal-min-watch-metrics-attached-rate", type=float, default=DEFAULT_THRESHOLDS["ramp_policy_rehearsal_min_watch_metrics_attached_rate"])
+    parser.add_argument("--ramp-policy-rehearsal-min-strict-contract-rate", type=float, default=DEFAULT_THRESHOLDS["ramp_policy_rehearsal_min_strict_contract_rate"])
+    parser.add_argument("--ramp-policy-rehearsal-max-over-limit-count", type=int, default=DEFAULT_THRESHOLDS["ramp_policy_rehearsal_max_over_limit_count"])
     return parser.parse_args()
 
 
@@ -260,6 +282,14 @@ def evaluate_live_scout_candidate(path: Path, *, thresholds: dict[str, float | i
     tool_call_count = int(tool_errors.get("tool_call_count") or 0)
     tool_error_count = int(tool_errors.get("tool_error_count") or 0)
     tool_error_rate = _to_float(tool_errors.get("tool_error_rate"))
+    ramp_policy_path = _ramp_policy_path(report, path)
+    ramp_policy_rehearsal = _ramp_policy_rehearsal_metrics(
+        report,
+        path,
+        thresholds=thresholds,
+        n_requested=n_requested,
+        ramp_policy_path=ramp_policy_path,
+    )
     provider_error_rate = max(
         len(transcript_errors) / max(call_count, 1),
         quality_provider_errors / max(n_requested, 1),
@@ -300,6 +330,7 @@ def evaluate_live_scout_candidate(path: Path, *, thresholds: dict[str, float | i
         "geometry_cells_created": int(geometry.get("cell_count") or 0) > 0,
         "self_healing_no_failures": int(self_healing.get("failed_tasks") or 0) == 0,
     }
+    gates.update(ramp_policy_rehearsal.get("gates") or {})
     if n_requested >= int(thresholds["distribution_min_scouts"]):
         gates.update({
             "distribution_sample_size_ge_100": n_requested >= int(thresholds["distribution_min_scouts"]),
@@ -348,6 +379,7 @@ def evaluate_live_scout_candidate(path: Path, *, thresholds: dict[str, float | i
             "provider_timeout_s": report.get("provider_timeout_s"),
             "concurrency": report.get("concurrency"),
             "seed_rng": report.get("seed_rng"),
+            "ramp_policy_path": ramp_policy_path,
         },
         "sample": {
             "requested": n_requested,
@@ -393,6 +425,7 @@ def evaluate_live_scout_candidate(path: Path, *, thresholds: dict[str, float | i
             "tool_proposals": int(self_healing.get("tool_proposals") or 0),
         },
         "market_evolve": market_evolve,
+        "ramp_policy_rehearsal": ramp_policy_rehearsal,
         "original_canary_verdict": original_verdict,
         "gates": gates,
         "failed_gates": failed_gates,
@@ -467,6 +500,119 @@ def _market_evolve_proof_metrics(report: dict[str, Any], path: Path) -> dict[str
     }
 
 
+def _ramp_policy_path(report: dict[str, Any], canary_report_path: Path) -> str:
+    raw = str(report.get("ramp_policy_path") or "").strip()
+    if raw:
+        return raw
+    artifacts = report.get("artifacts") if isinstance(report.get("artifacts"), dict) else {}
+    for key in ("ramp_policy", "live_scout_ramp_policy_json"):
+        raw = str(artifacts.get(key) or "").strip()
+        if raw:
+            return raw
+    sibling = canary_report_path.parent / "live_scout_ramp_policy.json"
+    if sibling.exists():
+        return str(sibling)
+    return ""
+
+
+def _ramp_policy_rehearsal_metrics(
+    report: dict[str, Any],
+    path: Path,
+    *,
+    thresholds: dict[str, float | int],
+    n_requested: int,
+    ramp_policy_path: str,
+) -> dict[str, Any]:
+    inline = report.get("ramp_policy_rehearsal") if isinstance(report.get("ramp_policy_rehearsal"), dict) else {}
+    sibling = _read_sibling_json(path, "live_scout_ramp_policy_rehearsal.json")
+    sibling = sibling if isinstance(sibling, dict) else {}
+    rehearsal = inline or sibling
+    observed = bool(rehearsal)
+    required = bool(ramp_policy_path) or n_requested >= int(thresholds["distribution_min_scouts"])
+    if not required and not observed:
+        return {
+            "required": False,
+            "observed": False,
+            "status": "not_required",
+            "decision": "",
+            "score": 0.0,
+            "metrics": {},
+            "target_source_family_hits": {},
+            "gates": {},
+            "failed_gates": [],
+        }
+
+    metrics = rehearsal.get("metrics") if isinstance(rehearsal.get("metrics"), dict) else {}
+    target_hits = (
+        rehearsal.get("target_source_family_hits")
+        if isinstance(rehearsal.get("target_source_family_hits"), dict)
+        else {}
+    )
+    status = str(rehearsal.get("status") or ("missing" if required else "not_captured"))
+    decision = str(rehearsal.get("decision") or "")
+    tool_refresh = _to_float(metrics.get("tool_candidate_refresh_rate"), default=0.0)
+    source_coverage = _to_float(metrics.get("source_target_coverage_rate"), default=0.0)
+    policy_attached = _to_float(metrics.get("policy_attached_rate"), default=0.0)
+    repair_attached = _to_float(metrics.get("repair_ids_attached_rate"), default=0.0)
+    watch_attached = _to_float(metrics.get("watch_metrics_attached_rate"), default=0.0)
+    strict_contract = _to_float(metrics.get("strict_contract_rate"), default=0.0)
+    over_limit = int(metrics.get("over_limit_count") or 0)
+
+    gates = {
+        "ramp_policy_rehearsal_observed": observed,
+        "ramp_policy_rehearsal_status_pass": status == "pass",
+        "ramp_policy_rehearsal_decision_can_gate_spend": decision == "policy_can_gate_live_spend",
+        "ramp_policy_rehearsal_tool_refresh_rate_ge_0_95": (
+            tool_refresh >= float(thresholds["ramp_policy_rehearsal_min_tool_candidate_refresh_rate"])
+        ),
+        "ramp_policy_rehearsal_source_coverage_ge_0_60": (
+            source_coverage >= float(thresholds["ramp_policy_rehearsal_min_source_target_coverage_rate"])
+        ),
+        "ramp_policy_rehearsal_policy_attached_rate_ge_1_00": (
+            policy_attached >= float(thresholds["ramp_policy_rehearsal_min_policy_attached_rate"])
+        ),
+        "ramp_policy_rehearsal_repair_ids_attached_rate_ge_1_00": (
+            repair_attached >= float(thresholds["ramp_policy_rehearsal_min_repair_ids_attached_rate"])
+        ),
+        "ramp_policy_rehearsal_watch_metrics_attached_rate_ge_1_00": (
+            watch_attached >= float(thresholds["ramp_policy_rehearsal_min_watch_metrics_attached_rate"])
+        ),
+        "ramp_policy_rehearsal_strict_contract_rate_ge_1_00": (
+            strict_contract >= float(thresholds["ramp_policy_rehearsal_min_strict_contract_rate"])
+        ),
+        "ramp_policy_rehearsal_over_limit_count_eq_0": (
+            over_limit <= int(thresholds["ramp_policy_rehearsal_max_over_limit_count"])
+        ),
+    }
+    if not required:
+        gates = {name: ok for name, ok in gates.items() if observed}
+    failed = [name for name, ok in gates.items() if not ok]
+    return {
+        "required": required,
+        "observed": observed,
+        "source": "inline_report" if inline else ("sibling_artifact" if sibling else "missing"),
+        "path": str(path.parent / "live_scout_ramp_policy_rehearsal.json") if sibling else "",
+        "policy_path": ramp_policy_path,
+        "status": status,
+        "decision": decision,
+        "score": _to_float(rehearsal.get("score"), default=0.0),
+        "metrics": {
+            "tool_candidate_refresh_rate": round(tool_refresh, 4),
+            "source_target_coverage_rate": round(source_coverage, 4),
+            "policy_attached_rate": round(policy_attached, 4),
+            "repair_ids_attached_rate": round(repair_attached, 4),
+            "watch_metrics_attached_rate": round(watch_attached, 4),
+            "strict_contract_rate": round(strict_contract, 4),
+            "over_limit_count": over_limit,
+            "tool_candidate_added_count": int(metrics.get("tool_candidate_added_count") or 0),
+            "candidate_tool_delta_avg": _to_float(metrics.get("candidate_tool_delta_avg"), default=0.0),
+        },
+        "target_source_family_hits": target_hits,
+        "gates": gates,
+        "failed_gates": failed,
+    }
+
+
 def render_tournament_markdown(report: dict[str, Any]) -> str:
     decision = report.get("promotion_decision") if isinstance(report.get("promotion_decision"), dict) else {}
     repeatability = report.get("shadow_repeatability") if isinstance(report.get("shadow_repeatability"), dict) else {}
@@ -488,6 +634,8 @@ def render_tournament_markdown(report: dict[str, Any]) -> str:
         q = c.get("quality") or {}
         sample = c.get("sample") or {}
         evolve = c.get("market_evolve") or {}
+        rehearsal = c.get("ramp_policy_rehearsal") or {}
+        rehearsal_metrics = rehearsal.get("metrics") if isinstance(rehearsal.get("metrics"), dict) else {}
         lines.extend([
             f"### {c.get('candidate_id')}",
             "",
@@ -503,6 +651,8 @@ def render_tournament_markdown(report: dict[str, Any]) -> str:
             f"- market_evolve_pairs: `{evolve.get('paired_seed_slices')}`",
             f"- market_evolve_decision: `{evolve.get('latest_experiment_decision') or evolve.get('hard_experiment_final_decision')}`",
             f"- market_evolve_proof: `policy={evolve.get('policy_stamped_on_seeds')} arms={evolve.get('control_arm_present') and evolve.get('candidate_arm_present')} falsified={evolve.get('falsification_gates_evaluated')}`",
+            f"- ramp_policy_rehearsal: `required={rehearsal.get('required')} observed={rehearsal.get('observed')} status={rehearsal.get('status')} decision={rehearsal.get('decision')}`",
+            f"- ramp_policy_metrics: `tool_refresh={rehearsal_metrics.get('tool_candidate_refresh_rate')} source_coverage={rehearsal_metrics.get('source_target_coverage_rate')} over_limit={rehearsal_metrics.get('over_limit_count')}`",
             f"- failed_gates: `{', '.join(c.get('failed_gates') or []) or 'none'}`",
             "",
             str(c.get("interpretation") or ""),
@@ -633,6 +783,14 @@ def _production_policy_signature(candidate: dict[str, Any]) -> str:
         str(cfg.get("provider_timeout_s") or ""),
     ]
     return "::".join(parts)
+
+
+def _ramp_policy_command_arg(candidate: dict[str, Any]) -> str:
+    cfg = candidate.get("configuration") if isinstance(candidate.get("configuration"), dict) else {}
+    path = str(cfg.get("ramp_policy_path") or "").strip()
+    if not path:
+        return ""
+    return f"--ramp-policy {shlex.quote(path)} "
 
 
 def _repeatability_for_group(
@@ -862,6 +1020,7 @@ def _next_experiment_plan(
         variant = (winner.get("configuration") or {}).get("prompt_variants") or ["flash_temporal_v4"]
         prompt_variant = str(variant[0] or "flash_temporal_v4")
         max_tool_iterations = int((winner.get("configuration") or {}).get("max_tool_iterations") or 0)
+        ramp_policy_arg = _ramp_policy_command_arg(winner)
         return [
             {
                 "id": "schedule_guarded_shadow_production",
@@ -873,7 +1032,7 @@ def _next_experiment_plan(
                     "PYTHONPATH=.:talis_tic python scripts/run_live_scout_canary.py --n-scouts 1000 "
                     "--concurrency 8 --cost-cap-usd 5.00 --provider-timeout-s 45 "
                     f"--prompt-variant {prompt_variant} --max-tool-iterations {max_tool_iterations} "
-                    "--allow-live-spend"
+                    f"{ramp_policy_arg}--allow-live-spend"
                 ),
                 "promotion_rule": (
                     "A scheduled job remains shadow-only unless daily tournament reports keep "
@@ -891,6 +1050,7 @@ def _next_experiment_plan(
     if winner.get("promotion_eligible"):
         sample = winner.get("sample") if isinstance(winner.get("sample"), dict) else {}
         max_tool_iterations = int((winner.get("configuration") or {}).get("max_tool_iterations") or 0)
+        ramp_policy_arg = _ramp_policy_command_arg(winner)
         if int(sample.get("requested") or 0) >= int(thresholds["scale_min_scouts"]):
             return [
                 {
@@ -900,7 +1060,8 @@ def _next_experiment_plan(
                         "PYTHONPATH=.:talis_tic python scripts/run_live_scout_canary.py --n-scouts 1000 "
                         "--concurrency 8 --cost-cap-usd 5.00 --provider-timeout-s 45 "
                         f"--prompt-variant {winner['configuration']['prompt_variants'][0]} "
-                        f"--max-tool-iterations {max_tool_iterations} --seed-rng 20260523 --allow-live-spend"
+                        f"--max-tool-iterations {max_tool_iterations} --seed-rng 20260523 "
+                        f"{ramp_policy_arg}--allow-live-spend"
                     ),
                     "promotion_rule": (
                         "Scheduled production requires two independent 1,000-scout shadow runs with provider errors <= "
@@ -919,7 +1080,7 @@ def _next_experiment_plan(
                         "PYTHONPATH=.:talis_tic python scripts/run_live_scout_canary.py --n-scouts 1000 "
                         "--concurrency 8 --cost-cap-usd 5.00 --provider-timeout-s 45 "
                         f"--prompt-variant {winner['configuration']['prompt_variants'][0]} "
-                        f"--max-tool-iterations {max_tool_iterations} --allow-live-spend"
+                        f"--max-tool-iterations {max_tool_iterations} {ramp_policy_arg}--allow-live-spend"
                     ),
                     "promotion_rule": (
                         "Promote to a repeat 1,000-scout shadow trial only if the 1,000-scout run keeps provider errors <= "
@@ -938,7 +1099,7 @@ def _next_experiment_plan(
                     "PYTHONPATH=.:talis_tic python scripts/run_live_scout_canary.py --n-scouts 100 "
                     "--concurrency 4 --cost-cap-usd 1.00 --provider-timeout-s 45 "
                     f"--prompt-variant {winner['configuration']['prompt_variants'][0]} "
-                    f"--max-tool-iterations {max_tool_iterations} --allow-live-spend"
+                    f"--max-tool-iterations {max_tool_iterations} {ramp_policy_arg}--allow-live-spend"
                 ),
                 "promotion_rule": (
                     "Promote to 1,000 only if the 100-scout run keeps provider errors <= "
@@ -959,6 +1120,28 @@ def _next_experiment_plan(
         "scale_information_strings_ge_1000",
     }.intersection(failed))
     market_evolve_failed = any(name.startswith("distribution_market_evolve_") or name.startswith("scale_market_evolve_") for name in failed)
+    ramp_policy_rehearsal_failed = any(name.startswith("ramp_policy_rehearsal_") for name in failed)
+    if ramp_policy_rehearsal_failed:
+        policy_path = str(((winner.get("configuration") or {}).get("ramp_policy_path")) or "PROMPT_OUTPUT_DIR/live_scout_ramp_policy.json")
+        plan.append({
+            "id": "ramp_policy_rehearsal_repair",
+            "purpose": (
+                "Repair the learned next-run policy before spending on another scale run. "
+                "The policy must first prove, without provider calls, that it attaches strict "
+                "contracts, repair IDs, watch metrics, refreshed tools, and source-family coverage."
+            ),
+            "command": (
+                "PYTHONPATH=. python scripts/run_live_scout_canary.py --n-scouts 12 "
+                "--concurrency 1 --cost-cap-usd 0.01 --provider-timeout-s 45 "
+                "--max-tool-iterations 1 "
+                f"--ramp-policy {shlex.quote(policy_path)}"
+            ),
+            "promotion_rule": (
+                "Do not run the next paid ramp until live_scout_ramp_policy_rehearsal.json has "
+                "status=pass, decision=policy_can_gate_live_spend, tool refresh >= 95%, source "
+                "target coverage >= 60%, strict contract attachment at 100%, and zero over-limit cells."
+            ),
+        })
     if market_evolve_failed:
         plan.append({
             "id": "market_evolve_proof_repair_100",
@@ -1196,6 +1379,8 @@ def _interpret_candidate(candidate: dict[str, Any]) -> str:
         fragments.append("structural misses are above the 10% distribution gate")
     if "distribution_success_rate_ge_0_90" in failed or "scale_success_rate_ge_0_90" in failed:
         fragments.append("useful scout completion is below the 90% scale gate")
+    if any(name.startswith("ramp_policy_rehearsal_") for name in failed):
+        fragments.append("the learned next-run policy has not passed the no-spend rehearsal gate")
     if any(name.startswith("distribution_market_evolve_") or name.startswith("scale_market_evolve_") for name in failed):
         fragments.append("the evolution proof loop did not run cleanly across matched control/candidate slices")
     if "avg_prompt_quality_ge_min" in failed or "low_prompt_quality_rate_le_max" in failed:
