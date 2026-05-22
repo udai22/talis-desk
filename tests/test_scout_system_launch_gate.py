@@ -80,6 +80,7 @@ def test_launch_gate_uses_tournament_as_only_1000_promotion_authority():
     assert decision["status"] == "ready_for_live_1000_ramp"
     assert decision["allowed_next_step"] == "live_1000_scout_ramp"
     assert decision["human_authorization_required"] is True
+    assert "--ramp-policy /tmp/live_scout_ramp_policy.json" in decision["next_command"]
     assert report["proof_ladder"][4]["passed"] is True
     assert report["proof_ladder"][5]["passed"] is False
 
@@ -300,8 +301,15 @@ def _live_pass_report(*, n_scouts: int):
                 "red_failure_modes_from_prior_ramp": ["json_unparseable"],
                 "must_watch_metrics": ["json_unparseable_rate"],
             },
+            "next_ramp_policy": {
+                "policy_id": "lrp_test",
+                "seed_payload_patch": {"prompt_contract_pressure": "strict"},
+            },
             "next_run": {
                 "allowed_next_step": "live_1000_scout_ramp",
+            },
+            "artifacts": {
+                "ramp_policy": "/tmp/live_scout_ramp_policy.json",
             },
         },
     }

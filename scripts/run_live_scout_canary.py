@@ -38,6 +38,10 @@ from talis_desk.information_map import (
     run_market_evolve_step,
 )
 from talis_desk.information_map.deep_scout_prompt import build_deep_scout_system_prompt
+from talis_desk.information_map.live_ramp_policy import (
+    apply_live_scout_ramp_policy_to_seeds,
+    load_live_scout_ramp_policy,
+)
 from talis_desk.market_map.coverage_audit import build_coverage_gap_manifest
 from talis_desk.market_map.governor import build_market_map_governor_plan
 from talis_desk.market_map.self_healing import (
@@ -136,6 +140,11 @@ def main() -> int:
             conn=store.conn,
         )
         _force_live_seed_runtime_options(seeds, args=args)
+        ramp_policy: dict[str, Any] = {}
+        ramp_policy_application: dict[str, Any] = {}
+        if args.ramp_policy:
+            ramp_policy = load_live_scout_ramp_policy(args.ramp_policy)
+            ramp_policy_application = apply_live_scout_ramp_policy_to_seeds(seeds, ramp_policy)
         seed_path = prompt_output_dir / "live_scout_canary_seeds.json"
         _write_json(seed_path, [_seed_payload(seed) for seed in seeds])
         prompt_preview = _write_live_prompt_preview(
@@ -159,6 +168,8 @@ def main() -> int:
                 prompt_preview=prompt_preview,
                 slice_preview=slice_preview,
                 preflight=preflight,
+                ramp_policy=ramp_policy,
+                ramp_policy_application=ramp_policy_application,
                 reason="explicit_live_spend_flag_missing",
                 elapsed_s=time.perf_counter() - started,
             )
@@ -177,6 +188,8 @@ def main() -> int:
                 prompt_preview=prompt_preview,
                 slice_preview=slice_preview,
                 preflight=preflight,
+                ramp_policy=ramp_policy,
+                ramp_policy_application=ramp_policy_application,
                 reason="provider_import_failed",
                 elapsed_s=time.perf_counter() - started,
             )
@@ -327,6 +340,9 @@ def main() -> int:
             "provider_timeout_s": args.provider_timeout_s,
             "prompt_variant_override": args.prompt_variant,
             "max_tool_iterations": args.max_tool_iterations,
+            "ramp_policy_path": args.ramp_policy,
+            "ramp_policy": ramp_policy,
+            "ramp_policy_application": ramp_policy_application,
             "preflight": preflight,
             "prompt_preview": prompt_preview,
             "slice_preview": slice_preview,
@@ -364,6 +380,11 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--provider-timeout-s", type=float, default=45.0)
     parser.add_argument("--prompt-variant", default="", help="Optional forced scout prompt variant for this canary.")
     parser.add_argument("--max-tool-iterations", type=int, default=1)
+    parser.add_argument(
+        "--ramp-policy",
+        default="",
+        help="Optional live_scout_ramp_policy.json from a prior learning report. Applies repair/work-order policy to this slice.",
+    )
     parser.add_argument("--model", default="deepseek:v4-flash")
     parser.add_argument("--fallback", default="anthropic:claude-haiku-4-5")
     parser.add_argument(
@@ -616,6 +637,13 @@ def _write_live_prompt_preview(
             "source_family_targets": payload_dict.get("source_family_targets") or [],
             "prefer_learned_tools": bool(payload_dict.get("prefer_learned_tools")),
         },
+        "learning_policy": {
+            "policy_id": payload_dict.get("learning_policy_id"),
+            "watch_metrics": payload_dict.get("learning_watch_metrics") or [],
+            "repair_work_order_ids": payload_dict.get("learning_repair_work_order_ids") or [],
+            "prompt_repair_modes": payload_dict.get("prompt_repair_modes") or [],
+            "geometry_replication_targets": payload_dict.get("learning_geometry_replication_targets") or [],
+        },
         "system_prompt": system_prompt,
         "user_prompt": user_prompt,
         "system_prompt_chars": len(system_prompt),
@@ -718,6 +746,12 @@ def _write_live_slice_preview(
                 "experiment_arm": payload.get("market_evolve_experiment_arm"),
                 "pair_id": payload.get("market_evolve_pair_id"),
                 "applied": bool(payload.get("market_evolve_applied")),
+            },
+            "learning_policy": {
+                "policy_id": payload.get("learning_policy_id"),
+                "watch_metrics": payload.get("learning_watch_metrics") or [],
+                "repair_work_order_ids": payload.get("learning_repair_work_order_ids") or [],
+                "geometry_replication_targets": payload.get("learning_geometry_replication_targets") or [],
             },
         })
     duplicate_cells = {
@@ -833,6 +867,8 @@ def _blocked_report(
     prompt_preview: dict[str, Any],
     slice_preview: dict[str, Any],
     preflight: dict[str, Any],
+    ramp_policy: dict[str, Any],
+    ramp_policy_application: dict[str, Any],
     reason: str,
     elapsed_s: float,
 ) -> dict[str, Any]:
@@ -860,6 +896,9 @@ def _blocked_report(
         "provider_timeout_s": args.provider_timeout_s,
         "prompt_variant_override": args.prompt_variant,
         "max_tool_iterations": args.max_tool_iterations,
+        "ramp_policy_path": args.ramp_policy,
+        "ramp_policy": ramp_policy,
+        "ramp_policy_application": ramp_policy_application,
         "preflight": preflight,
         "prompt_preview": prompt_preview,
         "slice_preview": slice_preview,

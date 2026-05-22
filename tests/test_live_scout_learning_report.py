@@ -106,7 +106,13 @@ def test_live_scout_learning_report_extracts_repair_modes_and_next_gate(tmp_path
     assert any(order["owner"] == "scout_harness" for order in report["repair_work_orders"])
     assert any(order["work_order_id"] == "lso_geometry_replication" for order in report["repair_work_orders"])
     assert "json_unparseable_rate" in report["next_run"]["pre_1000_gate"]["must_watch_metrics"]
+    assert report["next_ramp_policy"]["schema_version"] == "talis_live_scout_ramp_policy_v1"
+    assert report["next_ramp_policy"]["seed_payload_patch"]["prompt_contract_pressure"] == "strict"
+    assert "lso_json_unparseable_scout_harness" in report["next_ramp_policy"]["repair_work_order_ids"]
+    assert "--ramp-policy LIVE_PROMPT_OUTPUT_DIR/live_scout_ramp_policy.json" in report["next_run"]["recommended_command"]
 
     json_path, md_path = write_learning_report_artifacts(report, output_dir=tmp_path / "out")
+    policy_path = tmp_path / "out" / "live_scout_ramp_policy.json"
     assert json_path.exists()
-    assert "Live Scout Learning Report" in md_path.read_text(encoding="utf-8")
+    assert policy_path.exists()
+    assert "Executable Ramp Policy" in md_path.read_text(encoding="utf-8")

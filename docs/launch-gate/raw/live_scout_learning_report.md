@@ -57,6 +57,12 @@ The live run earned `promote_to_1000_scout_ramp` with average prompt quality 0.8
 - ready_for_authorized_1000: `True`
 - must_watch: `accepted_unique_high_quality_coverage_per_dollar_delta, empty_hypothesis_with_strings_rate, invented_tool_persist_rate, json_unparseable_rate, missing_evidence_refs_rate, missing_information_strings_rate, quarantine_to_repair_route_rate, stale_directionality_flag_rate, top_geometry_confirmation_rate`
 
+## Executable Ramp Policy
+
+- policy_id: `lrp_cycle_live100_20260522_live_100_100`
+- seed_patch: `{"max_evidence_tools_min": 6, "max_tool_iterations": 2, "preserve_missing_tool_as_proposal": true, "prompt_contract_pressure": "strict", "prompt_min_information_strings": 2, "prompt_require_evidence_refs": true, "prompt_require_kill_signal": true, "prompt_require_mechanism": true, "quarantine_before_verifier_spend": true, "source_family_targets_append": ["event_feed", "hydromancer", "market_timeseries", "our_hl_node", "our_node", "parallel_web", "source_health"], "stale_evidence_becomes_gap_string": true, "suggested_tool_allowlist_only": true, "tool_candidate_limit_min": 12}`
+- ramp_policy_artifact: `/tmp/talis-live100-20260522/live_canary/prompt_outputs/live_scout_ramp_policy.json`
+
 ## Next Run
 
 - allowed_next_step: `live_1000_scout_ramp`

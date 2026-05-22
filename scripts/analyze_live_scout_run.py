@@ -83,6 +83,14 @@ def build_live_scout_learning_report(
         failure_modes=failure_modes,
         repair_work_orders=repair_work_orders,
     )
+    next_ramp_policy = _next_ramp_policy(
+        live_report=live_report,
+        failure_modes=failure_modes,
+        repair_work_orders=repair_work_orders,
+        evolution_arms=evolution_arms,
+        geometry=geometry,
+        pre_1000_gate=pre_1000_gate,
+    )
     return {
         "schema_version": "talis_live_scout_learning_report_v1",
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -125,6 +133,7 @@ def build_live_scout_learning_report(
         "evolution_arms": evolution_arms,
         "repair_work_orders": repair_work_orders,
         "pre_1000_gate": pre_1000_gate,
+        "next_ramp_policy": next_ramp_policy,
         "next_run": _next_run(decision, failure_modes, evolution_arms, pre_1000_gate=pre_1000_gate),
         "artifacts": {
             "live_report": str(live_report_path),
@@ -139,6 +148,10 @@ def write_learning_report_artifacts(report: dict[str, Any], *, output_dir: Path)
     output_dir.mkdir(parents=True, exist_ok=True)
     json_path = output_dir / "live_scout_learning_report.json"
     md_path = output_dir / "live_scout_learning_report.md"
+    policy_path = output_dir / "live_scout_ramp_policy.json"
+    if isinstance(report.get("next_ramp_policy"), dict):
+        report.setdefault("artifacts", {})["ramp_policy"] = str(policy_path)
+        _write_json(policy_path, report["next_ramp_policy"])
     _write_json(json_path, report)
     md_path.write_text(render_learning_report_markdown(report), encoding="utf-8")
     return json_path, md_path
@@ -195,6 +208,12 @@ def render_learning_report_markdown(report: dict[str, Any]) -> str:
         "",
         f"- ready_for_authorized_1000: `{(report.get('pre_1000_gate') or {}).get('ready_for_authorized_1000')}`",
         f"- must_watch: `{', '.join((report.get('pre_1000_gate') or {}).get('must_watch_metrics') or [])}`",
+        "",
+        "## Executable Ramp Policy",
+        "",
+        f"- policy_id: `{(report.get('next_ramp_policy') or {}).get('policy_id')}`",
+        f"- seed_patch: `{json.dumps((report.get('next_ramp_policy') or {}).get('seed_payload_patch') or {}, sort_keys=True)}`",
+        f"- ramp_policy_artifact: `{(report.get('artifacts') or {}).get('ramp_policy')}`",
         "",
         "## Next Run",
         "",
@@ -548,6 +567,102 @@ def _pre_1000_gate(
     }
 
 
+def _next_ramp_policy(
+    *,
+    live_report: dict[str, Any],
+    failure_modes: list[dict[str, Any]],
+    repair_work_orders: list[dict[str, Any]],
+    evolution_arms: list[dict[str, Any]],
+    geometry: dict[str, Any],
+    pre_1000_gate: dict[str, Any],
+) -> dict[str, Any]:
+    counts = {str(row.get("id")): int(row.get("count") or 0) for row in failure_modes if isinstance(row, dict)}
+    source_gap_pressure = any(
+        counts.get(mode, 0) > 0
+        for mode in ("missing_evidence_refs", "missing_information_strings", "stale_date_directionality")
+    )
+    node_pressure = counts.get("node_not_promoted", 0) > 0
+    quarantine_pressure = counts.get("adversarial_quarantine", 0) > 0
+    max_tool_iterations = 2 if source_gap_pressure or quarantine_pressure else 1
+    max_evidence_tools = 6 if source_gap_pressure or node_pressure else 4
+    tool_candidate_limit = 12 if source_gap_pressure or node_pressure else 10
+    source_targets = ["source_health", "parallel_web"]
+    if node_pressure:
+        source_targets.extend(["hydromancer", "our_node", "our_hl_node"])
+    if source_gap_pressure:
+        source_targets.extend(["event_feed", "market_timeseries"])
+    repair_ids = [
+        str(order.get("work_order_id"))
+        for order in repair_work_orders
+        if isinstance(order, dict) and str(order.get("work_order_id") or "").strip()
+    ]
+    prompt_modes = [
+        mode
+        for mode in (
+            "hypothesis_string_consistency" if counts.get("empty_hypothesis", 0) else "",
+            "gap_string_instead_of_empty" if counts.get("missing_information_strings", 0) else "",
+            "evidence_ref_hard_gate" if counts.get("missing_evidence_refs", 0) else "",
+            "stale_data_gap_prompt" if counts.get("stale_date_directionality", 0) else "",
+            "node_contract_upgrade" if node_pressure else "",
+        )
+        if mode
+    ]
+    geometry_targets = []
+    for row in (geometry.get("top_actions") or [])[:10]:
+        if not isinstance(row, dict):
+            continue
+        metrics = row.get("metrics") if isinstance(row.get("metrics"), dict) else {}
+        geometry_targets.append({
+            "cell_key": row.get("cell_key"),
+            "route_directive": row.get("route_directive"),
+            "trade_scream_score": metrics.get("trade_scream_score"),
+            "source_work_order_id": "lso_geometry_replication",
+        })
+    policy_id = "lrp_" + _slug(str(live_report.get("cycle_id") or "cycle") + "_" + str(live_report.get("n_scouts_requested") or "n"))
+    return {
+        "schema_version": "talis_live_scout_ramp_policy_v1",
+        "policy_id": policy_id,
+        "source": "live_scout_learning_report",
+        "source_cycle_id": live_report.get("cycle_id"),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "intent": "Apply live-100 learning as a monotonic seed policy patch for the next evaluator-gated ramp.",
+        "apply_mode": "monotonic_patch",
+        "allowed_next_step": "live_1000_scout_ramp" if pre_1000_gate.get("ready_for_authorized_1000") else "repair_then_repeat_100",
+        "requires_explicit_spend_authorization": True,
+        "watch_metrics": pre_1000_gate.get("must_watch_metrics") or [],
+        "ramp_success_requirements": pre_1000_gate.get("ramp_success_requirements") or [],
+        "repair_work_order_ids": repair_ids,
+        "prompt_repair_modes": prompt_modes,
+        "seed_payload_patch": {
+            "prompt_contract_pressure": "strict",
+            "prompt_min_information_strings": 2,
+            "prompt_require_mechanism": True,
+            "prompt_require_kill_signal": True,
+            "prompt_require_evidence_refs": True,
+            "suggested_tool_allowlist_only": True,
+            "preserve_missing_tool_as_proposal": True,
+            "stale_evidence_becomes_gap_string": True,
+            "quarantine_before_verifier_spend": True,
+            "max_tool_iterations": max_tool_iterations,
+            "max_evidence_tools_min": max_evidence_tools,
+            "tool_candidate_limit_min": tool_candidate_limit,
+            "source_family_targets_append": sorted(set(source_targets)),
+        },
+        "geometry_replication_targets": geometry_targets,
+        "market_evolve_experiment_policy": {
+            "keep_matched_control_candidate_pairs": True,
+            "min_pairs_for_100_plus_scouts": 20,
+            "promote_only_on_evaluator_positive_delta": True,
+            "active_evolution_arms": [
+                str(arm.get("id"))
+                for arm in evolution_arms
+                if isinstance(arm, dict) and arm.get("id")
+            ],
+        },
+        "quality_flags": [],
+    }
+
+
 def _next_run(
     decision: dict[str, Any],
     failure_modes: list[dict[str, Any]],
@@ -562,10 +677,12 @@ def _next_run(
         "requires_explicit_spend_authorization": True,
         "recommended_command": (
             "PYTHONPATH=. python scripts/run_scout_system_launch_gate.py --allow-live-spend "
-            "--live-scouts 1000 --live-cost-cap-usd 5.00 --live-concurrency 8 --max-tool-iterations 1"
+            "--live-scouts 1000 --live-cost-cap-usd 5.00 --live-concurrency 8 --max-tool-iterations 1 "
+            "--ramp-policy LIVE_PROMPT_OUTPUT_DIR/live_scout_ramp_policy.json"
             if ready_1000 else
             "PYTHONPATH=. python scripts/run_scout_system_launch_gate.py --allow-live-spend "
-            "--live-scouts 100 --live-cost-cap-usd 1.00 --live-concurrency 4 --max-tool-iterations 1"
+            "--live-scouts 100 --live-cost-cap-usd 1.00 --live-concurrency 4 --max-tool-iterations 1 "
+            "--ramp-policy LIVE_PROMPT_OUTPUT_DIR/live_scout_ramp_policy.json"
         ),
         "operator_note": (
             "The 1,000 ramp is allowed by tournament evidence, but scheduled production remains blocked until two independent 1,000-scout shadow runs pass repeatability gates."

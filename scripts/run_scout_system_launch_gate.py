@@ -19,6 +19,7 @@ import html
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -128,6 +129,8 @@ def main() -> int:
     ]
     if args.prompt_variant:
         live_cmd.extend(["--prompt-variant", args.prompt_variant])
+    if args.ramp_policy:
+        live_cmd.extend(["--ramp-policy", args.ramp_policy])
     if args.cycle_prefix:
         live_cmd.extend(["--cycle-id", f"{args.cycle_prefix}_live_{args.live_scouts}"])
     if args.allow_live_spend:
@@ -726,6 +729,7 @@ def _launch_decision(
     allow_live_spend: bool,
     next_live_scouts: int,
 ) -> dict[str, Any]:
+    ramp_policy_arg = _ramp_policy_command_arg(live_report)
     if not deterministic_ready:
         return {
             "status": "blocked_deterministic_readiness",
@@ -754,7 +758,7 @@ def _launch_decision(
             "next_command": (
                 "PYTHONPATH=. python scripts/run_scout_system_launch_gate.py "
                 f"--allow-live-spend --live-scouts {next_live_scouts} "
-                "--live-cost-cap-usd 0.10 --live-concurrency 1 --max-tool-iterations 1"
+                f"--live-cost-cap-usd 0.10 --live-concurrency 1 --max-tool-iterations 1{ramp_policy_arg}"
             ),
         }
     if not tournament_decision:
@@ -784,7 +788,7 @@ def _launch_decision(
             "reason": "The live tournament passed distribution gates. A capped 1,000-scout ramp is allowed, not scheduled production.",
             "next_command": (
                 "PYTHONPATH=. python scripts/run_scout_system_launch_gate.py "
-                "--allow-live-spend --live-scouts 1000 --live-cost-cap-usd 5.00 --live-concurrency 8 --max-tool-iterations 1"
+                f"--allow-live-spend --live-scouts 1000 --live-cost-cap-usd 5.00 --live-concurrency 8 --max-tool-iterations 1{ramp_policy_arg}"
             ),
         }
     if tournament_decision.get("ready_for_live_100"):
@@ -796,7 +800,7 @@ def _launch_decision(
             "reason": "The live canary passed tournament gates. A capped 100-scout ramp is allowed.",
             "next_command": (
                 "PYTHONPATH=. python scripts/run_scout_system_launch_gate.py "
-                "--allow-live-spend --live-scouts 100 --live-cost-cap-usd 1.00 --live-concurrency 4 --max-tool-iterations 1"
+                f"--allow-live-spend --live-scouts 100 --live-cost-cap-usd 1.00 --live-concurrency 4 --max-tool-iterations 1{ramp_policy_arg}"
             ),
         }
     return {
@@ -807,6 +811,15 @@ def _launch_decision(
         "reason": "The live tournament blocked promotion. Repair the failed gates before increasing scout spend.",
         "next_command": str((live_report.get("scale_decision") or {}).get("next_step") or "Inspect live_scout_tournament_report.json"),
     }
+
+
+def _ramp_policy_command_arg(live_report: dict[str, Any]) -> str:
+    learning = live_report.get("learning_report") if isinstance(live_report.get("learning_report"), dict) else {}
+    artifacts = learning.get("artifacts") if isinstance(learning.get("artifacts"), dict) else {}
+    policy_path = str(artifacts.get("ramp_policy") or "").strip()
+    if not policy_path:
+        return ""
+    return " --ramp-policy " + shlex.quote(policy_path)
 
 
 def _proof_ladder(
@@ -975,6 +988,7 @@ def _learning_report_summary(report: dict[str, Any]) -> dict[str, Any]:
             if isinstance(row, dict)
         ][:12],
         "pre_1000_gate": learning.get("pre_1000_gate") if isinstance(learning.get("pre_1000_gate"), dict) else {},
+        "next_ramp_policy": learning.get("next_ramp_policy") if isinstance(learning.get("next_ramp_policy"), dict) else {},
         "next_run": learning.get("next_run") if isinstance(learning.get("next_run"), dict) else {},
         "artifacts": learning.get("artifacts") if isinstance(learning.get("artifacts"), dict) else {},
     }
@@ -1101,6 +1115,7 @@ def _pre_1000_rows(learning: dict[str, Any]) -> str:
     gate = learning.get("pre_1000_gate") if isinstance(learning.get("pre_1000_gate"), dict) else {}
     if not gate:
         return "<li><span>No pre-1000 gate captured<small>run the live learning report first</small></span><b>unknown</b></li>"
+    policy = learning.get("next_ramp_policy") if isinstance(learning.get("next_ramp_policy"), dict) else {}
     rows = [
         (
             "Authorized 1,000 experiment",
@@ -1111,6 +1126,11 @@ def _pre_1000_rows(learning: dict[str, Any]) -> str:
             "Scheduled production",
             str(bool(gate.get("scheduled_production_allowed"))),
             "requires independent shadow-run repeatability",
+        ),
+        (
+            "Executable ramp policy",
+            str(policy.get("policy_id") or "missing"),
+            "applied with --ramp-policy on the next live slice",
         ),
     ]
     for mode in (gate.get("red_failure_modes_from_prior_ramp") or [])[:4]:
@@ -1144,6 +1164,7 @@ def _publish_live_artifacts(report: dict[str, Any], *, output_dir: Path) -> dict
         "live_scout_preview_user_prompt_md": prompt_output_dir / "live_scout_preview_user_prompt.md",
         "live_scout_learning_report_json": prompt_output_dir / "live_scout_learning_report.json",
         "live_scout_learning_report_md": prompt_output_dir / "live_scout_learning_report.md",
+        "live_scout_ramp_policy_json": prompt_output_dir / "live_scout_ramp_policy.json",
     }
     raw_dir.mkdir(parents=True, exist_ok=True)
     for key, src in candidates.items():
@@ -1178,6 +1199,7 @@ def _artifact_rows(report: dict[str, Any]) -> str:
         "live_scout_preview_user_prompt_md": "User prompt",
         "live_scout_learning_report_json": "Learning report",
         "live_scout_learning_report_md": "Learning markdown",
+        "live_scout_ramp_policy_json": "Executable ramp policy",
         "live_scout_tournament_report_json": "Tournament report",
         "live_scout_canary_report_md": "Canary markdown",
     }
@@ -1279,6 +1301,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--live-cost-cap-usd", type=float, default=0.10)
     parser.add_argument("--provider-timeout-s", type=float, default=45.0)
     parser.add_argument("--max-tool-iterations", type=int, default=1)
+    parser.add_argument("--ramp-policy", default="")
     parser.add_argument("--prompt-variant", default="flash_temporal_v4")
     parser.add_argument("--allow-live-spend", action="store_true")
     return parser.parse_args()
