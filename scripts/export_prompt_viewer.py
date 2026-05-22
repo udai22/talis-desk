@@ -3866,6 +3866,7 @@ def _render_geometry_evolution_chapter(data: dict[str, Any]) -> str:
         if isinstance(task_execution.get("execution"), dict)
         else {}
     )
+    worker_proof = task_execution.get("proof") if isinstance(task_execution.get("proof"), dict) else {}
     worker_tasks = [
         row for row in (task_execution.get("tasks") or [])
         if isinstance(row, dict)
@@ -3881,6 +3882,9 @@ def _render_geometry_evolution_chapter(data: dict[str, Any]) -> str:
         "completed_count": worker_execution.get("completed_count"),
         "failed_count": worker_execution.get("failed_count"),
         "execute_followup_tools": worker_execution.get("execute_followup_tools"),
+        "bounded_followup_tools_enabled": worker_proof.get("bounded_followup_tools_enabled"),
+        "followup_observation_count": worker_proof.get("followup_observation_count"),
+        "shape_tool_observed": worker_proof.get("shape_tool_observed"),
         "tasks": [
             {
                 "id": row.get("id"),
@@ -3905,12 +3909,19 @@ def _render_geometry_evolution_chapter(data: dict[str, Any]) -> str:
                 "ok": obs.get("ok"),
                 "tool_call_log_id": obs.get("tool_call_log_id"),
                 "summary": obs.get("summary"),
+                "phase": obs.get("phase"),
             }
-            for execution in (worker_execution.get("executions") or [])[:1]
+            for execution in (worker_execution.get("executions") or [])[:3]
             if isinstance(execution, dict)
-            for obs in (execution.get("observations") or [])[:4]
+            for obs in (execution.get("observations") or [])[:6]
             if isinstance(obs, dict)
-        ],
+        ][:10],
+        "execution_quality_flags": [
+            flag
+            for execution in (worker_execution.get("executions") or [])
+            if isinstance(execution, dict)
+            for flag in (execution.get("quality_flags") or [])
+        ][:10],
     }
     feedback_metrics = task_feedback.get("metrics") if isinstance(task_feedback.get("metrics"), dict) else {}
     feedback_payload = {
@@ -3927,6 +3938,9 @@ def _render_geometry_evolution_chapter(data: dict[str, Any]) -> str:
                 "cortex_shape_observation_rate",
                 "cortex_observations_per_task",
                 "cortex_deferred_followup_rate",
+                "cortex_followup_execution_rate",
+                "cortex_followup_observations_per_task",
+                "cortex_shape_blocked_followup_rate",
             ]
         },
     }
@@ -4164,12 +4178,12 @@ def _render_geometry_evolution_chapter(data: dict[str, Any]) -> str:
           </article>
           <article class="workbench-panel" style="margin-top:10px">
             <h3>Cortex worker execution</h3>
-            <p>The next layer claims those contracts, starts them, reads the shape through the approved harness, stores observations on the blackboard completion event, and leaves external follow-up tools deferred until a worker has a reason to spend them.</p>
+            <p>The next layer claims those contracts, starts them, reads the shape through the approved harness, then spends a bounded follow-up budget only after the shape read succeeds. In this run, the worker logged {html.escape(str(worker_proof.get("followup_observation_count") or 0))} follow-up observations and kept every observation tied to task events.</p>
             <pre class="prompt-slice">{html.escape(json.dumps(worker_payload, indent=2, sort_keys=True, ensure_ascii=True, default=str))}</pre>
           </article>
           <article class="workbench-panel" style="margin-top:10px">
             <h3>Evaluator feedback from worker outcomes</h3>
-            <p>The worker loop now feeds MarketEvolve directly. Completion rate, task failures, pending work, shape-observation rate, observation yield, and deferred follow-up discipline become objective terms, so the system can evolve the harness instead of merely logging that it ran.</p>
+            <p>The worker loop now feeds MarketEvolve directly. Completion rate, task failures, pending work, shape-observation rate, bounded follow-up execution, follow-up observation yield, and shape-blocked follow-up penalties become objective terms, so the system can evolve the harness instead of merely logging that it ran.</p>
             <pre class="prompt-slice">{html.escape(json.dumps(feedback_payload, indent=2, sort_keys=True, ensure_ascii=True, default=str))}</pre>
           </article>
           <article class="workbench-panel" style="margin-top:10px">
