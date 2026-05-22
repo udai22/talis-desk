@@ -1,0 +1,328 @@
+{
+  "application": {
+    "applied_seed_count": 12,
+    "geometry_annotated_seed_count": 0,
+    "policy_id": "lrp_cycle_live100_20260522_live_100_100",
+    "quality_flags": [],
+    "repair_work_order_ids": [
+      "lso_json_unparseable_scout_harness",
+      "lso_invented_tools_tool_harness",
+      "lso_empty_hypothesis_prompt_policy",
+      "lso_missing_information_strings_prompt_policy",
+      "lso_missing_evidence_refs_source_router",
+      "lso_stale_date_directionality_source_router",
+      "lso_adversarial_quarantine_adversarial_reviewer",
+      "lso_node_not_promoted_node_intelligence",
+      "lso_geometry_replication",
+      "lso_market_evolve_arena"
+    ],
+    "schema_version": "live_scout_ramp_policy_application_v1",
+    "seed_count": 12,
+    "source_family_targets_added": [
+      "event_feed",
+      "hydromancer",
+      "market_timeseries",
+      "our_hl_node",
+      "our_node",
+      "parallel_web",
+      "source_health"
+    ],
+    "status": "applied",
+    "tool_candidate_added_count": 11,
+    "tool_candidate_refreshed_seed_count": 12,
+    "watch_metrics": [
+      "accepted_unique_high_quality_coverage_per_dollar_delta",
+      "empty_hypothesis_with_strings_rate",
+      "invented_tool_persist_rate",
+      "json_unparseable_rate",
+      "missing_evidence_refs_rate",
+      "missing_information_strings_rate",
+      "quarantine_to_repair_route_rate",
+      "stale_directionality_flag_rate",
+      "top_geometry_confirmation_rate"
+    ]
+  },
+  "baseline": {
+    "avg_tool_candidates": 10.75,
+    "source_family_counts": {
+      "event_feed": 8,
+      "hydromancer": 4,
+      "market_timeseries": 12,
+      "our_node": 5,
+      "parallel_web": 4,
+      "source_health": 12,
+      "tool_atlas": 12
+    }
+  },
+  "candidate": {
+    "avg_tool_candidates": 11.667,
+    "source_family_counts": {
+      "event_feed": 9,
+      "hydromancer": 5,
+      "market_timeseries": 12,
+      "our_node": 6,
+      "parallel_web": 4,
+      "source_health": 12,
+      "tool_atlas": 12
+    }
+  },
+  "decision": "policy_can_gate_live_spend",
+  "gates": {
+    "candidate_menu_not_smaller": true,
+    "policy_attached_all": true,
+    "repair_ids_attached_all": true,
+    "source_target_coverage": true,
+    "strict_contract_all": true,
+    "tool_overbreadth_ok": true,
+    "tool_refresh_all": true,
+    "watch_metrics_attached_all": true
+  },
+  "metrics": {
+    "candidate_tool_delta_avg": 0.917,
+    "over_limit_count": 0,
+    "policy_attached_rate": 1.0,
+    "repair_ids_attached_rate": 1.0,
+    "source_target_coverage_rate": 1.0,
+    "strict_contract_rate": 1.0,
+    "tool_candidate_added_count": 11,
+    "tool_candidate_refresh_rate": 1.0,
+    "watch_metrics_attached_rate": 1.0
+  },
+  "policy_id": "lrp_cycle_live100_20260522_live_100_100",
+  "quality_flags": [],
+  "sample_deltas": [
+    {
+      "added_tools": [
+        "tic://tool/builtin/analyze_microstructure@v1",
+        "tic://tool/builtin/compare_vehicle_flow_to_af_baseline@v1"
+      ],
+      "baseline_tool_count": 10,
+      "candidate_tool_count": 12,
+      "entity": "kFLOKI",
+      "horizon": "1d",
+      "lens": "factor",
+      "removed_tools": [],
+      "seed_id": "seed_cycle_ramp_policy_rehearsal_20260522_T_0000",
+      "source_families": [
+        "market_timeseries",
+        "our_node",
+        "source_health",
+        "tool_atlas"
+      ]
+    },
+    {
+      "added_tools": [],
+      "baseline_tool_count": 12,
+      "candidate_tool_count": 12,
+      "entity": "WIF",
+      "horizon": "1q",
+      "lens": "catalyst",
+      "removed_tools": [],
+      "seed_id": "seed_cycle_ramp_policy_rehearsal_20260522_T_0001",
+      "source_families": [
+        "event_feed",
+        "hydromancer",
+        "market_timeseries",
+        "parallel_web",
+        "source_health",
+        "tool_atlas"
+      ]
+    },
+    {
+      "added_tools": [
+        "tic://tool/builtin/rrg_state@v1",
+        "tic://tool/hydromancer/get_hip4_outcomes@v1"
+      ],
+      "baseline_tool_count": 10,
+      "candidate_tool_count": 12,
+      "entity": "OGN",
+      "horizon": "1w",
+      "lens": "macro",
+      "removed_tools": [],
+      "seed_id": "seed_cycle_ramp_policy_rehearsal_20260522_S_0000",
+      "source_families": [
+        "event_feed",
+        "hydromancer",
+        "market_timeseries",
+        "source_health",
+        "tool_atlas"
+      ]
+    },
+    {
+      "added_tools": [
+        "tic://tool/agent_native/replay_artifact_reasoning@v1"
+      ],
+      "baseline_tool_count": 11,
+      "candidate_tool_count": 12,
+      "entity": "V",
+      "horizon": "structural",
+      "lens": "filing",
+      "removed_tools": [],
+      "seed_id": "seed_cycle_ramp_policy_rehearsal_20260522_S_0001",
+      "source_families": [
+        "event_feed",
+        "market_timeseries",
+        "parallel_web",
+        "source_health",
+        "tool_atlas"
+      ]
+    },
+    {
+      "added_tools": [
+        "tic://tool/builtin/synthesize_confluence_window@v1",
+        "tic://tool/perplexity/web_search@v1"
+      ],
+      "baseline_tool_count": 10,
+      "candidate_tool_count": 12,
+      "entity": "AVGO",
+      "horizon": "1m",
+      "lens": "sentiment",
+      "removed_tools": [],
+      "seed_id": "seed_cycle_ramp_policy_rehearsal_20260522_S_0002",
+      "source_families": [
+        "event_feed",
+        "market_timeseries",
+        "parallel_web",
+        "source_health",
+        "tool_atlas"
+      ]
+    },
+    {
+      "added_tools": [],
+      "baseline_tool_count": 12,
+      "candidate_tool_count": 12,
+      "entity": "RESOLV",
+      "horizon": "intraday",
+      "lens": "rotation",
+      "removed_tools": [],
+      "seed_id": "seed_cycle_ramp_policy_rehearsal_20260522_S_0003",
+      "source_families": [
+        "event_feed",
+        "market_timeseries",
+        "our_node",
+        "source_health",
+        "tool_atlas"
+      ]
+    },
+    {
+      "added_tools": [
+        "tic://tool/builtin/compute_wallet_stats@v1",
+        "tic://tool/builtin/correct_pvalues@v1"
+      ],
+      "baseline_tool_count": 10,
+      "candidate_tool_count": 12,
+      "entity": "AI",
+      "horizon": "1m",
+      "lens": "money_velocity",
+      "removed_tools": [],
+      "seed_id": "seed_cycle_ramp_policy_rehearsal_20260522_S_0004",
+      "source_families": [
+        "market_timeseries",
+        "our_node",
+        "source_health",
+        "tool_atlas"
+      ]
+    },
+    {
+      "added_tools": [],
+      "baseline_tool_count": 12,
+      "candidate_tool_count": 12,
+      "entity": "HYPER",
+      "horizon": "intraday",
+      "lens": "microstructure",
+      "removed_tools": [],
+      "seed_id": "seed_cycle_ramp_policy_rehearsal_20260522_S_0005",
+      "source_families": [
+        "hydromancer",
+        "market_timeseries",
+        "our_node",
+        "source_health",
+        "tool_atlas"
+      ]
+    },
+    {
+      "added_tools": [],
+      "baseline_tool_count": 8,
+      "candidate_tool_count": 8,
+      "entity": "XLM",
+      "horizon": "1d",
+      "lens": "anomaly",
+      "removed_tools": [],
+      "seed_id": "seed_cycle_ramp_policy_rehearsal_20260522_S_0006",
+      "source_families": [
+        "event_feed",
+        "hydromancer",
+        "market_timeseries",
+        "source_health",
+        "tool_atlas"
+      ]
+    },
+    {
+      "added_tools": [
+        "tic://tool/builtin/get_treasury_auction_calendar@v1",
+        "tic://tool/builtin/get_yahoo_options@v1"
+      ],
+      "baseline_tool_count": 10,
+      "candidate_tool_count": 12,
+      "entity": "UMA",
+      "horizon": "structural",
+      "lens": "options_flow",
+      "removed_tools": [],
+      "seed_id": "seed_cycle_ramp_policy_rehearsal_20260522_S_0007",
+      "source_families": [
+        "event_feed",
+        "market_timeseries",
+        "our_node",
+        "source_health",
+        "tool_atlas"
+      ]
+    },
+    {
+      "added_tools": [],
+      "baseline_tool_count": 12,
+      "candidate_tool_count": 12,
+      "entity": "AAVE",
+      "horizon": "1w",
+      "lens": "vol_surface",
+      "removed_tools": [],
+      "seed_id": "seed_cycle_ramp_policy_rehearsal_20260522_S_0008",
+      "source_families": [
+        "event_feed",
+        "market_timeseries",
+        "our_node",
+        "source_health",
+        "tool_atlas"
+      ]
+    },
+    {
+      "added_tools": [],
+      "baseline_tool_count": 12,
+      "candidate_tool_count": 12,
+      "entity": "TRUMP",
+      "horizon": "1q",
+      "lens": "catalyst",
+      "removed_tools": [],
+      "seed_id": "seed_cycle_ramp_policy_rehearsal_20260522_S_0009",
+      "source_families": [
+        "event_feed",
+        "hydromancer",
+        "market_timeseries",
+        "parallel_web",
+        "source_health",
+        "tool_atlas"
+      ]
+    }
+  ],
+  "schema_version": "live_scout_ramp_policy_rehearsal_v1",
+  "score": 1.0,
+  "seed_count": 12,
+  "status": "pass",
+  "target_source_family_hits": {
+    "event_feed": 9,
+    "hydromancer": 5,
+    "market_timeseries": 12,
+    "our_node": 6,
+    "parallel_web": 4,
+    "source_health": 12
+  }
+}
