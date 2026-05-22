@@ -13,6 +13,8 @@ import tempfile
 from pathlib import Path
 
 from talis_desk.cadence import (
+    build_followup_plan_from_report,
+    build_followup_plan_from_scoreboard,
     build_intelligence_cadence_plan,
     execute_cadence_plan,
     write_cadence_plan,
@@ -27,19 +29,45 @@ def main() -> int:
         if args.artifact_dir
         else Path(tempfile.gettempdir()) / f"talis-intelligence-cadence-{args.mode.replace('_', '-')}"
     )
-    plan = build_intelligence_cadence_plan(
-        mode=args.mode,
-        artifact_dir=artifact_dir,
-        allow_live_spend=args.allow_live_spend,
-        cycle_id=args.cycle_id,
-        scout_count=args.scouts,
-        ramp_policy=args.ramp_policy,
-        repo_root=repo,
-        live_cost_cap_usd=args.live_cost_cap_usd,
-        concurrency=args.concurrency,
-        max_tool_iterations=args.max_tool_iterations,
-        brief_budget_usd=args.brief_budget_usd,
-    )
+    if args.follow_report:
+        plan = build_followup_plan_from_report(
+            report_path=args.follow_report,
+            artifact_dir=artifact_dir,
+            allow_live_spend=args.allow_live_spend,
+            cycle_id=args.cycle_id,
+            repo_root=repo,
+            live_cost_cap_usd=args.live_cost_cap_usd,
+            concurrency=args.concurrency,
+            max_tool_iterations=args.max_tool_iterations,
+            brief_budget_usd=args.brief_budget_usd,
+        )
+    elif args.follow_scoreboard:
+        plan = build_followup_plan_from_scoreboard(
+            scoreboard_path=args.follow_scoreboard,
+            artifact_dir=artifact_dir,
+            mode=args.mode,
+            allow_live_spend=args.allow_live_spend,
+            cycle_id=args.cycle_id,
+            repo_root=repo,
+            live_cost_cap_usd=args.live_cost_cap_usd,
+            concurrency=args.concurrency,
+            max_tool_iterations=args.max_tool_iterations,
+            brief_budget_usd=args.brief_budget_usd,
+        )
+    else:
+        plan = build_intelligence_cadence_plan(
+            mode=args.mode,
+            artifact_dir=artifact_dir,
+            allow_live_spend=args.allow_live_spend,
+            cycle_id=args.cycle_id,
+            scout_count=args.scouts,
+            ramp_policy=args.ramp_policy,
+            repo_root=repo,
+            live_cost_cap_usd=args.live_cost_cap_usd,
+            concurrency=args.concurrency,
+            max_tool_iterations=args.max_tool_iterations,
+            brief_budget_usd=args.brief_budget_usd,
+        )
     plan_path = write_cadence_plan(plan)
     print("TALIS_CADENCE_PLAN_JSON=" + str(plan_path))
     print("TALIS_CADENCE_PLAN=" + json.dumps({
@@ -74,6 +102,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--max-tool-iterations", type=int, default=1)
     parser.add_argument("--brief-budget-usd", type=float, default=5.0)
     parser.add_argument("--ramp-policy", default="")
+    parser.add_argument("--follow-report", default="", help="Compile the next plan from a prior cadence report control_decision.")
+    parser.add_argument("--follow-scoreboard", default="", help="Compile the next plan from a MarketEvolve scoreboard artifact.")
     parser.add_argument("--execute", action="store_true")
     parser.add_argument("--continue-on-failure", action="store_true")
     parser.add_argument("--allow-live-spend", action="store_true")

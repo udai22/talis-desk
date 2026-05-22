@@ -5,6 +5,8 @@ from pathlib import Path
 
 from talis_desk.cadence import (
     build_cadence_control_decision,
+    build_followup_plan_from_report,
+    build_followup_plan_from_scoreboard,
     build_intelligence_cadence_plan,
     write_cadence_plan,
 )
@@ -119,6 +121,8 @@ def test_cadence_control_decision_turns_open_experiments_into_paired_scout_step(
     assert decision["decision"] == "collect_experiment_evidence"
     assert decision["allowed_next_step"] == "paired_evolution_sentinel"
     assert decision["recommended_next_run"]["scouts"] == 32
+    assert decision["recommended_next_run"]["requires_allow_live_spend"] is True
+    assert "explicit_live_spend_gate_required_for_recommended_run" in decision["quality_flags"]
     assert "open_experiment_without_result_window" in decision["quality_flags"]
 
 
@@ -157,7 +161,89 @@ def test_cadence_control_decision_recommends_shadow_for_promoted_policy() -> Non
     assert decision["decision"] == "widen_shadow_evaluation"
     assert decision["recommended_next_run"]["mode"] == "full_pipeline"
     assert decision["recommended_next_run"]["scouts"] == 1000
+    assert decision["recommended_next_run"]["requires_allow_live_spend"] is True
     assert "explicit_live_spend_gate_required_for_recommended_run" in decision["quality_flags"]
+
+
+def test_followup_plan_compiles_prior_report_control_decision_without_opening_spend_gate(tmp_path: Path) -> None:
+    report_path = tmp_path / "report.json"
+    report_path.write_text(json.dumps({
+        "control_decision": {
+            "schema_version": "talis_cadence_control_decision_v1",
+            "decision": "collect_experiment_evidence",
+            "allowed_next_step": "paired_evolution_sentinel",
+            "source_scoreboard_id": "score_open",
+            "blocks_wider_spend": False,
+            "recommended_next_run": {
+                "mode": "sentinel_tick",
+                "scouts": 32,
+                "requires_allow_live_spend": True,
+                "primary_market_evolve_action": "run_scouts_before_deciding_experiment",
+            },
+        },
+    }))
+
+    plan = build_followup_plan_from_report(
+        report_path=report_path,
+        artifact_dir=tmp_path / "next",
+        cycle_id="cycle_follow",
+        allow_live_spend=False,
+    )
+
+    assert plan.mode == "sentinel_tick"
+    assert plan.cycle_id == "cycle_follow"
+    assert plan.allow_live_spend is False
+    assert _arg_after(plan.commands[0].command, "--n-scouts") == "32"
+    assert "--allow-live-spend" not in plan.commands[0].command
+    assert any("control_decision=collect_experiment_evidence" == note for note in plan.notes)
+
+
+def test_followup_plan_respects_control_block_even_if_spend_requested(tmp_path: Path) -> None:
+    report_path = tmp_path / "report.json"
+    report_path.write_text(json.dumps({
+        "control_decision": {
+            "schema_version": "talis_cadence_control_decision_v1",
+            "decision": "repair_before_scale",
+            "allowed_next_step": "tool_prompt_route_repair",
+            "source_scoreboard_id": "score_repair",
+            "blocks_wider_spend": True,
+            "recommended_next_run": {"mode": "sentinel_tick", "scouts": 8},
+        },
+    }))
+
+    plan = build_followup_plan_from_report(
+        report_path=report_path,
+        artifact_dir=tmp_path / "next",
+        allow_live_spend=True,
+    )
+
+    assert plan.allow_live_spend is False
+    assert _arg_after(plan.commands[0].command, "--n-scouts") == "8"
+    assert "--allow-live-spend" not in plan.commands[0].command
+    assert any(gate["id"] == "control_blocks_wider_spend" for gate in plan.gates)
+
+
+def test_followup_plan_from_scoreboard_builds_control_when_missing(tmp_path: Path) -> None:
+    scoreboard_path = tmp_path / "scoreboard.json"
+    scoreboard_path.write_text(json.dumps({
+        "id": "score_promoted",
+        "status": "evolving_promoted_policy",
+        "counts": {"open_experiments": 0, "candidate_programs": 0, "result_window": 2},
+        "cadence_readiness": {"eligible_for_shadow_schedule_review": False},
+        "hard_experiment_gate_summary": {"triggered": 0},
+        "evolution_memory": {"best_score_delta_recent": 0.18},
+    }))
+
+    plan = build_followup_plan_from_scoreboard(
+        scoreboard_path=scoreboard_path,
+        artifact_dir=tmp_path / "shadow",
+        allow_live_spend=False,
+    )
+
+    assert plan.mode == "full_pipeline"
+    assert plan.allow_live_spend is False
+    assert _arg_after(plan.commands[0].command, "--live-scouts") == "1000"
+    assert "--allow-live-spend" not in plan.commands[0].command
 
 
 def _arg_after(command: list[str], flag: str) -> str:

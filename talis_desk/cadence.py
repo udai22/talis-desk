@@ -281,6 +281,128 @@ def execute_cadence_plan(
     return report
 
 
+def build_followup_plan_from_control_decision(
+    *,
+    control_decision: dict[str, Any],
+    artifact_dir: str | Path,
+    allow_live_spend: bool = False,
+    cycle_id: str = "",
+    repo_root: str | Path | None = None,
+    live_cost_cap_usd: float | None = None,
+    concurrency: int | None = None,
+    max_tool_iterations: int = 1,
+    brief_budget_usd: float = 5.0,
+) -> CadenceRunPlan:
+    """Compile a cadence control decision into the next executable run plan."""
+    if not isinstance(control_decision, dict) or not control_decision:
+        raise ValueError("control_decision_required")
+    recommended = (
+        control_decision.get("recommended_next_run")
+        if isinstance(control_decision.get("recommended_next_run"), dict)
+        else {}
+    )
+    mode = _normalize_mode(str(recommended.get("mode") or "sentinel_tick"))
+    scouts = _positive_int(recommended.get("scouts"), default=24)
+    decision = str(control_decision.get("decision") or "unknown")
+    blocks_wider_spend = bool(control_decision.get("blocks_wider_spend"))
+    requested_spend = bool(allow_live_spend)
+    allow_for_plan = requested_spend and not blocks_wider_spend
+    safe_decision_slug = _slug(decision or "followup")
+    source_scoreboard = str(control_decision.get("source_scoreboard_id") or "")
+    now = datetime.now(timezone.utc)
+    follow_cycle = cycle_id or f"cadence_followup_{safe_decision_slug}_{now.strftime('%Y%m%dT%H%M%SZ')}"
+    plan = build_intelligence_cadence_plan(
+        mode=mode,
+        artifact_dir=artifact_dir,
+        allow_live_spend=allow_for_plan,
+        cycle_id=follow_cycle,
+        scout_count=scouts,
+        repo_root=repo_root,
+        live_cost_cap_usd=live_cost_cap_usd,
+        concurrency=concurrency,
+        max_tool_iterations=max_tool_iterations,
+        brief_budget_usd=brief_budget_usd,
+    )
+    plan.notes.extend([
+        "Compiled from MarketEvolve cadence_control; no operator should hand-translate JSON into commands.",
+        f"control_decision={decision}",
+        f"allowed_next_step={control_decision.get('allowed_next_step') or ''}",
+        f"source_scoreboard_id={source_scoreboard}",
+        f"requested_live_spend={requested_spend}",
+        f"live_spend_allowed_in_plan={allow_for_plan}",
+    ])
+    if blocks_wider_spend and requested_spend:
+        plan.gates.append({
+            "id": "control_blocks_wider_spend",
+            "status": "closed",
+            "requirement": "The MarketEvolve control decision blocked wider spend; repair/evidence gates must clear first.",
+        })
+    return plan
+
+
+def build_followup_plan_from_report(
+    *,
+    report_path: str | Path,
+    artifact_dir: str | Path,
+    allow_live_spend: bool = False,
+    cycle_id: str = "",
+    repo_root: str | Path | None = None,
+    live_cost_cap_usd: float | None = None,
+    concurrency: int | None = None,
+    max_tool_iterations: int = 1,
+    brief_budget_usd: float = 5.0,
+) -> CadenceRunPlan:
+    report = _read_json_file(Path(report_path).expanduser().resolve(), {})
+    control = _control_decision_from_payload(report)
+    if not control:
+        raise ValueError("report_missing_control_decision")
+    return build_followup_plan_from_control_decision(
+        control_decision=control,
+        artifact_dir=artifact_dir,
+        allow_live_spend=allow_live_spend,
+        cycle_id=cycle_id,
+        repo_root=repo_root,
+        live_cost_cap_usd=live_cost_cap_usd,
+        concurrency=concurrency,
+        max_tool_iterations=max_tool_iterations,
+        brief_budget_usd=brief_budget_usd,
+    )
+
+
+def build_followup_plan_from_scoreboard(
+    *,
+    scoreboard_path: str | Path,
+    artifact_dir: str | Path,
+    mode: str = "sentinel_tick",
+    allow_live_spend: bool = False,
+    cycle_id: str = "",
+    repo_root: str | Path | None = None,
+    live_cost_cap_usd: float | None = None,
+    concurrency: int | None = None,
+    max_tool_iterations: int = 1,
+    brief_budget_usd: float = 5.0,
+) -> CadenceRunPlan:
+    scoreboard = _read_json_file(Path(scoreboard_path).expanduser().resolve(), {})
+    control = _control_decision_from_payload(scoreboard)
+    if not control:
+        control = build_cadence_control_decision(
+            scoreboard=scoreboard,
+            mode=mode,
+            allow_live_spend=allow_live_spend,
+        )
+    return build_followup_plan_from_control_decision(
+        control_decision=control,
+        artifact_dir=artifact_dir,
+        allow_live_spend=allow_live_spend,
+        cycle_id=cycle_id,
+        repo_root=repo_root,
+        live_cost_cap_usd=live_cost_cap_usd,
+        concurrency=concurrency,
+        max_tool_iterations=max_tool_iterations,
+        brief_budget_usd=brief_budget_usd,
+    )
+
+
 def build_cadence_control_decision(
     *,
     scoreboard: dict[str, Any],
@@ -373,7 +495,14 @@ def build_cadence_control_decision(
         recommended_scouts = max(16, min(96, candidate_count * 16 or 24))
         why = "Candidate programs exist but need matched control/candidate evidence."
 
+    requires_live_spend = _control_decision_requires_live_spend(
+        decision=decision,
+        recommended_mode=recommended_mode,
+        recommended_scouts=recommended_scouts,
+    )
     spend_gate = "open" if allow_live_spend and not blocks_wider_spend else "closed"
+    if requires_live_spend and not allow_live_spend:
+        flags.append("explicit_live_spend_gate_required_for_recommended_run")
     if recommended_mode == "full_pipeline" and not allow_live_spend:
         flags.append("explicit_live_spend_gate_required_for_recommended_run")
     return {
@@ -383,7 +512,7 @@ def build_cadence_control_decision(
         "recommended_next_run": {
             "mode": recommended_mode,
             "scouts": recommended_scouts,
-            "requires_allow_live_spend": recommended_mode == "full_pipeline" or recommended_scouts > 64,
+            "requires_allow_live_spend": requires_live_spend,
             "primary_market_evolve_action": primary_action,
         },
         "spend_gate": spend_gate,
@@ -421,6 +550,54 @@ def _read_json_file(path: Path, default: Any) -> Any:
     except Exception:
         return default
     return default
+
+
+def _control_decision_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {}
+    direct = payload.get("control_decision")
+    if isinstance(direct, dict) and direct.get("schema_version") == "talis_cadence_control_decision_v1":
+        return direct
+    nested = payload.get("cadence_control")
+    if isinstance(nested, dict) and nested.get("schema_version") == "talis_cadence_control_decision_v1":
+        return nested
+    return {}
+
+
+def _control_decision_requires_live_spend(
+    *,
+    decision: str,
+    recommended_mode: str,
+    recommended_scouts: int,
+) -> bool:
+    if recommended_mode == "full_pipeline":
+        return True
+    if recommended_scouts > 64:
+        return True
+    return decision in {
+        "collect_experiment_evidence",
+        "continue_candidate_experiment",
+        "widen_shadow_evaluation",
+        "request_shadow_schedule_review",
+    }
+
+
+def _positive_int(raw: Any, *, default: int) -> int:
+    try:
+        value = int(raw)
+    except Exception:
+        value = int(default)
+    return max(1, value)
+
+
+def _slug(raw: str) -> str:
+    out = []
+    for ch in str(raw).lower():
+        if ch.isalnum():
+            out.append(ch)
+        elif ch in {"_", "-", " "}:
+            out.append("_")
+    return "".join(out).strip("_")[:80] or "control"
 
 
 def _scoreboard_report_summary(scoreboard: dict[str, Any]) -> dict[str, Any]:
@@ -680,6 +857,9 @@ __all__ = [
     "CadenceCommand",
     "CadenceRunPlan",
     "build_cadence_control_decision",
+    "build_followup_plan_from_control_decision",
+    "build_followup_plan_from_report",
+    "build_followup_plan_from_scoreboard",
     "build_intelligence_cadence_plan",
     "default_intelligence_cadence_policy",
     "execute_cadence_plan",
