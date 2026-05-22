@@ -2046,6 +2046,34 @@ async def _run_one_scout(
                 out.quality_flags.append("calendar_json_retry")
         except Exception as e:
             logger.info("critical calendar scout JSON retry failed: %s", e)
+    if not isinstance(parsed, dict) and not calendar_seed and cost_counter.get("total", 0.0) < cost_cap:
+        retry_model_name = fallback or model
+        try:
+            retry = await _chat(
+                retry_model_name,
+                system_prompt,
+                user_prompt + "\n\nYour previous answer was not parseable JSON. "
+                "Return only the strict JSON object requested above. No markdown, no prose.",
+                max_tokens=SCOUT_MAX_TOKENS,
+                fallback=None,
+            )
+            retry_text = (retry.get("text") or "").strip()
+            retry_parsed = _extract_first_json(retry_text)
+            retry_model = retry.get("model_used", retry_model_name)
+            retry_cost = _flash_cost_estimate(retry_model)
+            out.cost_usd += retry_cost
+            cost_counter["total"] = cost_counter.get("total", 0.0) + retry_cost
+            out.quality_flags.append("scout_json_retry")
+            if isinstance(retry_parsed, dict):
+                parsed = retry_parsed
+                out.model_used = retry_model
+                out.provider = retry.get("provider", out.provider)
+                out.quality_flags.append("scout_json_retry_success")
+            else:
+                out.quality_flags.append("scout_json_retry_unparseable")
+        except Exception as e:
+            out.quality_flags.append(f"scout_json_retry_failed:{type(e).__name__}")
+            logger.info("scout %s: JSON retry failed: %s", scout_id, e)
     if not isinstance(parsed, dict):
         out.error = "scout_json_unparseable"
         out.quality_flags.append("scout_json_unparseable")
@@ -2082,7 +2110,15 @@ async def _run_one_scout(
     out.rationale_brief = (parsed.get("rationale_brief") or "").strip()[:200]
     sugg = parsed.get("suggested_tools") or []
     if isinstance(sugg, list):
-        out.suggested_tools = [str(x) for x in sugg[:6]]
+        allowed_suggestions = set(_prompt_tool_candidates(seed, tool_evidence))
+        filtered = [
+            str(x)
+            for x in sugg
+            if isinstance(x, str) and str(x) in allowed_suggestions
+        ]
+        if len(filtered) != len([x for x in sugg if isinstance(x, str)]):
+            out.quality_flags.append("suggested_tools_filtered")
+        out.suggested_tools = filtered[:6]
     out.tool_requests = _normalize_tool_requests(
         parsed.get("tool_requests"),
         allowed_tools=_prompt_tool_candidates(seed, tool_evidence),

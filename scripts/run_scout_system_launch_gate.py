@@ -267,6 +267,7 @@ def build_launch_gate_report(
             "scale_decision": live_report.get("scale_decision") or {},
             "metrics": _live_summary(live_report),
             "prompt_preview": _prompt_preview_summary(live_report),
+            "slice_preview": _slice_preview_summary(live_report),
         },
         "tournament": {
             "decision": tournament_decision.get("decision"),
@@ -285,6 +286,7 @@ def render_launch_gate_markdown(report: dict[str, Any]) -> str:
     live = report.get("live") if isinstance(report.get("live"), dict) else {}
     tournament = report.get("tournament") if isinstance(report.get("tournament"), dict) else {}
     prompt_preview = live.get("prompt_preview") if isinstance(live.get("prompt_preview"), dict) else {}
+    slice_preview = live.get("slice_preview") if isinstance(live.get("slice_preview"), dict) else {}
     lines = [
         "# Scout System Launch Gate",
         "",
@@ -307,6 +309,9 @@ def render_launch_gate_markdown(report: dict[str, Any]) -> str:
         f"- first_scout_cell: `{_preview_cell(prompt_preview)}`",
         f"- first_scout_prompt_variant: `{prompt_preview.get('prompt_variant')}`",
         f"- first_scout_tool_candidates: `{prompt_preview.get('tool_candidate_count')}`",
+        f"- planned_slice_scouts: `{slice_preview.get('n_scouts') or 0}`",
+        f"- planned_slice_unique_cells: `{slice_preview.get('unique_cell_count') or 0}`",
+        f"- planned_slice_market_evolve_arms: `{_inline_counts(slice_preview.get('market_evolve_arm_counts') or {})}`",
         "",
         "## Tournament",
         "",
@@ -359,10 +364,15 @@ def render_launch_gate_html(report: dict[str, Any]) -> str:
     prompt_preview = live.get("prompt_preview") if isinstance(live.get("prompt_preview"), dict) else {}
     tool_atlas = live_preflight.get("tool_atlas") if isinstance(live_preflight.get("tool_atlas"), dict) else {}
     universe = live_preflight.get("market_universe") if isinstance(live_preflight.get("market_universe"), dict) else {}
+    slice_preview = live.get("slice_preview") if isinstance(live.get("slice_preview"), dict) else {}
     status = str(decision.get("status") or "unknown")
     hero = _launch_hero_copy(status)
     proof_rows = "".join(_proof_card(step) for step in report.get("proof_ladder") or [])
     stage_rows = "".join(_stage_card(stage) for stage in report.get("stages") or [])
+    slice_rows = "".join(_slice_card(row) for row in (slice_preview.get("seed_rows") or [])[:120])
+    if not slice_rows:
+        slice_rows = '<div class="slice-card"><span>No slice captured</span><h3>Blocked</h3><p>The live route sheet was not written.</p></div>'
+    slice_chips = _distribution_chips(slice_preview)
     tool_rows = "".join(
         f"<li><span>{html.escape(str(uri))}</span><b>allowed</b></li>"
         for uri in (prompt_preview.get("allowed_tool_candidates") or [])[:8]
@@ -426,6 +436,13 @@ def render_launch_gate_html(report: dict[str, Any]) -> str:
     .metric span, .card span, .stage span {{ display: block; color: var(--muted); font-size: 12px; font-weight: 760; text-transform: uppercase; }}
     .metric strong {{ display: block; margin-top: 8px; font-size: 28px; line-height: 1; }}
     .proof .card {{ scroll-snap-align: start; min-height: 218px; }}
+    .chips {{ display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }}
+    .chip {{ border: 1px solid var(--line); border-radius: 999px; padding: 7px 10px; color: var(--muted); background: rgba(255,255,255,.045); font-size: 13px; }}
+    .chip b {{ color: var(--ink); }}
+    .slice-track {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; margin-top: 14px; }}
+    .slice-card {{ min-height: 190px; padding: 14px; background: rgba(255,255,255,.068); border: 1px solid var(--line); border-radius: 8px; min-width: 0; overflow-wrap: anywhere; }}
+    .slice-card h3 {{ font-size: 19px; }}
+    .slice-card small {{ color: var(--muted); display: block; margin-top: 10px; }}
     .pass {{ color: var(--green); }}
     .blocked {{ color: var(--amber); }}
     .fail {{ color: var(--red); }}
@@ -441,6 +458,8 @@ def render_launch_gate_html(report: dict[str, Any]) -> str:
       .hero-grid, .metrics, .two {{ grid-template-columns: 1fr; }}
       .proof {{ display: flex; }}
       .proof .card {{ flex: 0 0 84%; }}
+      .slice-track {{ display: flex; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 12px; }}
+      .slice-card {{ flex: 0 0 84%; scroll-snap-align: start; }}
       p {{ font-size: 17px; }}
     }}
   </style>
@@ -477,6 +496,21 @@ def render_launch_gate_html(report: dict[str, Any]) -> str:
       <div class="metric"><span>Tools</span><strong>{html.escape(str(tool_atlas.get("tools") or 0))}</strong></div>
       <div class="metric"><span>Market entities</span><strong>{html.escape(str(universe.get("entity_count") or 0))}</strong></div>
     </div>
+  </section>
+
+  <section>
+    <h2>Full Canary Slice Preview</h2>
+    <p>This is the route sheet before spend. Each tile is one planned scout cell: what it sees, how it is prompted, which MarketEvolve arm it belongs to, and how much tool surface it can touch.</p>
+    <div class="grid metrics">
+      <div class="metric"><span>Planned scouts</span><strong>{html.escape(str(slice_preview.get("n_scouts") or 0))}</strong></div>
+      <div class="metric"><span>Unique cells</span><strong>{html.escape(str(slice_preview.get("unique_cell_count") or 0))}</strong></div>
+      <div class="metric"><span>Duplicates</span><strong>{html.escape(str(slice_preview.get("duplicate_cell_count") or 0))}</strong></div>
+      <div class="metric"><span>Tool avg</span><strong>{html.escape(str((slice_preview.get("tool_candidate_count_stats") or {}).get("avg") or 0))}</strong></div>
+      <div class="metric"><span>Prompt variants</span><strong>{html.escape(str(len(slice_preview.get("prompt_variant_counts") or {})))}</strong></div>
+      <div class="metric"><span>ME arms</span><strong>{html.escape(str(len(slice_preview.get("market_evolve_arm_counts") or {})))}</strong></div>
+    </div>
+    <div class="chips">{slice_chips}</div>
+    <div class="slice-track">{slice_rows}</div>
   </section>
 
   <section class="grid two">
@@ -656,7 +690,7 @@ def _launch_decision(
             "next_command": (
                 "PYTHONPATH=. python scripts/run_scout_system_launch_gate.py "
                 f"--allow-live-spend --live-scouts {next_live_scouts} "
-                "--live-cost-cap-usd 0.10 --live-concurrency 1"
+                "--live-cost-cap-usd 0.10 --live-concurrency 1 --max-tool-iterations 1"
             ),
         }
     if not tournament_decision:
@@ -686,7 +720,7 @@ def _launch_decision(
             "reason": "The live tournament passed distribution gates. A capped 1,000-scout ramp is allowed, not scheduled production.",
             "next_command": (
                 "PYTHONPATH=. python scripts/run_scout_system_launch_gate.py "
-                "--allow-live-spend --live-scouts 1000 --live-cost-cap-usd 5.00 --live-concurrency 8"
+                "--allow-live-spend --live-scouts 1000 --live-cost-cap-usd 5.00 --live-concurrency 8 --max-tool-iterations 1"
             ),
         }
     if tournament_decision.get("ready_for_live_100"):
@@ -698,7 +732,7 @@ def _launch_decision(
             "reason": "The live canary passed tournament gates. A capped 100-scout ramp is allowed.",
             "next_command": (
                 "PYTHONPATH=. python scripts/run_scout_system_launch_gate.py "
-                "--allow-live-spend --live-scouts 100 --live-cost-cap-usd 1.00 --live-concurrency 4"
+                "--allow-live-spend --live-scouts 100 --live-cost-cap-usd 1.00 --live-concurrency 4 --max-tool-iterations 1"
             ),
         }
     return {
@@ -818,6 +852,79 @@ def _prompt_preview_summary(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _slice_preview_summary(report: dict[str, Any]) -> dict[str, Any]:
+    preview = report.get("slice_preview") if isinstance(report.get("slice_preview"), dict) else {}
+    distributions = preview.get("distributions") if isinstance(preview.get("distributions"), dict) else {}
+    rows = [
+        row
+        for row in (preview.get("seed_rows") or [])
+        if isinstance(row, dict)
+    ]
+    return {
+        "status": preview.get("status"),
+        "cycle_id": preview.get("cycle_id"),
+        "n_scouts": preview.get("n_scouts") or len(rows),
+        "unique_cell_count": preview.get("unique_cell_count") or 0,
+        "duplicate_cell_count": preview.get("duplicate_cell_count") or 0,
+        "tool_candidate_count_stats": preview.get("tool_candidate_count_stats") or {},
+        "asset_class_counts": distributions.get("asset_class") or {},
+        "horizon_counts": distributions.get("horizon") or {},
+        "lens_counts": distributions.get("lens") or {},
+        "bias_mode_counts": distributions.get("bias_mode") or {},
+        "theme_counts": distributions.get("theme") or {},
+        "prompt_variant_counts": distributions.get("prompt_variant") or {},
+        "market_evolve_arm_counts": distributions.get("market_evolve_arm") or {},
+        "source_family_counts": distributions.get("source_family") or {},
+        "seed_rows": rows[:120],
+        "seed_row_count": len(rows),
+        "artifacts": preview.get("artifacts") or {},
+    }
+
+
+def _inline_counts(counts: Any, *, limit: int = 6) -> str:
+    if not isinstance(counts, dict) or not counts:
+        return "none"
+    items = sorted(counts.items(), key=lambda kv: (-int(kv[1] or 0), str(kv[0])))[:limit]
+    return " / ".join(f"{key} {value}" for key, value in items)
+
+
+def _distribution_chips(slice_preview: dict[str, Any]) -> str:
+    chips: list[str] = []
+    for label, key in (
+        ("assets", "asset_class_counts"),
+        ("horizons", "horizon_counts"),
+        ("lenses", "lens_counts"),
+        ("arms", "market_evolve_arm_counts"),
+        ("sources", "source_family_counts"),
+    ):
+        chips.append(
+            f'<span class="chip">{html.escape(label)} <b>{html.escape(_inline_counts(slice_preview.get(key) or {}, limit=4))}</b></span>'
+        )
+    return "".join(chips) or '<span class="chip">No slice distribution captured</span>'
+
+
+def _slice_card(row: dict[str, Any]) -> str:
+    market_evolve = row.get("market_evolve") if isinstance(row.get("market_evolve"), dict) else {}
+    cell = " / ".join([
+        str(row.get("entity") or "?"),
+        str(row.get("horizon") or "?"),
+        str(row.get("lens") or "?"),
+        str(row.get("bias_mode") or "?"),
+    ])
+    families = ", ".join(str(x) for x in (row.get("source_families") or [])[:4]) or "tool atlas"
+    theme = str(row.get("theme") or "unassigned")
+    return (
+        '<div class="slice-card">'
+        f'<span>Scout {html.escape(str(row.get("index", 0)))}</span>'
+        f'<h3>{html.escape(cell)}</h3>'
+        f'<p>{html.escape(theme)}</p>'
+        f'<small>Prompt: {html.escape(str(row.get("prompt_variant") or "unknown"))}</small>'
+        f'<small>MarketEvolve: {html.escape(str(market_evolve.get("experiment_arm") or "active"))}</small>'
+        f'<small>Tools: {html.escape(str(row.get("tool_candidate_count") or 0))} · {html.escape(families)}</small>'
+        '</div>'
+    )
+
+
 def _run_stage(name: str, command: list[str], *, repo: Path) -> StageResult:
     env = os.environ.copy()
     env["PYTHONPATH"] = _prepend_pythonpath(env.get("PYTHONPATH", ""), [str(repo), str(repo / "talis_tic")])
@@ -903,7 +1010,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--live-concurrency", type=int, default=1)
     parser.add_argument("--live-cost-cap-usd", type=float, default=0.10)
     parser.add_argument("--provider-timeout-s", type=float, default=45.0)
-    parser.add_argument("--max-tool-iterations", type=int, default=0)
+    parser.add_argument("--max-tool-iterations", type=int, default=1)
     parser.add_argument("--prompt-variant", default="flash_temporal_v4")
     parser.add_argument("--allow-live-spend", action="store_true")
     return parser.parse_args()

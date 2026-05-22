@@ -19,6 +19,7 @@ import json
 import os
 import tempfile
 import time
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -70,6 +71,7 @@ from scripts.run_100_scout_readiness_slice import (
     _prepare_seed,
     _readiness_trace,
     _seed_payload,
+    _source_family,
     _supplemental_seeds,
     _trim_preserving_pairs,
     _write_readiness_artifacts,
@@ -140,6 +142,11 @@ def main() -> int:
             prompt_output_dir=prompt_output_dir,
             seeds=seeds,
         )
+        slice_preview = _write_live_slice_preview(
+            prompt_output_dir=prompt_output_dir,
+            cycle_id=cycle_id,
+            seeds=seeds,
+        )
 
         if not args.allow_live_spend:
             report = _blocked_report(
@@ -150,6 +157,7 @@ def main() -> int:
                 prompt_output_dir=prompt_output_dir,
                 seed_path=seed_path,
                 prompt_preview=prompt_preview,
+                slice_preview=slice_preview,
                 preflight=preflight,
                 reason="explicit_live_spend_flag_missing",
                 elapsed_s=time.perf_counter() - started,
@@ -167,6 +175,7 @@ def main() -> int:
                 prompt_output_dir=prompt_output_dir,
                 seed_path=seed_path,
                 prompt_preview=prompt_preview,
+                slice_preview=slice_preview,
                 preflight=preflight,
                 reason="provider_import_failed",
                 elapsed_s=time.perf_counter() - started,
@@ -320,11 +329,13 @@ def main() -> int:
             "max_tool_iterations": args.max_tool_iterations,
             "preflight": preflight,
             "prompt_preview": prompt_preview,
+            "slice_preview": slice_preview,
             "metrics": metrics,
             "verdict": verdict,
             "artifacts": {
                 "seeds": str(seed_path),
                 "outputs": str(outputs_path),
+                "slice_preview": str(prompt_output_dir / "live_scout_slice_preview.json"),
             },
             "transcript_summary": transcript_summary,
             "scale_decision": _scale_decision(verdict, n_scouts=args.n_scouts),
@@ -375,6 +386,11 @@ def _prepare_live_seed(seed: SeedCell, *, args: argparse.Namespace) -> SeedCell:
     if args.prompt_variant:
         payload["prompt_variant"] = args.prompt_variant
     payload["max_tool_iterations"] = max(0, int(args.max_tool_iterations or 0))
+    payload["prompt_contract_pressure"] = "strict"
+    payload["prompt_min_information_strings"] = max(2, int(payload.get("prompt_min_information_strings") or 0))
+    payload["prompt_require_mechanism"] = True
+    payload["prompt_require_kill_signal"] = True
+    payload["prompt_require_evidence_refs"] = True
     seed.payload = payload
     return seed
 
@@ -385,6 +401,11 @@ def _force_live_seed_runtime_options(seeds: list[SeedCell], *, args: argparse.Na
         if args.prompt_variant:
             payload["prompt_variant"] = args.prompt_variant
         payload["max_tool_iterations"] = max(0, int(args.max_tool_iterations or 0))
+        payload["prompt_contract_pressure"] = "strict"
+        payload["prompt_min_information_strings"] = max(2, int(payload.get("prompt_min_information_strings") or 0))
+        payload["prompt_require_mechanism"] = True
+        payload["prompt_require_kill_signal"] = True
+        payload["prompt_require_evidence_refs"] = True
         seed.payload = payload
 
 
@@ -611,6 +632,123 @@ def _write_live_prompt_preview(
     return preview
 
 
+def _write_live_slice_preview(
+    *,
+    prompt_output_dir: Path,
+    cycle_id: str,
+    seeds: list[SeedCell],
+) -> dict[str, Any]:
+    rows: list[dict[str, Any]] = []
+    cell_counts: Counter[str] = Counter()
+    distributions: dict[str, Counter[str]] = {
+        "asset_class": Counter(),
+        "horizon": Counter(),
+        "lens": Counter(),
+        "bias_mode": Counter(),
+        "theme": Counter(),
+        "prompt_variant": Counter(),
+        "market_evolve_arm": Counter(),
+        "source_family": Counter(),
+    }
+    tool_counts: list[int] = []
+    for idx, seed in enumerate(seeds):
+        payload = dict(seed.payload or {})
+        tool_candidates = [
+            str(x)
+            for x in (payload.get("tool_candidates") or [])
+            if str(x).strip()
+        ]
+        source_families = sorted({_source_family(uri) for uri in tool_candidates})
+        for family in source_families:
+            distributions["source_family"][family] += 1
+        prompt_variant = _prompt_variant_for_seed(seed)
+        arm = str(payload.get("market_evolve_experiment_arm") or "active")
+        asset_class = str(_seed_payload(seed).get("asset_class") or "unknown")
+        theme = str(seed.theme or "unassigned")
+        cell_key = "|".join([
+            str(seed.entity),
+            str(seed.horizon),
+            str(seed.lens),
+            str(seed.bias_mode),
+            theme,
+        ])
+        cell_counts[cell_key] += 1
+        for key, value in (
+            ("asset_class", asset_class),
+            ("horizon", seed.horizon),
+            ("lens", seed.lens),
+            ("bias_mode", seed.bias_mode),
+            ("theme", theme),
+            ("prompt_variant", prompt_variant),
+            ("market_evolve_arm", arm),
+        ):
+            distributions[key][str(value or "unknown")] += 1
+        tool_counts.append(len(tool_candidates))
+        rows.append({
+            "index": idx,
+            "seed_id": seed.seed_id,
+            "entity": seed.entity,
+            "asset_class": asset_class,
+            "horizon": seed.horizon,
+            "lens": seed.lens,
+            "bias_mode": seed.bias_mode,
+            "theme": seed.theme,
+            "cell_key": cell_key,
+            "weight": seed.weight,
+            "coverage_penalty": seed.coverage_penalty,
+            "frontier_boost": seed.frontier_boost,
+            "prompt_variant": prompt_variant,
+            "prompt_contract_pressure": payload.get("prompt_contract_pressure"),
+            "minimum_information_strings": payload.get("prompt_min_information_strings"),
+            "max_evidence_tools": payload.get("max_evidence_tools"),
+            "max_tool_iterations": payload.get("max_tool_iterations"),
+            "tool_candidate_count": len(tool_candidates),
+            "allowed_tool_candidates_head": tool_candidates[:8],
+            "source_families": source_families,
+            "source_family_targets": [
+                str(x)
+                for x in (payload.get("source_family_targets") or [])
+                if str(x).strip()
+            ],
+            "market_evolve": {
+                "program_id": payload.get("market_evolve_program_id"),
+                "program_name": payload.get("market_evolve_program_name"),
+                "generation": payload.get("market_evolve_generation"),
+                "experiment_id": payload.get("market_evolve_experiment_id"),
+                "experiment_arm": payload.get("market_evolve_experiment_arm"),
+                "pair_id": payload.get("market_evolve_pair_id"),
+                "applied": bool(payload.get("market_evolve_applied")),
+            },
+        })
+    duplicate_cells = {
+        key: count
+        for key, count in cell_counts.items()
+        if count > 1
+    }
+    preview = {
+        "schema_version": "talis_live_scout_slice_preview_v1",
+        "status": "ready" if rows else "no_seed_available",
+        "cycle_id": cycle_id,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "n_scouts": len(rows),
+        "unique_cell_count": len(cell_counts),
+        "duplicate_cell_count": sum(count - 1 for count in cell_counts.values() if count > 1),
+        "duplicate_cells": duplicate_cells,
+        "tool_candidate_count_stats": _int_stats(tool_counts),
+        "distributions": {
+            key: dict(counter.most_common())
+            for key, counter in distributions.items()
+        },
+        "seed_rows": rows,
+        "artifacts": {
+            "json": str(prompt_output_dir / "live_scout_slice_preview.json"),
+            "seeds": str(prompt_output_dir / "live_scout_canary_seeds.json"),
+        },
+    }
+    _write_json(prompt_output_dir / "live_scout_slice_preview.json", preview)
+    return preview
+
+
 def _live_canary_verdict(
     metrics: dict[str, Any],
     *,
@@ -693,6 +831,7 @@ def _blocked_report(
     prompt_output_dir: Path,
     seed_path: Path,
     prompt_preview: dict[str, Any],
+    slice_preview: dict[str, Any],
     preflight: dict[str, Any],
     reason: str,
     elapsed_s: float,
@@ -723,6 +862,7 @@ def _blocked_report(
         "max_tool_iterations": args.max_tool_iterations,
         "preflight": preflight,
         "prompt_preview": prompt_preview,
+        "slice_preview": slice_preview,
         "verdict": {
             "status": "blocked",
             "reason": reason,
@@ -736,6 +876,7 @@ def _blocked_report(
         "artifacts": {
             "seeds": str(seed_path),
             "prompt_preview": str(prompt_output_dir / "live_scout_prompt_preview.json"),
+            "slice_preview": str(prompt_output_dir / "live_scout_slice_preview.json"),
             "preview_system_prompt": str(prompt_output_dir / "live_scout_preview_system_prompt.md"),
             "preview_user_prompt": str(prompt_output_dir / "live_scout_preview_user_prompt.md"),
         },
@@ -867,6 +1008,16 @@ def _to_float(raw: Any, *, default: float = 0.0) -> float:
         return float(raw)
     except Exception:
         return default
+
+
+def _int_stats(values: list[int]) -> dict[str, Any]:
+    if not values:
+        return {"min": 0, "max": 0, "avg": 0.0}
+    return {
+        "min": min(values),
+        "max": max(values),
+        "avg": round(sum(values) / max(1, len(values)), 3),
+    }
 
 
 def _extract_first_json(text: str) -> Any:

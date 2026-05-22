@@ -1,15 +1,15 @@
 {
-  "artifact_dir": "/private/tmp/talis-launch-gate-preview-pages-20260522/deterministic_100",
+  "artifact_dir": "/private/tmp/talis-live100-20260522/deterministic_100",
   "artifacts": {
-    "outputs": "/private/tmp/talis-launch-gate-preview-pages-20260522/deterministic_100/prompt_outputs/100_scout_outputs.json",
-    "seeds": "/private/tmp/talis-launch-gate-preview-pages-20260522/deterministic_100/prompt_outputs/100_scout_seeds.json"
+    "outputs": "/private/tmp/talis-live100-20260522/deterministic_100/prompt_outputs/100_scout_outputs.json",
+    "seeds": "/private/tmp/talis-live100-20260522/deterministic_100/prompt_outputs/100_scout_seeds.json"
   },
   "concurrency": 20,
   "cost_cap_usd": 1.0,
-  "cycle_id": "cycle_launch_gate_preview_pages_20260522_deterministic_100",
-  "db_path": "/private/tmp/talis-launch-gate-preview-pages-20260522/deterministic_100/desk-100-scout.db",
+  "cycle_id": "cycle_live100_20260522_deterministic_100",
+  "db_path": "/private/tmp/talis-live100-20260522/deterministic_100/desk-100-scout.db",
   "fallback": "anthropic:claude-haiku-4-5",
-  "generated_at": "2026-05-22T15:26:45.286362+00:00",
+  "generated_at": "2026-05-22T15:42:42.486734+00:00",
   "metrics": {
     "atlas": {
       "sources": 0,
@@ -127,8 +127,8 @@
       "suggested_seed_cells": 48,
       "valid_cell_count": 132048
     },
-    "cycle_id": "cycle_launch_gate_preview_pages_20260522_deterministic_100",
-    "elapsed_s": 2.419,
+    "cycle_id": "cycle_live100_20260522_deterministic_100",
+    "elapsed_s": 2.442,
     "geometry": {
       "cell_count": 80,
       "routing_queue_count": 24,
@@ -543,7 +543,7 @@
           "y_frontier_pressure": 0.7139,
           "z_tension": 0.28
         },
-        "cycle_id": "cycle_launch_gate_preview_pages_20260522_deterministic_100",
+        "cycle_id": "cycle_live100_20260522_deterministic_100",
         "entity": "XPL",
         "evidence_ref_count": 10,
         "horizon": "1q",
@@ -601,7 +601,7 @@
       "confluences": 12,
       "promoted_hypotheses": 8,
       "string_count": 337,
-      "synthesis_id": "isyn_cc9293d264b1",
+      "synthesis_id": "isyn_fa376857fd97",
       "tensions": 0
     },
     "market_evolve": {
@@ -802,7 +802,7 @@
     "recommendation": "Run a 10-scout live-provider canary with the same seed packet before a 1,000 scout run.",
     "why": "This harness proves orchestration and storage, not provider quality or live data freshness."
   },
-  "prompt_output_dir": "/private/tmp/talis-launch-gate-preview-pages-20260522/deterministic_100/prompt_outputs",
+  "prompt_output_dir": "/private/tmp/talis-live100-20260522/deterministic_100/prompt_outputs",
   "readiness": {
     "failed_gates": [],
     "gates": {

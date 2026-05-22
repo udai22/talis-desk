@@ -51,6 +51,9 @@ def test_launch_gate_preflight_blocks_before_live_spend_but_allows_authorized_ca
     assert "86" in html
     assert "First Live Scout Preview" in html
     assert "HYPE / intraday / on_chain / frontier" in html
+    assert "Full Canary Slice Preview" in html
+    assert "HYPE / intraday / on_chain / frontier" in html
+    assert "MarketEvolve: control" in html
     assert "tic://tool/builtin/query_events_recent@v1" in html
     assert "launch_gate_report.json" in html
 
@@ -183,6 +186,54 @@ def _live_preflight_report():
             "user_prompt": "entity=HYPE\nallowed_tool_candidates:\n  tic://tool/builtin/query_events_recent@v1",
             "system_prompt_chars": 49,
             "user_prompt_chars": 86,
+        },
+        "slice_preview": {
+            "schema_version": "talis_live_scout_slice_preview_v1",
+            "status": "ready",
+            "n_scouts": 2,
+            "unique_cell_count": 2,
+            "duplicate_cell_count": 0,
+            "tool_candidate_count_stats": {"min": 2, "max": 3, "avg": 2.5},
+            "distributions": {
+                "asset_class": {"hyperliquid_perp": 2},
+                "horizon": {"intraday": 1, "1d": 1},
+                "lens": {"on_chain": 1, "microstructure": 1},
+                "bias_mode": {"frontier": 2},
+                "theme": {"validator_unstake": 1, "node_intelligence": 1},
+                "prompt_variant": {"flash_temporal_v4": 2},
+                "market_evolve_arm": {"control": 1, "candidate": 1},
+                "source_family": {"hydromancer": 2, "our_node": 2},
+            },
+            "seed_rows": [
+                {
+                    "index": 0,
+                    "seed_id": "seed_live_0",
+                    "entity": "HYPE",
+                    "asset_class": "hyperliquid_perp",
+                    "horizon": "intraday",
+                    "lens": "on_chain",
+                    "bias_mode": "frontier",
+                    "theme": "validator_unstake",
+                    "prompt_variant": "flash_temporal_v4",
+                    "tool_candidate_count": 2,
+                    "source_families": ["hydromancer", "our_node"],
+                    "market_evolve": {"experiment_arm": "control"},
+                },
+                {
+                    "index": 1,
+                    "seed_id": "seed_live_1",
+                    "entity": "kFLOKI",
+                    "asset_class": "hyperliquid_perp",
+                    "horizon": "1d",
+                    "lens": "microstructure",
+                    "bias_mode": "frontier",
+                    "theme": "node_intelligence",
+                    "prompt_variant": "flash_temporal_v4",
+                    "tool_candidate_count": 3,
+                    "source_families": ["hydromancer", "our_node"],
+                    "market_evolve": {"experiment_arm": "candidate"},
+                },
+            ],
         },
     }
 
