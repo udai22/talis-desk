@@ -20,6 +20,7 @@ from .universe import (
 from .self_healing import (
     MarketMapWorkOrder,
     build_market_map_self_healing_plan,
+    execute_market_map_self_healing_tasks,
     post_market_map_self_healing_work_orders,
     render_market_map_self_healing_markdown,
 )
@@ -50,6 +51,7 @@ __all__ = [
     "render_market_map_governor_markdown",
     "MarketMapWorkOrder",
     "build_market_map_self_healing_plan",
+    "execute_market_map_self_healing_tasks",
     "post_market_map_self_healing_work_orders",
     "render_market_map_self_healing_markdown",
     "build_coverage_gap_manifest",

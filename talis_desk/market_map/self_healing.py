@@ -272,6 +272,173 @@ def post_market_map_self_healing_work_orders(
     }
 
 
+def execute_market_map_self_healing_tasks(
+    *,
+    cycle_id: str,
+    conn: sqlite3.Connection | None = None,
+    limit: int = 8,
+    agent_id: str = "market_map_self_healing_worker",
+    specialist_id: str = "market_map_repair",
+) -> dict[str, Any]:
+    """Claim and execute posted market-map repair contracts.
+
+    Route work reads the alpha-geometry field through the normal read-only
+    harness. Tool/source/context work becomes concrete analysis-tool proposals
+    or learned-tool promotion reports. The worker therefore moves the map
+    rather than leaving repair orders as inert dashboard text.
+    """
+    from ..agent_harness import HarnessPolicy, dispatch_harness_tool
+    from ..coordination import claim_task, complete_task, fail_task, start_task
+    from ..tool_atlas import AgentContext
+
+    db = conn or get_desk_store().conn
+    rows = _fetch_posted_self_healing_tasks(conn=db, cycle_id=cycle_id, limit=limit)
+    policy = HarnessPolicy(evidence_hard_cap=4, max_retries=0, retry_backoff_s=0.0)
+    executions: list[dict[str, Any]] = []
+    for row in rows:
+        task = _row_dict(row)
+        task_id = str(task.get("id") or "")
+        payload = _json_load(task.get("payload"), {})
+        input_schema = _json_load(task.get("input_schema_json"), {})
+        allowed_tools = _json_load(task.get("allowed_tools_json"), [])
+        promotion_criteria = _json_load(task.get("promotion_criteria_json"), {})
+        kill_criteria = _json_load(task.get("kill_criteria_json"), {})
+        execution: dict[str, Any] = {
+            "task_id": task_id,
+            "topic": task.get("topic"),
+            "claimed": False,
+            "started": False,
+            "completed": False,
+            "failed": False,
+            "observations": [],
+            "tool_proposal_ids": [],
+            "promotion_reports": [],
+            "quality_flags": [],
+            "error": "",
+        }
+        if not claim_task(task_id, agent_id=agent_id, specialist_id=specialist_id, conn=db):
+            execution["quality_flags"] = ["claim_lost"]
+            executions.append(execution)
+            continue
+        execution["claimed"] = True
+        execution["started"] = start_task(
+            task_id,
+            agent_id=agent_id,
+            specialist_id=specialist_id,
+            conn=db,
+        )
+
+        owner = str(payload.get("owner") or input_schema.get("owner") or "")
+        action = str(payload.get("action") or input_schema.get("action") or "")
+        observations: list[dict[str, Any]] = []
+        proposal_ids: list[str] = []
+        promotion_reports: list[dict[str, Any]] = []
+        quality_flags: list[str] = []
+
+        if _is_tool_backlog_task(owner=owner, action=action, payload=payload):
+            promotion_reports = _promote_self_healing_tool_backlog(
+                payload=payload,
+                cycle_id=cycle_id,
+                conn=db,
+            )
+            quality_flags.append(f"tool_backlog_evaluated:{len(promotion_reports)}")
+        elif _self_healing_task_creates_tool(owner=owner, action=action):
+            proposal_ids = _persist_tool_proposals_for_self_healing_task(
+                task=task,
+                payload=payload,
+                input_schema=input_schema,
+                promotion_criteria=promotion_criteria,
+                kill_criteria=kill_criteria,
+                conn=db,
+            )
+            quality_flags.append(f"tool_proposals_created:{len(proposal_ids)}")
+        else:
+            context = AgentContext(
+                cycle_id=str(payload.get("source_cycle_id") or task.get("cycle_id") or cycle_id),
+                specialist_id=specialist_id,
+                investigation_id=task_id,
+            )
+            for uri in _self_healing_tool_sequence(
+                allowed_tools=allowed_tools,
+                input_schema=input_schema,
+            ):
+                observations.append(dispatch_harness_tool(
+                    uri,
+                    _self_healing_tool_args(
+                        uri,
+                        payload=payload,
+                        input_schema=input_schema,
+                        cycle_id=cycle_id,
+                    ),
+                    context,
+                    policy=policy,
+                    phase="market_map_self_heal",
+                    requested_by_model=False,
+                    request_why=str(payload.get("reason") or task.get("description") or "Repair a market-map gap."),
+                    expected_edge=_self_healing_expected_edge(payload, promotion_criteria),
+                    expected_info_value=0.72,
+                    would_change_decision=True,
+                    fallback_if_denied="Leave the self-healing task unresolved and request a source/tool adapter.",
+                ))
+
+        success = bool(proposal_ids) or bool(promotion_reports) or any(bool(obs.get("ok")) for obs in observations)
+        if not success:
+            quality_flags.append("no_repair_action_taken")
+        completion_payload = _self_healing_completion_payload(
+            task=task,
+            payload=payload,
+            input_schema=input_schema,
+            promotion_criteria=promotion_criteria,
+            kill_criteria=kill_criteria,
+            observations=observations,
+            proposal_ids=proposal_ids,
+            promotion_reports=promotion_reports,
+            quality_flags=quality_flags,
+        )
+        if success:
+            execution["completed"] = complete_task(
+                task_id,
+                agent_id=agent_id,
+                specialist_id=specialist_id,
+                payload=completion_payload,
+                conn=db,
+            )
+        else:
+            execution["failed"] = fail_task(
+                task_id,
+                agent_id=agent_id,
+                specialist_id=specialist_id,
+                reason="market_map_self_healing_no_observation_or_proposal",
+                payload=completion_payload,
+                conn=db,
+            )
+            execution["error"] = "market_map_self_healing_no_observation_or_proposal"
+        execution["observations"] = observations
+        execution["tool_proposal_ids"] = proposal_ids
+        execution["promotion_reports"] = promotion_reports
+        execution["quality_flags"] = quality_flags
+        executions.append(execution)
+    return {
+        "schema_version": "market_map_self_healing_worker_batch_v1",
+        "cycle_id": cycle_id,
+        "task_count": len(executions),
+        "claimed_count": sum(1 for item in executions if item.get("claimed")),
+        "completed_count": sum(1 for item in executions if item.get("completed")),
+        "failed_count": sum(1 for item in executions if item.get("failed")),
+        "tool_proposal_count": sum(len(item.get("tool_proposal_ids") or []) for item in executions),
+        "promotion_report_count": sum(len(item.get("promotion_reports") or []) for item in executions),
+        "observation_count": sum(len(item.get("observations") or []) for item in executions),
+        "executions": executions,
+        "proof": {
+            "self_healing_tasks_claimed": any(item.get("claimed") for item in executions),
+            "self_healing_tasks_completed": any(item.get("completed") for item in executions),
+            "tool_builder_orders_became_proposals": any(item.get("tool_proposal_ids") for item in executions),
+            "tool_backlog_orders_evaluated": any(item.get("promotion_reports") for item in executions),
+            "failed_count": sum(1 for item in executions if item.get("failed")),
+        },
+    }
+
+
 def render_market_map_self_healing_markdown(plan: dict[str, Any]) -> str:
     lines = [
         "# Market Map Self-Healing Plan",
@@ -523,6 +690,283 @@ def _json_load(raw: Any, default: Any) -> Any:
         return default
 
 
+def _fetch_posted_self_healing_tasks(
+    *,
+    conn: sqlite3.Connection,
+    cycle_id: str,
+    limit: int,
+) -> list[Any]:
+    try:
+        return conn.execute(
+            """
+            SELECT *
+            FROM task_contracts
+            WHERE cycle_id = ?
+              AND status = 'posted'
+              AND topic LIKE 'market_map.self_heal.%'
+              AND transaction_to IS NULL
+            ORDER BY priority DESC, posted_at ASC
+            LIMIT ?
+            """,
+            (cycle_id, max(1, int(limit or 1))),
+        ).fetchall()
+    except sqlite3.OperationalError:
+        return []
+
+
+def _row_dict(row: Any) -> dict[str, Any]:
+    if row is None:
+        return {}
+    if isinstance(row, dict):
+        return dict(row)
+    if hasattr(row, "keys"):
+        return {key: row[key] for key in row.keys()}
+    return dict(row)
+
+
+def _is_tool_backlog_task(*, owner: str, action: str, payload: dict[str, Any]) -> bool:
+    owner_l = owner.lower()
+    action_l = action.lower()
+    return (
+        owner_l == "learned_tool_runtime"
+        or "promote_tool" in action_l
+        or "evaluate_and_promote_tool" in action_l
+        or any(str(ref).startswith("atp_") for ref in (payload.get("input_refs") or []))
+    )
+
+
+def _self_healing_task_creates_tool(*, owner: str, action: str) -> bool:
+    owner_l = owner.lower()
+    action_l = action.lower()
+    return (
+        owner_l in {"tool_builder", "context_builder", "source_integrity"}
+        or "tool" in action_l
+        or "source" in action_l
+        or "context" in action_l
+        or "universe" in action_l
+    )
+
+
+def _persist_tool_proposals_for_self_healing_task(
+    *,
+    task: dict[str, Any],
+    payload: dict[str, Any],
+    input_schema: dict[str, Any],
+    promotion_criteria: dict[str, Any],
+    kill_criteria: dict[str, Any],
+    conn: sqlite3.Connection,
+) -> list[str]:
+    from ..tool_atlas.discovery import AnalysisToolProposal, persist_analysis_tool_proposals
+
+    order_payload = payload.get("order_payload") if isinstance(payload.get("order_payload"), dict) else {}
+    surface = order_payload.get("surface") if isinstance(order_payload.get("surface"), dict) else {}
+    cell = order_payload.get("cell") if isinstance(order_payload.get("cell"), dict) else {}
+    coverage = order_payload.get("coverage") if isinstance(order_payload.get("coverage"), dict) else {}
+    owner = str(payload.get("owner") or input_schema.get("owner") or "market_map_worker")
+    action = str(payload.get("action") or input_schema.get("action") or "repair_market_map")
+    tool_name = _tool_name_for_self_healing_task(surface=surface, owner=owner, action=action)
+    source_family = str(surface.get("key") or owner or "market_map_repair")
+    entity = str(cell.get("entity") or coverage.get("entity") or "")
+    horizon = str(cell.get("horizon") or coverage.get("horizon") or "")
+    lens = str(cell.get("lens") or coverage.get("lens") or "")
+    expected_edge = _self_healing_expected_edge(payload, promotion_criteria)
+    proposal = AnalysisToolProposal(
+        cycle_id=str(task.get("cycle_id") or ""),
+        artifact_kind="market_map_self_healing_task",
+        artifact_id=str(task.get("id") or ""),
+        entity=entity,
+        horizon=horizon,
+        lens=lens,
+        proposal_kind="new_tool" if owner != "context_builder" else "context_expansion_tool",
+        tool_name=tool_name,
+        purpose=str(payload.get("expected_output") or task.get("description") or "Repair a missing market-map edge."),
+        source_family=source_family,
+        trigger=f"market_map_self_healing:{payload.get('market_map_work_order_id') or input_schema.get('order_id')}",
+        input_shape={
+            "entity": entity or "string",
+            "horizon": horizon or "string",
+            "lens": lens or "string",
+            "input_refs": list(payload.get("input_refs") or []),
+            "surface": surface.get("key") or source_family,
+        },
+        promotion_gate={
+            "expected_edge": expected_edge,
+            "expected_info_value": 0.72,
+            "would_change_decision": True,
+            "success_gate": promotion_criteria.get("success_gate"),
+            "stop_condition": kill_criteria.get("stop_condition"),
+        },
+        eval_plan={
+            "source": "market_map_self_healing_worker",
+            "fixture": str(surface.get("key") or owner or action),
+            "must_emit_source_timestamp_or_rejection": True,
+            "must_link_task_id": str(task.get("id") or ""),
+        },
+        priority="high" if float(task.get("priority") or 0.0) >= 80.0 else "medium",
+        created_by="market_map_self_healing_worker",
+        quality_flags=[
+            "from_market_map_self_healing_task",
+            f"self_healing_owner:{owner}",
+        ],
+    )
+    return persist_analysis_tool_proposals([proposal], conn=conn)
+
+
+def _promote_self_healing_tool_backlog(
+    *,
+    payload: dict[str, Any],
+    cycle_id: str,
+    conn: sqlite3.Connection,
+) -> list[dict[str, Any]]:
+    from ..tool_atlas import promote_analysis_tool_proposal
+
+    reports: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for ref in payload.get("input_refs") or []:
+        proposal_id = str(ref or "")
+        if not proposal_id.startswith("atp_") or proposal_id in seen:
+            continue
+        seen.add(proposal_id)
+        try:
+            report = promote_analysis_tool_proposal(proposal_id, conn=conn)
+            d = asdict(report) if hasattr(report, "__dataclass_fields__") else dict(report)
+            reports.append(d)
+        except Exception as exc:
+            reports.append({
+                "proposal_id": proposal_id,
+                "cycle_id": cycle_id,
+                "passed": False,
+                "status": "promotion_error",
+                "error": f"{type(exc).__name__}: {exc}",
+            })
+    return reports
+
+
+def _tool_name_for_self_healing_task(
+    *,
+    surface: dict[str, Any],
+    owner: str,
+    action: str,
+) -> str:
+    for uri in surface.get("example_tools") or []:
+        name = str(uri).rsplit("/", 1)[-1].split("@", 1)[0]
+        if name:
+            return _slug(name)
+    key = str(surface.get("key") or "")
+    if key:
+        return _slug(key)
+    if "universe" in action:
+        return "live_tradeable_universe_source_health"
+    if owner == "context_builder":
+        return "source_family_context_expander"
+    return _slug(action or owner or "market_map_repair_tool")
+
+
+def _self_healing_tool_sequence(
+    *,
+    allowed_tools: Any,
+    input_schema: dict[str, Any],
+) -> list[str]:
+    allowed = [str(uri) for uri in allowed_tools if str(uri or "").strip()] if isinstance(allowed_tools, list) else []
+    sequence: list[str] = []
+    required = str(input_schema.get("required_first_tool") or "")
+    if required:
+        sequence.append(required)
+    for uri in (
+        "tic://tool/talis_native/plan_alpha_geometry_actions@v1",
+        "tic://tool/talis_native/review_alpha_geometry_cortex@v1",
+    ):
+        if uri in allowed:
+            sequence.append(uri)
+    for uri in input_schema.get("tool_sequence") or []:
+        sequence.append(str(uri))
+    if not sequence:
+        sequence.extend(allowed)
+    return [uri for uri in _unique(sequence) if uri in allowed][:4]
+
+
+def _self_healing_tool_args(
+    uri: str,
+    *,
+    payload: dict[str, Any],
+    input_schema: dict[str, Any],
+    cycle_id: str,
+) -> dict[str, Any]:
+    if uri == "tic://tool/talis_native/plan_alpha_geometry_actions@v1":
+        return {"cycle_id": str(payload.get("source_cycle_id") or cycle_id), "limit": 64}
+    if uri == "tic://tool/talis_native/review_alpha_geometry_cortex@v1":
+        return {"cycle_id": str(payload.get("source_cycle_id") or cycle_id), "limit": 64, "use_llm": False}
+    order_payload = payload.get("order_payload") if isinstance(payload.get("order_payload"), dict) else {}
+    cell = order_payload.get("cell") if isinstance(order_payload.get("cell"), dict) else {}
+    args: dict[str, Any] = {}
+    for key in ("entity", "horizon", "lens"):
+        value = cell.get(key) or payload.get(key) or input_schema.get(key)
+        if value:
+            args[key] = value
+    if args.get("entity"):
+        args["entity_symbol"] = args["entity"]
+    return args
+
+
+def _self_healing_expected_edge(
+    payload: dict[str, Any],
+    promotion_criteria: dict[str, Any],
+) -> str:
+    order_payload = payload.get("order_payload") if isinstance(payload.get("order_payload"), dict) else {}
+    surface = order_payload.get("surface") if isinstance(order_payload.get("surface"), dict) else {}
+    if surface.get("key"):
+        return f"{surface.get('key')} -> market_map_evidence_edge"
+    if payload.get("action"):
+        return f"{payload.get('action')} -> market_map_update"
+    return str(promotion_criteria.get("success_gate") or "market_map_gap -> repair_result")[:240]
+
+
+def _self_healing_completion_payload(
+    *,
+    task: dict[str, Any],
+    payload: dict[str, Any],
+    input_schema: dict[str, Any],
+    promotion_criteria: dict[str, Any],
+    kill_criteria: dict[str, Any],
+    observations: list[dict[str, Any]],
+    proposal_ids: list[str],
+    promotion_reports: list[dict[str, Any]],
+    quality_flags: list[str],
+) -> dict[str, Any]:
+    return {
+        "schema_version": "market_map_self_healing_execution_v1",
+        "task_id": task.get("id"),
+        "topic": task.get("topic"),
+        "cycle_id": task.get("cycle_id"),
+        "order_id": payload.get("market_map_work_order_id") or input_schema.get("order_id"),
+        "owner": payload.get("owner") or input_schema.get("owner"),
+        "action": payload.get("action") or input_schema.get("action"),
+        "success_gate": promotion_criteria.get("success_gate"),
+        "stop_condition": kill_criteria.get("stop_condition"),
+        "observations": observations,
+        "tool_proposal_ids": proposal_ids,
+        "promotion_reports": promotion_reports,
+        "map_update": {
+            "kind": "proposal" if proposal_ids else "promotion_report" if promotion_reports else "harness_observation",
+            "expected_edge": _self_healing_expected_edge(payload, promotion_criteria),
+            "evidence_refs": [
+                str(obs.get("tool_call_log_id"))
+                for obs in observations
+                if obs.get("tool_call_log_id")
+            ],
+        },
+        "proof": {
+            "claimed_task_contract": True,
+            "observations_logged": len(observations),
+            "tool_proposals_created": len(proposal_ids),
+            "tool_backlog_reports": len(promotion_reports),
+            "success_gate_present": bool(promotion_criteria.get("success_gate")),
+            "stop_condition_present": bool(kill_criteria.get("stop_condition")),
+        },
+        "quality_flags": quality_flags,
+    }
+
+
 def _llm_gap_prompt(
     *,
     context_packet: dict[str, Any],
@@ -551,6 +995,7 @@ def _llm_gap_prompt(
 __all__ = [
     "MarketMapWorkOrder",
     "build_market_map_self_healing_plan",
+    "execute_market_map_self_healing_tasks",
     "post_market_map_self_healing_work_orders",
     "render_market_map_self_healing_markdown",
 ]

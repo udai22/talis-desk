@@ -300,7 +300,7 @@ def plan_alpha_geometry_actions(
             "repair_sources": "fragile evidence, failed evidence flags, or low source independence",
             "resolve_tension": "contradictory strings with enough evidence to adjudicate",
             "widen_sources": "novel/frontier cell with insufficient independent source families",
-            "widen_scouts": "thin but novel cell needing independent scout replication",
+            "widen_scouts": "novel cell needing independent scout replication",
         },
         "global_shape": global_shape,
         "top_cells": top_cells,
@@ -355,7 +355,7 @@ def _shape_action_from_geometry_row(row: dict[str, Any]) -> dict[str, Any] | Non
         action = "replicate_with_independent_scouts"
         owner = "seed_router"
         success_gate = "second scout confirms, contradicts, or kills the string"
-        reason = "The cell is novel but thin."
+        reason = "The cell is novel but still needs independent scout replication."
     else:
         if fragility >= 0.55:
             action = "repair_source_family"
@@ -656,7 +656,10 @@ def _missing_edges_for_shape(
     if action == "assign_tension_resolution_scouts":
         edges.append("contradiction -> adjudicating_evidence")
     if action == "replicate_with_independent_scouts":
-        edges.append("thin_cell -> independent_replication")
+        if "multi_string_single_scout_cell" in flags:
+            edges.append("single_scout_cell -> independent_replication")
+        else:
+            edges.append("thin_cell -> independent_replication")
     if fragility >= 0.55 or "low_evidence_coverage" in flags:
         edges.append("claim -> citation_resolved_evidence")
     if _float(metrics.get("frontier_pressure"), 0.0) >= 0.50:
@@ -926,6 +929,8 @@ def _cell_flags(
         flags.add("thin_cell")
     if scout_count < 2:
         flags.add("single_scout_cell")
+        if string_count >= 2:
+            flags.add("multi_string_single_scout_cell")
     if len(source_families) < 2:
         flags.add("low_source_entropy")
     if evidence_coverage < 0.5:
@@ -957,6 +962,11 @@ def _route_directive(
         metrics.get("fragility", 0.0) <= thresholds["verify_allow_fragility_max"]
         and metrics.get("source_independence", 0.0) >= thresholds["verify_source_independence_min"]
     )
+    if (
+        "multi_string_single_scout_cell" in flags
+        and metrics.get("novelty_pressure", 0.0) >= thresholds["widen_scouts_novelty_min"]
+    ):
+        return "widen_scouts"
     if "frontier_trade_candidate" in flags and verifier_shape_is_clean:
         return "verify_now"
     if "fragile_geometry" in flags or "contains_failed_evidence_flag" in flags:
@@ -971,7 +981,10 @@ def _route_directive(
         and metrics.get("source_independence", 0.0) < thresholds["widen_sources_source_max"]
     ):
         return "widen_sources"
-    if metrics.get("novelty_pressure", 0.0) >= thresholds["widen_scouts_novelty_min"] and "thin_cell" in flags:
+    if (
+        metrics.get("novelty_pressure", 0.0) >= thresholds["widen_scouts_novelty_min"]
+        and ("thin_cell" in flags or "multi_string_single_scout_cell" in flags)
+    ):
         return "widen_scouts"
     return "observe"
 
@@ -1086,7 +1099,10 @@ def _snapshot_flags(
         flags.add("no_information_strings")
     if cells and sum(1 for c in cells if "low_source_entropy" in c.quality_flags) / len(cells) > 0.60:
         flags.add("market_map_under_sourced")
-    if cells and sum(1 for c in cells if "thin_cell" in c.quality_flags) / len(cells) > 0.60:
+    if cells and sum(
+        1 for c in cells
+        if "thin_cell" in c.quality_flags or "multi_string_single_scout_cell" in c.quality_flags
+    ) / len(cells) > 0.60:
         flags.add("market_map_under_covered")
     if any("frontier_trade_candidate" in c.quality_flags for c in cells):
         flags.add("has_frontier_trade_candidates")
@@ -1143,7 +1159,8 @@ def _geometry_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
             d[dst] = json.loads(d.get(src) or json.dumps(default))
         except Exception:
             d[dst] = default
-        d.pop(src, None)
+        if src != dst:
+            d.pop(src, None)
     return d
 
 

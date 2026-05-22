@@ -6,7 +6,10 @@ import sys
 
 from talis_desk.market_map.coverage_audit import build_coverage_gap_manifest
 from talis_desk.market_map.governor import build_market_map_governor_plan
-from talis_desk.market_map.self_healing import post_market_map_self_healing_work_orders
+from talis_desk.market_map.self_healing import (
+    execute_market_map_self_healing_tasks,
+    post_market_map_self_healing_work_orders,
+)
 from talis_desk.market_map.universe import build_market_universe
 from talis_desk.schema.migrations import get_schema_version
 from talis_desk.store import reset_desk_store_for_test
@@ -438,3 +441,118 @@ def test_self_healing_orders_post_idempotent_task_contracts(tmp_path) -> None:
         ("cycle_self_heal_dispatch",),
     ).fetchone()[0]
     assert posted_events == 2
+
+
+def test_self_healing_worker_executes_routes_and_creates_tool_proposals(tmp_path, monkeypatch) -> None:
+    store = reset_desk_store_for_test(tmp_path / "desk.db")
+    get_schema_version(store.conn)
+    import talis_desk.tool_atlas as tool_atlas
+
+    calls: list[str] = []
+
+    def fake_dispatch(uri, args, context):
+        calls.append(uri)
+        return type("ToolResult", (), {
+            "ok": True,
+            "result": {
+                "schema_version": "shape_reader_fixture_v1",
+                "routing_queue": [{"route_task_id": "route_self_heal"}],
+                "actions": [{"action": "widen_scouts"}],
+            },
+            "error": None,
+            "tool_call_log_id": f"tc_self_heal_{len(calls)}",
+            "cost_usd": 0.0,
+        })()
+
+    monkeypatch.setattr(tool_atlas, "dispatch_uri", fake_dispatch)
+    plan = {
+        "schema_version": "market_map_self_healing_v1",
+        "cycle_id": "cycle_self_heal_worker",
+        "status": "ready",
+        "work_orders": [
+            {
+                "order_id": "mwo_route_followup",
+                "owner": "seed_router",
+                "priority": "high",
+                "action": "allocate_widen_scouts",
+                "reason": "Alpha geometry requested an independent scout route.",
+                "input_refs": ["istr_route_1"],
+                "expected_output": "Follow-up SeedCell batch with geometry source refs.",
+                "success_criteria": ["Route work cites the shape reader."],
+                "payload": {
+                    "route_directive": "widen_scouts",
+                    "cell": {
+                        "entity": "HYPE",
+                        "horizon": "intraday",
+                        "lens": "on_chain",
+                        "bias_mode": "frontier",
+                    },
+                },
+            },
+            {
+                "order_id": "mwo_surface_mempool_pending_intent",
+                "owner": "tool_builder",
+                "priority": "high",
+                "action": "build_or_validate_source_adapter",
+                "reason": "Mempool pending intent is not yet first-class.",
+                "input_refs": ["tc_node_1"],
+                "expected_output": "Promotable read-only tool proposal with fixture coverage.",
+                "success_criteria": ["Tool returns typed observations with source timestamps."],
+                "payload": {
+                    "surface": {
+                        "key": "mempool_pending_intent",
+                        "title": "Mempool pending intent",
+                        "example_tools": [
+                            "tic://tool/learned/hyperevm_mempool_actor_watch@v1",
+                        ],
+                    }
+                },
+            },
+        ],
+    }
+    post_market_map_self_healing_work_orders(
+        plan,
+        cycle_id="cycle_self_heal_worker",
+        conn=store.conn,
+    )
+
+    batch = execute_market_map_self_healing_tasks(
+        cycle_id="cycle_self_heal_worker",
+        conn=store.conn,
+    )
+
+    assert batch["schema_version"] == "market_map_self_healing_worker_batch_v1"
+    assert batch["claimed_count"] == 2
+    assert batch["completed_count"] == 2
+    assert batch["failed_count"] == 0
+    assert batch["tool_proposal_count"] == 1
+    assert "tic://tool/talis_native/plan_alpha_geometry_actions@v1" in calls
+    proposal = store.conn.execute(
+        """
+        SELECT tool_name, artifact_kind, artifact_id, source_family,
+               promotion_gate_json, status
+        FROM analysis_tool_proposals
+        WHERE cycle_id = ?
+        """,
+        ("cycle_self_heal_worker",),
+    ).fetchone()
+    assert proposal["tool_name"] == "hyperevm_mempool_actor_watch"
+    assert proposal["artifact_kind"] == "market_map_self_healing_task"
+    assert proposal["status"] == "proposed"
+    gate = json.loads(proposal["promotion_gate_json"])
+    assert gate["would_change_decision"] is True
+    assert "mempool_pending_intent" in gate["expected_edge"]
+    completed = store.conn.execute(
+        """
+        SELECT COUNT(*)
+        FROM blackboard_events
+        WHERE cycle_id = ? AND event_type = 'task.completed'
+        """,
+        ("cycle_self_heal_worker",),
+    ).fetchone()[0]
+    assert completed == 2
+    repeat = execute_market_map_self_healing_tasks(
+        cycle_id="cycle_self_heal_worker",
+        conn=store.conn,
+    )
+    assert repeat["task_count"] == 0

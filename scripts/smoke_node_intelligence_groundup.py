@@ -75,6 +75,7 @@ from talis_desk.monitor.server import (
 from talis_desk.market_map.universe import build_market_universe
 from talis_desk.market_map.self_healing import (
     build_market_map_self_healing_plan,
+    execute_market_map_self_healing_tasks,
     post_market_map_self_healing_work_orders,
     render_market_map_self_healing_markdown,
 )
@@ -1425,6 +1426,11 @@ def main() -> int:
         conn=store.conn,
         limit=8,
     )
+    self_healing_worker = execute_market_map_self_healing_tasks(
+        cycle_id=CYCLE_ID,
+        conn=store.conn,
+        limit=8,
+    )
     if self_healing.get("work_orders"):
         _assert(
             self_healing_dispatch.get("posted_count", 0) >= 1,
@@ -1439,9 +1445,22 @@ def main() -> int:
             self_healing_dispatch.get("proof", {}).get("all_tasks_have_success_gates") is True,
             "self-healing task contracts missing success gates",
         )
+        _assert(
+            self_healing_worker.get("task_count", 0) >= 1,
+            "self-healing worker found no posted task contracts to execute",
+        )
+        _assert(
+            self_healing_worker.get("completed_count", 0) >= 1,
+            "self-healing worker did not complete any repair task",
+        )
+        _assert(
+            self_healing_worker.get("failed_count", 0) == 0,
+            "self-healing worker failed a repair task",
+        )
     self_healing_json_path = prompt_output_dir / "market_map_self_healing.json"
     self_healing_md_path = prompt_output_dir / "market_map_self_healing.md"
     self_healing_dispatch_path = prompt_output_dir / "market_map_self_healing_dispatch.json"
+    self_healing_worker_path = prompt_output_dir / "market_map_self_healing_worker.json"
     _write_json(self_healing_json_path, self_healing)
     _write_json(
         self_healing_dispatch_path,
@@ -1450,6 +1469,7 @@ def main() -> int:
             "repeat_dispatch": repeated_self_healing_dispatch,
         },
     )
+    _write_json(self_healing_worker_path, self_healing_worker)
     _write_text(self_healing_md_path, render_market_map_self_healing_markdown(self_healing))
     report["system_trace"] = {
         "json": str(system_trace_json_path),
@@ -1463,10 +1483,18 @@ def main() -> int:
         "status": self_healing.get("status"),
         "work_orders": len(self_healing.get("work_orders") or []),
         "dispatch_artifact": str(self_healing_dispatch_path),
+        "worker_artifact": str(self_healing_worker_path),
         "posted_tasks": self_healing_dispatch.get("posted_count"),
         "repeat_existing_tasks": repeated_self_healing_dispatch.get("existing_count"),
+        "worker_completed_tasks": self_healing_worker.get("completed_count"),
+        "worker_failed_tasks": self_healing_worker.get("failed_count"),
+        "worker_tool_proposals": self_healing_worker.get("tool_proposal_count"),
+        "worker_promotion_reports": self_healing_worker.get("promotion_report_count"),
         "orders_became_task_contracts": (
             self_healing_dispatch.get("proof", {}).get("orders_became_task_contracts")
+        ),
+        "tasks_completed_by_worker": (
+            self_healing_worker.get("proof", {}).get("self_healing_tasks_completed")
         ),
     }
     _write_prompt_output_index(prompt_output_dir)
@@ -2045,6 +2073,7 @@ def _write_prompt_output_index(prompt_output_dir: Path) -> None:
         "- `market_map_governor.md`: readable market-map governor plan.",
         "- `market_map_self_healing.json`: worker orders for map repair, expansion, and tool creation.",
         "- `market_map_self_healing.md`: readable self-healing work-order plan.",
+        "- `market_map_self_healing_worker.json`: claimed/completed repair tasks, tool proposals, and shape-reader observations.",
         "- `coverage_gap_manifest.json`: deterministic covered/missing/stale audit against the known market lattice.",
         "- `market_evolve_lineage.json`: program ancestry, mutation edges, proof-gate verdicts, and frontier priorities.",
     ]

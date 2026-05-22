@@ -2049,6 +2049,86 @@ def test_alpha_geometry_uses_evolved_routing_thresholds(tmp_path):
     assert policy_metrics["routing_threshold_verify_trade_scream_min"] == 0.4
 
 
+def test_alpha_geometry_routes_multi_string_single_scout_cells_to_replication(tmp_path):
+    store = DeskStore(db_path=tmp_path / "desk.db")
+    import talis_desk.store as store_mod
+
+    store_mod._STORE = store
+    persist_information_strings(
+        conn=store.conn,
+        cycle_id="cycle_geo_single_scout",
+        scout_id="scout_one_voice",
+        seed_id="seed_one_voice",
+        entity="HYPE",
+        theme="validator_unstake",
+        horizon="intraday",
+        lens="on_chain",
+        bias_mode="frontier",
+        strings=[
+            InformationString(
+                title="Single scout first string",
+                thesis="HYPE route quality is interesting but only one scout has observed it.",
+                mechanism="One scout emitted a plausible source-diverse route, but independence requires a second scout.",
+                expected_outcome="The map should replicate this cell before verifier spend.",
+                kill_signal="Independent scout fails to confirm route quality.",
+                conviction=0.78,
+                novelty_score=0.82,
+                crowdedness=0.20,
+                entities_chain=["HYPE", "route quality"],
+                depth_layers=[
+                    {"layer": 1, "claim": "route quality"},
+                    {"layer": 2, "claim": "replication needed"},
+                ],
+                evidence_refs=[
+                    "tic://source/hydromancer/single_scout",
+                    "tic://source/news/single_scout",
+                ],
+                quality_flags=[
+                    "source_family:hydromancer",
+                    "source_family:web_attention",
+                    "adversarial_decision:allow",
+                ],
+            ),
+            InformationString(
+                title="Single scout second string",
+                thesis="The same scout also found a second mechanism, which is support but not independent scout coverage.",
+                mechanism="Multiple strings from one scout should raise attention, not count as independent scout support.",
+                expected_outcome="Geometry routes to widen_scouts.",
+                kill_signal="Second scout contradicts the route.",
+                conviction=0.74,
+                novelty_score=0.80,
+                crowdedness=0.18,
+                entities_chain=["HYPE", "independent replication"],
+                depth_layers=[
+                    {"layer": 1, "claim": "same scout"},
+                    {"layer": 2, "claim": "needs independent scout"},
+                ],
+                evidence_refs=[
+                    "tic://source/orderbook/single_scout",
+                    "tic://source/news/single_scout",
+                ],
+                quality_flags=[
+                    "source_family:market_microstructure",
+                    "source_family:web_attention",
+                    "adversarial_decision:allow",
+                ],
+            ),
+        ],
+        coverage_cell_key="HYPE|intraday|on_chain|frontier|validator_unstake",
+        source_tool_call_ids=["tc_single_hydro", "tc_single_orderbook", "tc_single_news"],
+    )
+
+    snapshot = compute_alpha_geometry(cycle_id="cycle_geo_single_scout", conn=store.conn, persist=True)
+    assert snapshot.cells[0].route_directive == "widen_scouts"
+    assert "multi_string_single_scout_cell" in snapshot.cells[0].quality_flags
+
+    action_plan = plan_alpha_geometry_actions(cycle_id="cycle_geo_single_scout", conn=store.conn)
+    action = action_plan["actions"][0]
+    assert action["action"] == "replicate_with_independent_scouts"
+    assert "multi_string_single_scout_cell" in action["quality_flags"]
+    assert "single_scout_cell -> independent_replication" in action["missing_edges"]
+
+
 def test_alpha_geometry_policy_can_block_fragile_verify_route(tmp_path):
     store = DeskStore(db_path=tmp_path / "desk.db")
     import talis_desk.store as store_mod

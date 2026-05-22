@@ -45,6 +45,10 @@ FILENAMES = {
     "market_map_governor": "market_map_governor.json",
     "market_map_self_healing": "market_map_self_healing.json",
     "market_map_self_healing_dispatch": "market_map_self_healing_dispatch.json",
+    "market_map_self_healing_worker": "market_map_self_healing_worker.json",
+    "scout_100_readiness": "100_scout_readiness_report.json",
+    "scout_100_outputs": "100_scout_outputs.json",
+    "scout_100_seeds": "100_scout_seeds.json",
     "coverage_gap_manifest": "coverage_gap_manifest.json",
 }
 
@@ -231,6 +235,10 @@ def render_html(data: dict[str, Any]) -> str:
         _render_panel("governor", "Map Governor", data, "market_map_governor"),
         _render_panel("selfheal", "Self-Healing Plan", data, "market_map_self_healing"),
         _render_panel("selfhealdispatch", "Self-Healing Tasks", data, "market_map_self_healing_dispatch"),
+        _render_panel("selfhealworker", "Self-Healing Worker", data, "market_map_self_healing_worker"),
+        _render_panel("scout100", "100 Scout Readiness", data, "scout_100_readiness"),
+        _render_panel("scout100out", "100 Scout Outputs", data, "scout_100_outputs"),
+        _render_panel("scout100seeds", "100 Scout Seeds", data, "scout_100_seeds"),
         _render_panel("coverage", "Coverage Gaps", data, "coverage_gap_manifest"),
     ])
     cohesive_story_html = _render_cohesive_story(
@@ -1937,6 +1945,7 @@ def _render_cohesive_story(
     )
     governor_html = _render_market_map_governor_chapter(data=data)
     self_healing_html = _render_self_healing_chapter(data=data)
+    scout_100_html = _render_100_scout_readiness_chapter(data=data)
     touched_surfaces = [row for row in data_substrate.touched if row.touched]
     untouched_surfaces = [row for row in data_substrate.touched if not row.touched]
     data_surface_html = "".join(
@@ -2142,6 +2151,8 @@ def _render_cohesive_story(
         {governor_html}
 
         {self_healing_html}
+
+        {scout_100_html}
 
         {swipe_deck_html}
 
@@ -2973,6 +2984,7 @@ def _render_market_map_governor_chapter(*, data: dict[str, Any]) -> str:
 def _render_self_healing_chapter(*, data: dict[str, Any]) -> str:
     plan = _artifact_json(data, "market_map_self_healing")
     dispatch_artifact = _artifact_json(data, "market_map_self_healing_dispatch")
+    worker = _artifact_json(data, "market_map_self_healing_worker")
     dispatch = (
         dispatch_artifact.get("dispatch")
         if isinstance(dispatch_artifact.get("dispatch"), dict)
@@ -3018,6 +3030,18 @@ def _render_self_healing_chapter(*, data: dict[str, Any]) -> str:
             ("task proof", dispatch.get("proof")),
         ]
     )
+    worker_rows = "".join(
+        f'<div><span>{html.escape(label)}</span><strong>{html.escape(_compact_value(value, limit=140))}</strong></div>'
+        for label, value in [
+            ("claimed", worker.get("claimed_count")),
+            ("completed", worker.get("completed_count")),
+            ("failed", worker.get("failed_count")),
+            ("tool proposals", worker.get("tool_proposal_count")),
+            ("promotion reports", worker.get("promotion_report_count")),
+            ("observations", worker.get("observation_count")),
+            ("proof", worker.get("proof")),
+        ]
+    )
     posted_preview = {
         "schema_version": dispatch.get("schema_version"),
         "posted_count": dispatch.get("posted_count"),
@@ -3036,18 +3060,53 @@ def _render_self_healing_chapter(*, data: dict[str, Any]) -> str:
             if isinstance(task, dict)
         ],
     }
+    worker_preview = {
+        "schema_version": worker.get("schema_version"),
+        "task_count": worker.get("task_count"),
+        "claimed_count": worker.get("claimed_count"),
+        "completed_count": worker.get("completed_count"),
+        "failed_count": worker.get("failed_count"),
+        "tool_proposal_count": worker.get("tool_proposal_count"),
+        "promotion_report_count": worker.get("promotion_report_count"),
+        "proof": worker.get("proof"),
+        "executions": [
+            {
+                "topic": item.get("topic"),
+                "completed": item.get("completed"),
+                "failed": item.get("failed"),
+                "tool_proposal_ids": item.get("tool_proposal_ids"),
+                "promotion_reports": item.get("promotion_reports"),
+                "observations": [
+                    {
+                        "uri": obs.get("uri"),
+                        "ok": obs.get("ok"),
+                        "tool_call_log_id": obs.get("tool_call_log_id"),
+                        "expected_edge": obs.get("expected_edge"),
+                        "summary": obs.get("summary"),
+                    }
+                    for obs in (item.get("observations") or [])[:3]
+                    if isinstance(obs, dict)
+                ],
+                "quality_flags": item.get("quality_flags"),
+            }
+            for item in (worker.get("executions") or [])[:6]
+            if isinstance(item, dict)
+        ],
+    }
     return f"""
         <section class="chapter">
           <div class="chapter-head">
             <div class="chapter-label">00e / self-healing map</div>
             <h2>The map assigns workers to repair itself.</h2>
-            <p>Coverage gaps should become action, not dashboard guilt. The self-healing planner reads the canonical trace and emits worker orders for seed routing, tool building, source integrity, context expansion, verifier routing, and learned-tool promotion. An LLM can improve the plan from a compact context packet, while deterministic rails keep every order tied to a missing edge and a success gate.</p>
+            <p>Coverage gaps should become action, not dashboard guilt. The self-healing planner reads the canonical trace, posts durable repair contracts, then a worker claims those contracts and either reads the map shape through the tool harness or turns missing surfaces into concrete tool proposals. An LLM can improve the plan from a compact context packet, while deterministic rails keep every order tied to a missing edge and a success gate.</p>
           </div>
           <div class="score-tape">
             <div><strong>{html.escape(str(len(orders)))}</strong><small>repair / expansion orders</small></div>
             <div><strong>{html.escape(str(plan.get("status") or "unknown"))}</strong><small>planner status</small></div>
             <div><strong>{html.escape(_compact_value(context.get("route")))}</strong><small>geometry route</small></div>
             <div><strong>{html.escape(str(dispatch.get("posted_count") or 0))}</strong><small>task contracts posted</small></div>
+            <div><strong>{html.escape(str(worker.get("completed_count") or 0))}</strong><small>repair tasks completed</small></div>
+            <div><strong>{html.escape(str(worker.get("tool_proposal_count") or 0))}</strong><small>new tool proposals</small></div>
           </div>
           <div class="output-grid" style="margin-top:10px">{order_cards}</div>
           <article class="workbench-panel" style="margin-top:10px">
@@ -3057,14 +3116,137 @@ def _render_self_healing_chapter(*, data: dict[str, Any]) -> str:
             <pre class="prompt-slice">{html.escape(json.dumps(posted_preview, indent=2, sort_keys=True, ensure_ascii=True, default=str))}</pre>
           </article>
           <article class="workbench-panel" style="margin-top:10px">
+            <h3>Repair worker executed</h3>
+            <p>The posted contracts are not decorative. The worker claims the task, starts it, dispatches approved read-only tools when the task is a route, creates analysis-tool proposals when the task is a missing surface, then completes or fails the contract with a proof payload.</p>
+            <div class="trace-meta">{worker_rows}</div>
+            <pre class="prompt-slice">{html.escape(json.dumps(worker_preview, indent=2, sort_keys=True, ensure_ascii=True, default=str))}</pre>
+          </article>
+          <article class="workbench-panel" style="margin-top:10px">
             <h3>Worker context packet</h3>
             <p>This is the compact state a repair worker receives before it acts.</p>
             <div class="trace-meta">{context_rows}</div>
           </article>
           <article class="workbench-panel" style="margin-top:10px">
             <h3>LLM repair-planner prompt</h3>
-            <p>The next version can call a cheap or strong model here; the output must be strict JSON and pass deterministic gates before workers run.</p>
+            <p>This is where a cheap or strong model can propose extra repair orders. The output still has to be strict JSON and pass deterministic gates before a worker is allowed to spend tools.</p>
             <pre class="prompt-slice">{html.escape(prompt[:5000])}</pre>
+          </article>
+        </section>
+    """
+
+
+def _render_100_scout_readiness_chapter(*, data: dict[str, Any]) -> str:
+    report = _artifact_json(data, "scout_100_readiness")
+    if not report:
+        return """
+        <section class="chapter">
+          <div class="chapter-head">
+            <div class="chapter-label">00f / scale pilot</div>
+            <h2>The 100-scout readiness slice has not been attached yet.</h2>
+            <p>Run <code>scripts/run_100_scout_readiness_slice.py</code> and export this viewer from the same prompt-output directory to see the scale gate.</p>
+          </div>
+        </section>
+        """
+    metrics = report.get("metrics") if isinstance(report.get("metrics"), dict) else {}
+    readiness = report.get("readiness") if isinstance(report.get("readiness"), dict) else {}
+    scouts = metrics.get("scouts") if isinstance(metrics.get("scouts"), dict) else {}
+    seeds = metrics.get("seeds") if isinstance(metrics.get("seeds"), dict) else {}
+    info = metrics.get("information_map") if isinstance(metrics.get("information_map"), dict) else {}
+    geometry = metrics.get("geometry") if isinstance(metrics.get("geometry"), dict) else {}
+    coverage = metrics.get("coverage") if isinstance(metrics.get("coverage"), dict) else {}
+    self_healing = metrics.get("self_healing") if isinstance(metrics.get("self_healing"), dict) else {}
+    model_shim = metrics.get("model_shim") if isinstance(metrics.get("model_shim"), dict) else {}
+    gates = readiness.get("gates") if isinstance(readiness.get("gates"), dict) else {}
+    top_cell = geometry.get("top_cell") if isinstance(geometry.get("top_cell"), dict) else {}
+    top_actions = [row for row in (geometry.get("top_actions") or []) if isinstance(row, dict)]
+    lanes = [row for row in (coverage.get("budget_lanes") or []) if isinstance(row, dict)]
+    gate_cards = "".join(
+        '<article class="output-panel">'
+        f'<span>{"pass" if ok else "fail"}</span>'
+        f'<h3>{html.escape(str(name).replace("_", " "))}</h3>'
+        f'<p>{html.escape("Gate passed." if ok else "Needs attention before live scale.")}</p>'
+        '</article>'
+        for name, ok in list(gates.items())[:12]
+    )
+    action_cards = "".join(
+        '<article class="output-panel">'
+        f'<span>{html.escape(str(action.get("owner") or ""))} / {html.escape(str(action.get("route_directive") or ""))}</span>'
+        f'<h3>{html.escape(str(action.get("action") or ""))}</h3>'
+        f'<p>{html.escape(str(action.get("cell_key") or ""))}</p>'
+        f'<p><strong>Gate:</strong> {html.escape(str(action.get("success_gate") or ""))}</p>'
+        f'<p><strong>Missing:</strong> {html.escape(", ".join(str(x) for x in (action.get("missing_edges") or [])))}</p>'
+        '</article>'
+        for action in top_actions[:3]
+    )
+    if not action_cards:
+        action_cards = '<article class="output-panel"><span>quiet shape</span><h3>No routed geometry actions.</h3><p>The map produced cells, but no non-observe route made it through the action planner.</p></article>'
+    lane_cards = "".join(
+        '<article class="output-panel">'
+        f'<span>{html.escape(str(lane.get("scout_count") or 0))} scouts</span>'
+        f'<h3>{html.escape(str(lane.get("entity_focus") or ""))} / {html.escape(str(lane.get("horizon_focus") or ""))} / {html.escape(str(lane.get("lens_focus") or ""))}</h3>'
+        f'<p>{html.escape(str(lane.get("reason") or ""))}</p>'
+        '</article>'
+        for lane in lanes[:3]
+    )
+    if not lane_cards:
+        lane_cards = '<article class="output-panel"><span>no lanes</span><h3>No budget lanes exported.</h3><p>The governor needs a coverage manifest before it can propose the next scout split.</p></article>'
+    readiness_preview = {
+        "status": readiness.get("status"),
+        "ready_for_live_1000": readiness.get("ready_for_live_1000"),
+        "failed_gates": readiness.get("failed_gates"),
+        "scouts": scouts,
+        "information_map": info,
+        "geometry": {
+            "cell_count": geometry.get("cell_count"),
+            "routing_queue_count": geometry.get("routing_queue_count"),
+            "top_cell": {
+                "cell_key": top_cell.get("cell_key"),
+                "route_directive": top_cell.get("route_directive"),
+                "trade_scream_score": (top_cell.get("metrics") or {}).get("trade_scream_score")
+                if isinstance(top_cell.get("metrics"), dict) else None,
+                "verifier_readiness": (top_cell.get("metrics") or {}).get("verifier_readiness")
+                if isinstance(top_cell.get("metrics"), dict) else None,
+                "quality_flags": top_cell.get("quality_flags"),
+            },
+        },
+        "self_healing": self_healing,
+        "next_live_gate": report.get("next_live_gate"),
+    }
+    return f"""
+        <section class="chapter">
+          <div class="chapter-head">
+            <div class="chapter-label">00f / 100-scout scale gate</div>
+            <h2>Before spending on 1,000 scouts, the desk ran a 100-scout rehearsal.</h2>
+            <p>This is a deterministic readiness slice: real seed generation, real scout harness, real storage, real information map, real geometry, real governor, and real self-healing worker, with the external provider layer replaced by an offline model/tool shim. It proves the machine can carry 100 packets through the system before we buy live model calls.</p>
+          </div>
+          <div class="score-tape">
+            <div><strong>{html.escape(str(readiness.get("status") or "unknown"))}</strong><small>readiness status</small></div>
+            <div><strong>{html.escape(str(scouts.get("completed") or 0))}/{html.escape(str(seeds.get("count") or 0))}</strong><small>scouts completed</small></div>
+            <div><strong>{html.escape(str(info.get("string_count") or 0))}</strong><small>information strings</small></div>
+            <div><strong>{html.escape(str(geometry.get("routing_queue_count") or 0))}</strong><small>shape-routed tasks</small></div>
+            <div><strong>{html.escape(str(model_shim.get("iteration_calls") or 0))}</strong><small>tool-loop revisions</small></div>
+            <div><strong>{html.escape(str(self_healing.get("completed_tasks") or 0))}</strong><small>repair tasks completed</small></div>
+          </div>
+          <article class="workbench-panel" style="margin-top:10px">
+            <h3>What the pilot proved</h3>
+            <p>Every scout produced usable map memory, the duplicate rate stayed at {html.escape(_pct(scouts.get("duplicate_hypothesis_rate")))} and evidence calls were clean. The shape layer then routed the strongest single-scout cells to independent replication instead of pretending one scout is enough support.</p>
+            <pre class="prompt-slice">{html.escape(json.dumps(readiness_preview, indent=2, sort_keys=True, ensure_ascii=True, default=str))}</pre>
+          </article>
+          <div class="output-grid" style="margin-top:10px">{gate_cards}</div>
+          <article class="workbench-panel" style="margin-top:10px">
+            <h3>The map screamed this next</h3>
+            <p>The highest-priority shape actions are not trade orders; they are the next research move the map demands before conviction can rise.</p>
+            <div class="output-grid" style="margin-top:10px">{action_cards}</div>
+          </article>
+          <article class="workbench-panel" style="margin-top:10px">
+            <h3>What the next 100 should cover</h3>
+            <p>The coverage governor still sees the market as huge: this run covered {html.escape(str(coverage.get("covered_count") or 0))} cells out of {html.escape(str(coverage.get("valid_cell_count") or "?"))}. The next allocation is concentrated where the frontier gaps are densest.</p>
+            <div class="output-grid" style="margin-top:10px">{lane_cards}</div>
+          </article>
+          <article class="workbench-panel" style="margin-top:10px">
+            <h3>Honest boundary</h3>
+            <p>{html.escape(str((report.get("next_live_gate") or {}).get("why") or "This proves orchestration, not live provider quality."))}</p>
+            <p><strong>Next:</strong> {html.escape(str((report.get("next_live_gate") or {}).get("recommendation") or ""))}</p>
           </article>
         </section>
     """
