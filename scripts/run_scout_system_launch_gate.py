@@ -266,6 +266,7 @@ def build_launch_gate_report(
             },
             "scale_decision": live_report.get("scale_decision") or {},
             "metrics": _live_summary(live_report),
+            "prompt_preview": _prompt_preview_summary(live_report),
         },
         "tournament": {
             "decision": tournament_decision.get("decision"),
@@ -283,6 +284,7 @@ def render_launch_gate_markdown(report: dict[str, Any]) -> str:
     deterministic = report.get("deterministic") if isinstance(report.get("deterministic"), dict) else {}
     live = report.get("live") if isinstance(report.get("live"), dict) else {}
     tournament = report.get("tournament") if isinstance(report.get("tournament"), dict) else {}
+    prompt_preview = live.get("prompt_preview") if isinstance(live.get("prompt_preview"), dict) else {}
     lines = [
         "# Scout System Launch Gate",
         "",
@@ -302,6 +304,9 @@ def render_launch_gate_markdown(report: dict[str, Any]) -> str:
         f"- mode: `{live.get('mode')}`",
         f"- status: `{live.get('status')}`",
         f"- failed_gates: `{', '.join(live.get('failed_gates') or []) or 'none'}`",
+        f"- first_scout_cell: `{_preview_cell(prompt_preview)}`",
+        f"- first_scout_prompt_variant: `{prompt_preview.get('prompt_variant')}`",
+        f"- first_scout_tool_candidates: `{prompt_preview.get('tool_candidate_count')}`",
         "",
         "## Tournament",
         "",
@@ -351,12 +356,17 @@ def render_launch_gate_html(report: dict[str, Any]) -> str:
     tournament = report.get("tournament") if isinstance(report.get("tournament"), dict) else {}
     det_metrics = deterministic.get("metrics") if isinstance(deterministic.get("metrics"), dict) else {}
     live_preflight = live.get("preflight") if isinstance(live.get("preflight"), dict) else {}
+    prompt_preview = live.get("prompt_preview") if isinstance(live.get("prompt_preview"), dict) else {}
     tool_atlas = live_preflight.get("tool_atlas") if isinstance(live_preflight.get("tool_atlas"), dict) else {}
     universe = live_preflight.get("market_universe") if isinstance(live_preflight.get("market_universe"), dict) else {}
     status = str(decision.get("status") or "unknown")
     hero = _launch_hero_copy(status)
     proof_rows = "".join(_proof_card(step) for step in report.get("proof_ladder") or [])
     stage_rows = "".join(_stage_card(stage) for stage in report.get("stages") or [])
+    tool_rows = "".join(
+        f"<li><span>{html.escape(str(uri))}</span><b>allowed</b></li>"
+        for uri in (prompt_preview.get("allowed_tool_candidates") or [])[:8]
+    ) or "<li><span>No tool candidates captured</span><b>blocked</b></li>"
     next_command = str(decision.get("next_command") or "")
     scout_viewer = str(report.get("viewer_index") or "")
     return f"""<!doctype html>
@@ -420,7 +430,7 @@ def render_launch_gate_html(report: dict[str, Any]) -> str:
     .blocked {{ color: var(--amber); }}
     .fail {{ color: var(--red); }}
     .command {{ position: relative; }}
-    pre {{ white-space: pre-wrap; overflow-wrap: anywhere; color: #dce8e6; background: rgba(0,0,0,.3); border: 1px solid var(--line); border-radius: 8px; padding: 13px; margin: 12px 0 0; }}
+    pre {{ white-space: pre-wrap; overflow-wrap: anywhere; color: #dce8e6; background: rgba(0,0,0,.3); border: 1px solid var(--line); border-radius: 8px; padding: 13px; margin: 12px 0 0; max-height: 520px; overflow: auto; }}
     a {{ color: var(--cyan); text-decoration: none; }}
     .list {{ list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }}
     .list li {{ display: flex; justify-content: space-between; gap: 14px; border-top: 1px solid var(--line); padding-top: 9px; color: var(--muted); }}
@@ -493,6 +503,43 @@ def render_launch_gate_html(report: dict[str, Any]) -> str:
   </section>
 
   <section>
+    <h2>First Live Scout Preview</h2>
+    <p>This is what the first scout would see if the spend gate were opened: the routed market cell, evolved prompt variant, MarketEvolve stamp, and allowed tool surface.</p>
+    <div class="grid hero-grid">
+      <div class="card"><span>Cell</span><h3>{html.escape(_preview_cell(prompt_preview))}</h3><p>{html.escape(str(prompt_preview.get("theme") or "no theme"))}</p></div>
+      <div class="card"><span>Prompt variant</span><h3>{html.escape(str(prompt_preview.get("prompt_variant") or "unknown").replace("_", " "))}</h3><p>Contract pressure: {html.escape(str(prompt_preview.get("prompt_contract_pressure") or "normal"))}</p></div>
+      <div class="card"><span>MarketEvolve</span><h3>{html.escape(str((prompt_preview.get("market_evolve") or {}).get("experiment_arm") or "active"))}</h3><p>{html.escape(str((prompt_preview.get("market_evolve") or {}).get("program_name") or "program not captured"))}</p></div>
+      <div class="card"><span>Tool budget</span><h3>{html.escape(str(prompt_preview.get("tool_candidate_count") or 0))}</h3><p>Max evidence tools: {html.escape(str(prompt_preview.get("max_evidence_tools") or "?"))}</p></div>
+    </div>
+  </section>
+
+  <section class="grid two">
+    <div class="panel">
+      <h2>Allowed Tools</h2>
+      <ul class="list">{tool_rows}</ul>
+    </div>
+    <div class="panel">
+      <h2>Prompt Sizes</h2>
+      <ul class="list">
+        <li><span>System prompt chars</span><b>{html.escape(str(prompt_preview.get("system_prompt_chars") or 0))}</b></li>
+        <li><span>User prompt chars</span><b>{html.escape(str(prompt_preview.get("user_prompt_chars") or 0))}</b></li>
+        <li><span>Min strings</span><b>{html.escape(str(prompt_preview.get("minimum_information_strings") or "?"))}</b></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="grid two">
+    <div class="panel">
+      <h2>System Prompt Excerpt</h2>
+      <pre>{html.escape(str(prompt_preview.get("system_prompt_excerpt") or ""))}</pre>
+    </div>
+    <div class="panel">
+      <h2>User Prompt Excerpt</h2>
+      <pre>{html.escape(str(prompt_preview.get("user_prompt_excerpt") or ""))}</pre>
+    </div>
+  </section>
+
+  <section>
     <h2>Run Stages</h2>
     <div class="grid hero-grid">{stage_rows}</div>
   </section>
@@ -543,6 +590,16 @@ def _stage_card(stage: dict[str, Any]) -> str:
         f'<h3 class="{"pass" if ok else "fail"}">{html.escape(name)}</h3>'
         f'<p>{html.escape(str(stage.get("elapsed_s") or 0))}s</p></div>'
     )
+
+
+def _preview_cell(prompt_preview: dict[str, Any]) -> str:
+    parts = [
+        str(prompt_preview.get("entity") or "?"),
+        str(prompt_preview.get("horizon") or "?"),
+        str(prompt_preview.get("lens") or "?"),
+        str(prompt_preview.get("bias_mode") or "?"),
+    ]
+    return " / ".join(parts)
 
 
 def _status_class(status: str) -> str:
@@ -727,6 +784,37 @@ def _live_summary(report: dict[str, Any]) -> dict[str, Any]:
         "strings": info.get("string_count", 0),
         "strings_per_scout": scouts.get("avg_information_strings_per_scout", 0),
         "estimated_cost_usd": scouts.get("total_cost_usd_estimate", 0),
+    }
+
+
+def _prompt_preview_summary(report: dict[str, Any]) -> dict[str, Any]:
+    preview = report.get("prompt_preview") if isinstance(report.get("prompt_preview"), dict) else {}
+    seed = preview.get("seed") if isinstance(preview.get("seed"), dict) else {}
+    tool_policy = preview.get("tool_policy") if isinstance(preview.get("tool_policy"), dict) else {}
+    market_evolve = preview.get("market_evolve") if isinstance(preview.get("market_evolve"), dict) else {}
+    system_prompt = str(preview.get("system_prompt") or "")
+    user_prompt = str(preview.get("user_prompt") or "")
+    return {
+        "status": preview.get("status"),
+        "entity": seed.get("entity"),
+        "horizon": seed.get("horizon"),
+        "lens": seed.get("lens"),
+        "bias_mode": seed.get("bias_mode"),
+        "theme": seed.get("theme"),
+        "prompt_variant": preview.get("prompt_variant"),
+        "prompt_contract_pressure": preview.get("prompt_contract_pressure"),
+        "minimum_information_strings": preview.get("minimum_information_strings"),
+        "market_evolve": market_evolve,
+        "allowed_tool_candidates": tool_policy.get("allowed_tool_candidates") or [],
+        "tool_candidate_count": tool_policy.get("tool_candidate_count") or 0,
+        "max_evidence_tools": tool_policy.get("max_evidence_tools"),
+        "max_tool_iterations": tool_policy.get("max_tool_iterations"),
+        "source_family_targets": tool_policy.get("source_family_targets") or [],
+        "system_prompt_chars": preview.get("system_prompt_chars") or len(system_prompt),
+        "user_prompt_chars": preview.get("user_prompt_chars") or len(user_prompt),
+        "system_prompt_excerpt": system_prompt[:2400],
+        "user_prompt_excerpt": user_prompt[:2400],
+        "artifacts": preview.get("artifacts") or {},
     }
 
 

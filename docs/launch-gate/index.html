@@ -59,7 +59,7 @@
     .blocked { color: var(--amber); }
     .fail { color: var(--red); }
     .command { position: relative; }
-    pre { white-space: pre-wrap; overflow-wrap: anywhere; color: #dce8e6; background: rgba(0,0,0,.3); border: 1px solid var(--line); border-radius: 8px; padding: 13px; margin: 12px 0 0; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; color: #dce8e6; background: rgba(0,0,0,.3); border: 1px solid var(--line); border-radius: 8px; padding: 13px; margin: 12px 0 0; max-height: 520px; overflow: auto; }
     a { color: var(--cyan); text-decoration: none; }
     .list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
     .list li { display: flex; justify-content: space-between; gap: 14px; border-top: 1px solid var(--line); padding-top: 9px; color: var(--muted); }
@@ -132,8 +132,103 @@
   </section>
 
   <section>
+    <h2>First Live Scout Preview</h2>
+    <p>This is what the first scout would see if the spend gate were opened: the routed market cell, evolved prompt variant, MarketEvolve stamp, and allowed tool surface.</p>
+    <div class="grid hero-grid">
+      <div class="card"><span>Cell</span><h3>kFLOKI / 1d / factor / mean_reversion</h3><p>hyperliquid_node_intelligence</p></div>
+      <div class="card"><span>Prompt variant</span><h3>flash temporal v4</h3><p>Contract pressure: normal</p></div>
+      <div class="card"><span>MarketEvolve</span><h3>control</h3><p>rosewood_research_policy_v1</p></div>
+      <div class="card"><span>Tool budget</span><h3>10</h3><p>Max evidence tools: 2</p></div>
+    </div>
+  </section>
+
+  <section class="grid two">
+    <div class="panel">
+      <h2>Allowed Tools</h2>
+      <ul class="list"><li><span>tic://tool/builtin/query_timeseries@v1</span><b>allowed</b></li><li><span>tic://tool/builtin/query_source_health@v1</span><b>allowed</b></li><li><span>tic://tool/agent_native/find_similar_setups@v1</span><b>allowed</b></li><li><span>tic://tool/builtin/compute_float_absorption_rate@v1</span><b>allowed</b></li><li><span>tic://tool/builtin/compute_wallet_stats@v1</span><b>allowed</b></li><li><span>tic://tool/builtin/solar_iv_regression@v1</span><b>allowed</b></li><li><span>tic://tool/builtin/query_claims_by_entity@v1</span><b>allowed</b></li><li><span>tic://tool/agent_native/find_confluence@v1</span><b>allowed</b></li></ul>
+    </div>
+    <div class="panel">
+      <h2>Prompt Sizes</h2>
+      <ul class="list">
+        <li><span>System prompt chars</span><b>2684</b></li>
+        <li><span>User prompt chars</span><b>1064</b></li>
+        <li><span>Min strings</span><b>1</b></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="grid two">
+    <div class="panel">
+      <h2>System Prompt Excerpt</h2>
+      <pre>You are a Talis Flash scout in a scale repair arm. Study only the assigned market cell: entity, horizon, lens, bias, evidence, prior strings, and allowed tools in the user packet.
+
+Goal: emit exactly one top-level hypothesis that summarizes the strongest valid information_string, plus 1-2 decision-changing information_strings. Abstain only when every provided evidence packet is empty, stale for this horizon, or unsupported by the allowed sources.
+
+Scale-repair rules:
+- Do not leave `hypothesis` empty when `information_strings` is non-empty.
+- Do not leave `information_strings` empty when at least one evidence packet is fresh enough to update a watchlist, verifier task, route decision, or gap repair.
+- If the evidence is thin, write a low-conviction map string with a concrete missing-edge kill_signal rather than vague prose.
+- Every string must include time_horizon, time_scale, observed_at, source_time_basis, expires_at, temporal_confidence, extends_or_contradicts, and would_change_decision=true.
+- Every evidence_refs value must cite a provided tool_call_log_id or source ref. If none exists, abstain and say the missing source in rationale_brief.
+- suggested_tools must be copied exactly from allowed_tool_candidates; if none are useful, return an empty list rather than inventing.
+- No prose outside JSON. Keep JSON small.
+
+Return strict JSON only:
+{
+  &quot;hypothesis&quot;: &quot;&lt;falsifiable one-sentence claim, or empty string to abstain&gt;&quot;,
+  &quot;confidence&quot;: 0.0,
+  &quot;rationale_brief&quot;: &quot;&lt;mechanism, max 180 chars&gt;&quot;,
+  &quot;suggested_tools&quot;: [&quot;&lt;copy tic://... from allowed_tool_candidates&gt;&quot;, &quot;...&quot;],
+  &quot;information_strings&quot;: [
+    {
+      &quot;title&quot;: &quot;&lt;short title&gt;&quot;,
+      &quot;thesis&quot;: &quot;&lt;entity -&gt; mechanism -&gt; market implication&gt;&quot;,
+      &quot;entities_chain&quot;: [&quot;&lt;entity&gt;&quot;, &quot;&lt;actor/venue/theme&gt;&quot;],
+      &quot;mechanism&quot;: &quot;&lt;why this should reprice or update the map&gt;&quot;,
+      &quot;depth_layers&quot;: [{&quot;layer&quot;: 1, &quot;claim&quot;: &quot;&lt;direct effect&gt;&quot;}, {&quot;layer&quot;: 2, &quot;claim&quot;: &quot;&lt;second-order effect&gt;&quot;}],
+      &quot;expected_outcome&quot;: &quot;&lt;observable confirmation&gt;&quot;,
+      &quot;time_horizon&quot;: &quot;&lt;tick|minute|hour|intraday|1d|1w|1m|structural&gt;&quot;,
+      &quot;time_scale&quot;: &quot;&lt;same grain as claim&gt;&quot;,
+      &quot;observed_at&quot;: &quot;&lt;ISO8601 source/tool observation time, or as_of_utc&gt;&quot;,
+      &quot;source_time_basis&quot;: &quot;&lt;event_time|ingestion_time|publication_time|valid_time|unknown&gt;&quot;,
+      &quot;kill_signal&quot;: &quot;&lt;what breaks the chain&gt;&quot;,
+      &quot;extends_or_contradicts&quot;: &quot;&lt;new|ex</pre>
+    </div>
+    <div class="panel">
+      <h2>User Prompt Excerpt</h2>
+      <pre>as_of_utc=2026-05-22T15:26:48.056230+00:00
+Freshness rule: for intraday/1d/1w horizons, do not use old historical dates as live catalyst evidence unless explicitly labeled as regime context.
+
+Cell:
+  entity=kFLOKI
+  horizon=1d
+  lens=factor
+  bias_mode=mean_reversion
+  theme=hyperliquid_node_intelligence
+
+atlas_policy:
+  Scouts may use any read-only approved atlas tool/source before the LLM call, under the evidence budget. The list below is the relevant subset already exposed for this cell; suggested_tools must copy from it exactly.
+
+
+allowed_tool_candidates:
+  tic://tool/builtin/query_timeseries@v1
+  tic://tool/builtin/query_source_health@v1
+  tic://tool/agent_native/find_similar_setups@v1
+  tic://tool/builtin/compute_float_absorption_rate@v1
+  tic://tool/builtin/compute_wallet_stats@v1
+  tic://tool/builtin/solar_iv_regression@v1
+  tic://tool/builtin/query_claims_by_entity@v1
+  tic://tool/agent_native/find_confluence@v1
+  tic://tool/agent_native/replay_artifact_reasoning@v1
+  tic://tool/agent_native/semantic_search@v1
+
+Return one JSON object only.</pre>
+    </div>
+  </section>
+
+  <section>
     <h2>Run Stages</h2>
-    <div class="grid hero-grid"><div class="stage"><span>ok</span><h3 class="pass">deterministic 100</h3><p>3.102s</p></div><div class="stage"><span>ok</span><h3 class="pass">viewer export</h3><p>0.049s</p></div><div class="stage"><span>ok</span><h3 class="pass">live canary or preflight</h3><p>2.889s</p></div></div>
+    <div class="grid hero-grid"><div class="stage"><span>ok</span><h3 class="pass">deterministic 100</h3><p>2.792s</p></div><div class="stage"><span>ok</span><h3 class="pass">viewer export</h3><p>0.053s</p></div><div class="stage"><span>ok</span><h3 class="pass">live canary or preflight</h3><p>2.894s</p></div></div>
   </section>
 </main>
 </body>

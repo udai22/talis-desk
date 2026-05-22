@@ -16,6 +16,9 @@
 - mode: `preflight_no_live_spend`
 - status: `blocked`
 - failed_gates: `explicit_live_spend_allowed`
+- first_scout_cell: `kFLOKI / 1d / factor / mean_reversion`
+- first_scout_prompt_variant: `flash_temporal_v4`
+- first_scout_tool_candidates: `10`
 
 ## Tournament
 

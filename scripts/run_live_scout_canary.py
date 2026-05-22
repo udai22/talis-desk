@@ -49,6 +49,7 @@ from talis_desk.store import reset_desk_store_for_test
 from talis_desk.swarm.scout_runner import (
     _apply_prompt_contract_pressure,
     _build_user_prompt,
+    _prompt_variant_for_seed,
     run_scouts,
 )
 from talis_desk.swarm.seed_generator import (
@@ -135,6 +136,10 @@ def main() -> int:
         _force_live_seed_runtime_options(seeds, args=args)
         seed_path = prompt_output_dir / "live_scout_canary_seeds.json"
         _write_json(seed_path, [_seed_payload(seed) for seed in seeds])
+        prompt_preview = _write_live_prompt_preview(
+            prompt_output_dir=prompt_output_dir,
+            seeds=seeds,
+        )
 
         if not args.allow_live_spend:
             report = _blocked_report(
@@ -144,6 +149,7 @@ def main() -> int:
                 artifact_dir=artifact_dir,
                 prompt_output_dir=prompt_output_dir,
                 seed_path=seed_path,
+                prompt_preview=prompt_preview,
                 preflight=preflight,
                 reason="explicit_live_spend_flag_missing",
                 elapsed_s=time.perf_counter() - started,
@@ -160,6 +166,7 @@ def main() -> int:
                 artifact_dir=artifact_dir,
                 prompt_output_dir=prompt_output_dir,
                 seed_path=seed_path,
+                prompt_preview=prompt_preview,
                 preflight=preflight,
                 reason="provider_import_failed",
                 elapsed_s=time.perf_counter() - started,
@@ -312,6 +319,7 @@ def main() -> int:
             "prompt_variant_override": args.prompt_variant,
             "max_tool_iterations": args.max_tool_iterations,
             "preflight": preflight,
+            "prompt_preview": prompt_preview,
             "metrics": metrics,
             "verdict": verdict,
             "artifacts": {
@@ -538,6 +546,71 @@ def _write_primary_live_artifacts(
     _write_json(prompt_output_dir / "live_scout_transcript.json", transcript)
 
 
+def _write_live_prompt_preview(
+    *,
+    prompt_output_dir: Path,
+    seeds: list[SeedCell],
+) -> dict[str, Any]:
+    seed = seeds[0] if seeds else None
+    if seed is None:
+        payload = {
+            "schema_version": "talis_live_scout_prompt_preview_v1",
+            "status": "no_seed_available",
+        }
+        _write_json(prompt_output_dir / "live_scout_prompt_preview.json", payload)
+        return payload
+    variant = _prompt_variant_for_seed(seed)
+    system_prompt = _apply_prompt_contract_pressure(
+        build_deep_scout_system_prompt(variant),
+        seed,
+    )
+    user_prompt = _build_user_prompt(seed, tool_evidence=[])
+    seed_payload = _seed_payload(seed)
+    payload_dict = seed.payload if isinstance(seed.payload, dict) else {}
+    tool_candidates = [
+        str(x)
+        for x in (payload_dict.get("tool_candidates") or [])
+        if str(x).strip()
+    ]
+    preview = {
+        "schema_version": "talis_live_scout_prompt_preview_v1",
+        "status": "ready",
+        "seed": seed_payload,
+        "prompt_variant": variant,
+        "prompt_contract_pressure": payload_dict.get("prompt_contract_pressure"),
+        "minimum_information_strings": payload_dict.get("prompt_min_information_strings"),
+        "market_evolve": {
+            "program_id": payload_dict.get("market_evolve_program_id"),
+            "program_name": payload_dict.get("market_evolve_program_name"),
+            "generation": payload_dict.get("market_evolve_generation"),
+            "experiment_id": payload_dict.get("market_evolve_experiment_id"),
+            "experiment_arm": payload_dict.get("market_evolve_experiment_arm"),
+            "applied": bool(payload_dict.get("market_evolve_applied")),
+        },
+        "tool_policy": {
+            "allowed_tool_candidates": tool_candidates,
+            "tool_candidate_count": len(tool_candidates),
+            "max_evidence_tools": payload_dict.get("max_evidence_tools"),
+            "max_tool_iterations": payload_dict.get("max_tool_iterations"),
+            "source_family_targets": payload_dict.get("source_family_targets") or [],
+            "prefer_learned_tools": bool(payload_dict.get("prefer_learned_tools")),
+        },
+        "system_prompt": system_prompt,
+        "user_prompt": user_prompt,
+        "system_prompt_chars": len(system_prompt),
+        "user_prompt_chars": len(user_prompt),
+        "artifacts": {
+            "json": str(prompt_output_dir / "live_scout_prompt_preview.json"),
+            "system_prompt": str(prompt_output_dir / "live_scout_preview_system_prompt.md"),
+            "user_prompt": str(prompt_output_dir / "live_scout_preview_user_prompt.md"),
+        },
+    }
+    _write_text(prompt_output_dir / "live_scout_preview_system_prompt.md", system_prompt)
+    _write_text(prompt_output_dir / "live_scout_preview_user_prompt.md", user_prompt)
+    _write_json(prompt_output_dir / "live_scout_prompt_preview.json", preview)
+    return preview
+
+
 def _live_canary_verdict(
     metrics: dict[str, Any],
     *,
@@ -619,6 +692,7 @@ def _blocked_report(
     artifact_dir: Path,
     prompt_output_dir: Path,
     seed_path: Path,
+    prompt_preview: dict[str, Any],
     preflight: dict[str, Any],
     reason: str,
     elapsed_s: float,
@@ -648,6 +722,7 @@ def _blocked_report(
         "prompt_variant_override": args.prompt_variant,
         "max_tool_iterations": args.max_tool_iterations,
         "preflight": preflight,
+        "prompt_preview": prompt_preview,
         "verdict": {
             "status": "blocked",
             "reason": reason,
@@ -658,7 +733,12 @@ def _blocked_report(
             "interpretation": "No live model calls were made. This is an anti-waste preflight artifact.",
         },
         "metrics": {"elapsed_s": round(elapsed_s, 3)},
-        "artifacts": {"seeds": str(seed_path)},
+        "artifacts": {
+            "seeds": str(seed_path),
+            "prompt_preview": str(prompt_output_dir / "live_scout_prompt_preview.json"),
+            "preview_system_prompt": str(prompt_output_dir / "live_scout_preview_system_prompt.md"),
+            "preview_user_prompt": str(prompt_output_dir / "live_scout_preview_user_prompt.md"),
+        },
         "scale_decision": {
             "decision": "do_not_scale_yet",
             "next_step": "Run this same script with --allow-live-spend under a tiny cost cap, then inspect the live canary gates.",

@@ -49,6 +49,9 @@ def test_launch_gate_preflight_blocks_before_live_spend_but_allows_authorized_ca
     assert "Ready, but the spend gate is locked." in html
     assert "337" in html
     assert "86" in html
+    assert "First Live Scout Preview" in html
+    assert "HYPE / intraday / on_chain / frontier" in html
+    assert "tic://tool/builtin/query_events_recent@v1" in html
     assert "launch_gate_report.json" in html
 
 
@@ -150,6 +153,37 @@ def _live_preflight_report():
         },
         "scale_decision": {"decision": "do_not_scale_yet"},
         "metrics": {},
+        "prompt_preview": {
+            "status": "ready",
+            "seed": {
+                "entity": "HYPE",
+                "horizon": "intraday",
+                "lens": "on_chain",
+                "bias_mode": "frontier",
+                "theme": "validator_unstake",
+            },
+            "prompt_variant": "flash_temporal_v4",
+            "prompt_contract_pressure": "raise",
+            "minimum_information_strings": 2,
+            "market_evolve": {
+                "program_name": "rosewood_research_policy_v1",
+                "experiment_arm": "control",
+                "applied": True,
+            },
+            "tool_policy": {
+                "allowed_tool_candidates": [
+                    "tic://tool/builtin/query_events_recent@v1",
+                    "tic://source/hl/hl_reject_corpus",
+                ],
+                "tool_candidate_count": 2,
+                "max_evidence_tools": 2,
+                "max_tool_iterations": 0,
+            },
+            "system_prompt": "Return strict JSON only with information strings.",
+            "user_prompt": "entity=HYPE\nallowed_tool_candidates:\n  tic://tool/builtin/query_events_recent@v1",
+            "system_prompt_chars": 49,
+            "user_prompt_chars": 86,
+        },
     }
 
 
