@@ -12,6 +12,7 @@
           "flash_temporal_v4"
         ],
         "provider_timeout_s": 45.0,
+        "ramp_policy_path": "/Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_ramp_policy.json",
         "seed_rng": 20260522
       },
       "cycle_id": "cycle_live100_20260522_live_100",
@@ -40,6 +41,16 @@
         "low_prompt_quality_rate_le_max": true,
         "original_canary_status_pass": true,
         "provider_error_rate_le_max": true,
+        "ramp_policy_rehearsal_decision_can_gate_spend": true,
+        "ramp_policy_rehearsal_observed": true,
+        "ramp_policy_rehearsal_over_limit_count_eq_0": true,
+        "ramp_policy_rehearsal_policy_attached_rate_ge_1_00": true,
+        "ramp_policy_rehearsal_repair_ids_attached_rate_ge_1_00": true,
+        "ramp_policy_rehearsal_source_coverage_ge_0_60": true,
+        "ramp_policy_rehearsal_status_pass": true,
+        "ramp_policy_rehearsal_strict_contract_rate_ge_1_00": true,
+        "ramp_policy_rehearsal_tool_refresh_rate_ge_0_95": true,
+        "ramp_policy_rehearsal_watch_metrics_attached_rate_ge_1_00": true,
         "sample_size_ge_min": true,
         "self_healing_no_failures": true,
         "strings_per_scout_ge_min": true,
@@ -148,6 +159,48 @@
         "tool_error_rate": 0.0,
         "transcript_error_count": 0
       },
+      "ramp_policy_rehearsal": {
+        "decision": "policy_can_gate_live_spend",
+        "failed_gates": [],
+        "gates": {
+          "ramp_policy_rehearsal_decision_can_gate_spend": true,
+          "ramp_policy_rehearsal_observed": true,
+          "ramp_policy_rehearsal_over_limit_count_eq_0": true,
+          "ramp_policy_rehearsal_policy_attached_rate_ge_1_00": true,
+          "ramp_policy_rehearsal_repair_ids_attached_rate_ge_1_00": true,
+          "ramp_policy_rehearsal_source_coverage_ge_0_60": true,
+          "ramp_policy_rehearsal_status_pass": true,
+          "ramp_policy_rehearsal_strict_contract_rate_ge_1_00": true,
+          "ramp_policy_rehearsal_tool_refresh_rate_ge_0_95": true,
+          "ramp_policy_rehearsal_watch_metrics_attached_rate_ge_1_00": true
+        },
+        "metrics": {
+          "candidate_tool_delta_avg": 0.917,
+          "over_limit_count": 0,
+          "policy_attached_rate": 1.0,
+          "repair_ids_attached_rate": 1.0,
+          "source_target_coverage_rate": 1.0,
+          "strict_contract_rate": 1.0,
+          "tool_candidate_added_count": 11,
+          "tool_candidate_refresh_rate": 1.0,
+          "watch_metrics_attached_rate": 1.0
+        },
+        "observed": true,
+        "path": "/Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_ramp_policy_rehearsal.json",
+        "policy_path": "/Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_ramp_policy.json",
+        "required": true,
+        "score": 1.0,
+        "source": "sibling_artifact",
+        "status": "pass",
+        "target_source_family_hits": {
+          "event_feed": 9,
+          "hydromancer": 5,
+          "market_timeseries": 12,
+          "our_node": 6,
+          "parallel_web": 4,
+          "source_health": 12
+        }
+      },
       "sample": {
         "completed": 93,
         "errored": 1,
@@ -155,16 +208,16 @@
         "requested": 100
       },
       "score": 0.9625,
-      "source_report": "/private/tmp/talis-live100-20260522/live_canary/prompt_outputs/live_scout_canary_report.json"
+      "source_report": "/Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_canary_report.json"
     }
   ],
-  "generated_at": "2026-05-22T15:50:40.183039+00:00",
+  "generated_at": "2026-05-22T16:42:55.783020+00:00",
   "input_reports": [
-    "/private/tmp/talis-live100-20260522/live_canary/prompt_outputs/live_scout_canary_report.json"
+    "/Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_canary_report.json"
   ],
   "next_experiment_plan": [
     {
-      "command": "PYTHONPATH=.:talis_tic python scripts/run_live_scout_canary.py --n-scouts 1000 --concurrency 8 --cost-cap-usd 5.00 --provider-timeout-s 45 --prompt-variant flash_temporal_v4 --max-tool-iterations 1 --allow-live-spend",
+      "command": "PYTHONPATH=.:talis_tic python scripts/run_live_scout_canary.py --n-scouts 1000 --concurrency 8 --cost-cap-usd 5.00 --provider-timeout-s 45 --prompt-variant flash_temporal_v4 --max-tool-iterations 1 --ramp-policy /Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_ramp_policy.json --allow-live-spend",
       "id": "live_1000_ramp",
       "promotion_rule": "Promote to a repeat 1,000-scout shadow trial only if the 1,000-scout run keeps provider errors <= 0.02, success >= 0.9, duplicate rate <= 0.2, structural misses <= 0.1, and produces usable geometry/coverage deltas. Scheduled production remains blocked until an independent repeat 1,000 run passes.",
       "purpose": "Validate the winning policy at broad market-sensing scale under a hard cap."
@@ -277,6 +330,13 @@
     "production_min_geometry_cell_ratio": 0.8,
     "production_min_information_string_ratio": 0.8,
     "production_min_shadow_runs": 2,
+    "ramp_policy_rehearsal_max_over_limit_count": 0,
+    "ramp_policy_rehearsal_min_policy_attached_rate": 1.0,
+    "ramp_policy_rehearsal_min_repair_ids_attached_rate": 1.0,
+    "ramp_policy_rehearsal_min_source_target_coverage_rate": 0.6,
+    "ramp_policy_rehearsal_min_strict_contract_rate": 1.0,
+    "ramp_policy_rehearsal_min_tool_candidate_refresh_rate": 0.95,
+    "ramp_policy_rehearsal_min_watch_metrics_attached_rate": 1.0,
     "scale_max_duplicate_rate": 0.2,
     "scale_max_provider_error_rate": 0.02,
     "scale_max_structural_flag_rate": 0.1,
@@ -299,6 +359,7 @@
         "flash_temporal_v4"
       ],
       "provider_timeout_s": 45.0,
+      "ramp_policy_path": "/Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_ramp_policy.json",
       "seed_rng": 20260522
     },
     "cycle_id": "cycle_live100_20260522_live_100",
@@ -327,6 +388,16 @@
       "low_prompt_quality_rate_le_max": true,
       "original_canary_status_pass": true,
       "provider_error_rate_le_max": true,
+      "ramp_policy_rehearsal_decision_can_gate_spend": true,
+      "ramp_policy_rehearsal_observed": true,
+      "ramp_policy_rehearsal_over_limit_count_eq_0": true,
+      "ramp_policy_rehearsal_policy_attached_rate_ge_1_00": true,
+      "ramp_policy_rehearsal_repair_ids_attached_rate_ge_1_00": true,
+      "ramp_policy_rehearsal_source_coverage_ge_0_60": true,
+      "ramp_policy_rehearsal_status_pass": true,
+      "ramp_policy_rehearsal_strict_contract_rate_ge_1_00": true,
+      "ramp_policy_rehearsal_tool_refresh_rate_ge_0_95": true,
+      "ramp_policy_rehearsal_watch_metrics_attached_rate_ge_1_00": true,
       "sample_size_ge_min": true,
       "self_healing_no_failures": true,
       "strings_per_scout_ge_min": true,
@@ -435,6 +506,48 @@
       "tool_error_rate": 0.0,
       "transcript_error_count": 0
     },
+    "ramp_policy_rehearsal": {
+      "decision": "policy_can_gate_live_spend",
+      "failed_gates": [],
+      "gates": {
+        "ramp_policy_rehearsal_decision_can_gate_spend": true,
+        "ramp_policy_rehearsal_observed": true,
+        "ramp_policy_rehearsal_over_limit_count_eq_0": true,
+        "ramp_policy_rehearsal_policy_attached_rate_ge_1_00": true,
+        "ramp_policy_rehearsal_repair_ids_attached_rate_ge_1_00": true,
+        "ramp_policy_rehearsal_source_coverage_ge_0_60": true,
+        "ramp_policy_rehearsal_status_pass": true,
+        "ramp_policy_rehearsal_strict_contract_rate_ge_1_00": true,
+        "ramp_policy_rehearsal_tool_refresh_rate_ge_0_95": true,
+        "ramp_policy_rehearsal_watch_metrics_attached_rate_ge_1_00": true
+      },
+      "metrics": {
+        "candidate_tool_delta_avg": 0.917,
+        "over_limit_count": 0,
+        "policy_attached_rate": 1.0,
+        "repair_ids_attached_rate": 1.0,
+        "source_target_coverage_rate": 1.0,
+        "strict_contract_rate": 1.0,
+        "tool_candidate_added_count": 11,
+        "tool_candidate_refresh_rate": 1.0,
+        "watch_metrics_attached_rate": 1.0
+      },
+      "observed": true,
+      "path": "/Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_ramp_policy_rehearsal.json",
+      "policy_path": "/Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_ramp_policy.json",
+      "required": true,
+      "score": 1.0,
+      "source": "sibling_artifact",
+      "status": "pass",
+      "target_source_family_hits": {
+        "event_feed": 9,
+        "hydromancer": 5,
+        "market_timeseries": 12,
+        "our_node": 6,
+        "parallel_web": 4,
+        "source_health": 12
+      }
+    },
     "sample": {
       "completed": 93,
       "errored": 1,
@@ -442,6 +555,6 @@
       "requested": 100
     },
     "score": 0.9625,
-    "source_report": "/private/tmp/talis-live100-20260522/live_canary/prompt_outputs/live_scout_canary_report.json"
+    "source_report": "/Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_canary_report.json"
   }
 }
