@@ -223,6 +223,19 @@
       },
       "score": 0.9163,
       "source_report": "/Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_canary_report.json",
+      "tool_creation_contract_repair": {
+        "after": {},
+        "before": {},
+        "enabled": false,
+        "failed_gates": [],
+        "gates": {},
+        "observed": false,
+        "quality_flags": [
+          "tool_creation_contract_repair_missing"
+        ],
+        "repairs_created": 0,
+        "status": "missing"
+      },
       "tool_creation_evolution": {
         "db_path": "/private/tmp/talis-live100-20260522/live_canary/desk-live-canary.db",
         "expected_tool_proposals": 4,
@@ -318,7 +331,7 @@
       }
     }
   ],
-  "generated_at": "2026-05-22T17:25:53.959617+00:00",
+  "generated_at": "2026-05-22T17:33:40.831612+00:00",
   "input_reports": [
     "/Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_canary_report.json"
   ],
@@ -683,6 +696,19 @@
     },
     "score": 0.9163,
     "source_report": "/Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_canary_report.json",
+    "tool_creation_contract_repair": {
+      "after": {},
+      "before": {},
+      "enabled": false,
+      "failed_gates": [],
+      "gates": {},
+      "observed": false,
+      "quality_flags": [
+        "tool_creation_contract_repair_missing"
+      ],
+      "repairs_created": 0,
+      "status": "missing"
+    },
     "tool_creation_evolution": {
       "db_path": "/private/tmp/talis-live100-20260522/live_canary/desk-live-canary.db",
       "expected_tool_proposals": 4,

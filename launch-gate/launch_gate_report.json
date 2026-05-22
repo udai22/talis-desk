@@ -7687,7 +7687,8 @@
       },
       "unique_cell_count": 80
     },
-    "status": "pass"
+    "status": "pass",
+    "tool_creation_contract_repair": {}
   },
   "proof_ladder": [
     {
@@ -15969,6 +15970,19 @@
     "ready_for_live_1000": false,
     "ready_for_scheduled_production": false,
     "reason": "The top candidate `flash_temporal_v4_deepseek_v4_flash_n100_t45_0_c4_iter1_live_100` still failed: tool_creation_quality_pass_rate_ge_0_70, tool_creation_eval_plan_rate_ge_0_85, tool_creation_expected_edge_rate_ge_0_60, tool_creation_would_change_decision_rate_ge_0_60. Do not promote the 100-scout stage yet.",
+    "tool_creation_contract_repair": {
+      "after": {},
+      "before": {},
+      "enabled": false,
+      "failed_gates": [],
+      "gates": {},
+      "observed": false,
+      "quality_flags": [
+        "tool_creation_contract_repair_missing"
+      ],
+      "repairs_created": 0,
+      "status": "missing"
+    },
     "tool_creation_evolution": {
       "db_path": "/private/tmp/talis-live100-20260522/live_canary/desk-live-canary.db",
       "expected_tool_proposals": 4,
