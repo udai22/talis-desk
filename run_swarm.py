@@ -224,6 +224,7 @@ def main() -> int:
     from talis_desk.swarm.seed_generator import (
         SeedCell,
         generate_alpha_geometry_route_seeds,
+        generate_information_perfusion_seeds,
         generate_market_map_governor_seeds,
         generate_seeds,
         load_themes_from_meta,
@@ -270,9 +271,18 @@ def main() -> int:
     if geometry_route_seeds:
         print(f"  alpha_geometry injected {len(geometry_route_seeds)} route-followup seeds")
     remaining_after_geometry = max(0, args.n_seeds - len(geometry_route_seeds))
-    governor_seeds = generate_market_map_governor_seeds(
+    perfusion_seeds = generate_information_perfusion_seeds(
         cycle_id=cycle_id,
         n_seed_budget=remaining_after_geometry,
+        program=active_market_program,
+        conn=_store_mod._STORE.conn,
+    )
+    if perfusion_seeds:
+        print(f"  information_perfusion injected {len(perfusion_seeds)} pressure-followup seeds")
+    remaining_after_perfusion = max(0, remaining_after_geometry - len(perfusion_seeds))
+    governor_seeds = generate_market_map_governor_seeds(
+        cycle_id=cycle_id,
+        n_seed_budget=remaining_after_perfusion,
         program=active_market_program,
         conn=_store_mod._STORE.conn,
         use_llm=not args.skip_market_map_llm_governor,
@@ -281,14 +291,14 @@ def main() -> int:
     )
     if governor_seeds:
         print(f"  map_governor injected {len(governor_seeds)} frontier/gap-repair seeds")
-    base_seed_count = max(0, args.n_seeds - len(geometry_route_seeds) - len(governor_seeds))
+    base_seed_count = max(0, args.n_seeds - len(geometry_route_seeds) - len(perfusion_seeds) - len(governor_seeds))
     seeds = generate_seeds(
         n_seeds=base_seed_count,
         cycle_id=cycle_id,
         themes=themes or None,
         rng_seed=seed_rng,
     )
-    seeds = geometry_route_seeds + governor_seeds + seeds
+    seeds = geometry_route_seeds + perfusion_seeds + governor_seeds + seeds
     calendar_seeds = _calendar_gate_seeds(cycle_id=cycle_id, conn=_store_mod._STORE.conn)
     if calendar_seeds:
         for seed in calendar_seeds:
@@ -521,7 +531,11 @@ def main() -> int:
         banner("TIER 1.33 — information-map attention synthesis")
         t133 = time.perf_counter()
         try:
-            from talis_desk.information_map import load_alpha_geometry, run_information_synthesis
+            from talis_desk.information_map import (
+                compute_information_perfusion,
+                load_alpha_geometry,
+                run_information_synthesis,
+            )
             from talis_desk.swarm.information_bridge import promoted_scouts_from_synthesis
 
             information_synthesis = run_information_synthesis(
@@ -558,6 +572,17 @@ def main() -> int:
                     f"scream={float(cell.get('trade_scream_score') or 0):.2f} "
                     f"ready={float(cell.get('verifier_readiness') or 0):.2f}"
                 )
+            perfusion = compute_information_perfusion(
+                cycle_id=cycle_id,
+                scout_budget=max(8, min(64, args.n_seeds)),
+                persist=True,
+            )
+            print(
+                "  perfusion        = "
+                f"{len(perfusion.cells)} cells "
+                f"routed={int(perfusion.global_metrics.get('routed_cell_count') or 0)} "
+                f"max_dilation={float(perfusion.global_metrics.get('max_dilation_score') or 0):.2f}"
+            )
             print(f"  synthesis_cost    = ${information_synthesis.cost_usd:.4f}")
             print(f"  synthesis_flags   = {information_synthesis.quality_flags}")
             print(f"  synthesis_elapsed = {t133_elapsed:.1f}s")

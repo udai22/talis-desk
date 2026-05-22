@@ -464,6 +464,7 @@ _JARVIS_BRIDGE_TOOL_NAMES = {
 
 _TALIS_NATIVE_TOOL_NAMES = {
     "plan_alpha_geometry_actions",
+    "compute_information_perfusion",
 }
 
 

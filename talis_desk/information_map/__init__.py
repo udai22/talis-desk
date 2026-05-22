@@ -75,6 +75,16 @@ from .outcomes import (
     persist_price_observations,
     summarize_information_price_outcomes,
 )
+from .perfusion import (
+    PERFUSION_SCHEMA_VERSION,
+    InformationPerfusionCell,
+    InformationPerfusionSnapshot,
+    compute_information_perfusion,
+    information_perfusion_seed_directives,
+    latest_information_perfusion_cycle,
+    load_information_perfusion,
+    persist_information_perfusion,
+)
 from .price_sources import (
     PriceObservationBatch,
     collect_hyperliquid_mid_price_observations,
@@ -203,6 +213,14 @@ __all__ = [
     "normalize_price_observation",
     "persist_price_observations",
     "summarize_information_price_outcomes",
+    "PERFUSION_SCHEMA_VERSION",
+    "InformationPerfusionCell",
+    "InformationPerfusionSnapshot",
+    "compute_information_perfusion",
+    "information_perfusion_seed_directives",
+    "latest_information_perfusion_cycle",
+    "load_information_perfusion",
+    "persist_information_perfusion",
     "PriceObservationBatch",
     "collect_hyperliquid_mid_price_observations",
     "default_hyperliquid_price_sources",

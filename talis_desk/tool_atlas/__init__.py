@@ -34,6 +34,7 @@ from .learned_lifecycle import (
     scaffold_learned_tool,
 )
 from .native_tools import (
+    compute_information_perfusion_tool,
     get_native_callable,
     native_tool_specs,
     plan_alpha_geometry_actions_tool,
@@ -69,6 +70,7 @@ __all__ = [
     "repair_low_quality_analysis_tool_proposals",
     "register_learned_tool_in_atlas",
     "scaffold_learned_tool",
+    "compute_information_perfusion_tool",
     "get_native_callable",
     "native_tool_specs",
     "plan_alpha_geometry_actions_tool",

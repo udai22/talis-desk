@@ -113,6 +113,7 @@ BIAS_MODES: list[str] = [
 
 ALPHA_GEOMETRY_ACTION_TOOL_URI = "tic://tool/talis_native/plan_alpha_geometry_actions@v1"
 GROK_X_ALPHA_TOOL_URI = "tic://tool/talis_native/farm_grok_x_alpha@v1"
+INFORMATION_PERFUSION_TOOL_URI = "tic://tool/talis_native/compute_information_perfusion@v1"
 
 
 @dataclass
@@ -543,6 +544,113 @@ def generate_market_map_governor_seeds(
     return out
 
 
+def generate_information_perfusion_seeds(
+    *,
+    cycle_id: str,
+    n_seed_budget: int,
+    source_cycle_id: Optional[str] = None,
+    program: Any = None,
+    max_seeds: Optional[int] = None,
+    conn: Optional[sqlite3.Connection] = None,
+) -> list[SeedCell]:
+    """Route scouts from the prior information-perfusion matrix.
+
+    This is the continuous-intelligence allocator: cells with information
+    pressure that price has not absorbed get more scout flow; thin but
+    promising cells get source oxygenation or price sensors instead of blind
+    call-count scale.
+    """
+    if int(n_seed_budget) <= 0:
+        return []
+    db = conn or get_desk_store().conn
+    budget = _information_perfusion_seed_budget(
+        n_seed_budget=n_seed_budget,
+        program=program,
+        max_seeds=max_seeds,
+    )
+    if budget <= 0:
+        return []
+    try:
+        from ..information_map import latest_information_perfusion_cycle, load_information_perfusion
+    except Exception:
+        return []
+    source_cycle = source_cycle_id or latest_information_perfusion_cycle(
+        exclude_cycle_id=cycle_id,
+        conn=db,
+    )
+    if not source_cycle:
+        return []
+    try:
+        rows = load_information_perfusion(cycle_id=source_cycle, limit=256, conn=db)
+    except Exception as exc:
+        logger.info("information perfusion seed generation skipped: %s", exc)
+        return []
+    route_rows = [
+        row for row in rows
+        if str(row.get("route_directive") or "maintain") != "maintain"
+    ]
+    if not route_rows:
+        return []
+    route_rows.sort(key=_information_perfusion_route_sort_key, reverse=True)
+
+    out: list[SeedCell] = []
+    seen: set[tuple[str, str, str, str]] = set()
+    for row in route_rows:
+        directive = str(row.get("route_directive") or "maintain")
+        entity = str(row.get("entity") or "UNKNOWN").upper()
+        horizon = str(row.get("horizon") or "intraday")
+        lens = _coerce_lens_for_entity(entity, str(row.get("lens") or "anomaly"), len(out))
+        bias = _bias_for_information_perfusion_route(directive)
+        key = (entity, horizon, lens, directive)
+        if key in seen:
+            continue
+        seen.add(key)
+        metrics = dict(row.get("metrics") or {})
+        suggested_tools = [
+            str(tool)
+            for tool in (row.get("suggested_tools") or [])
+            if str(tool).strip()
+        ]
+        recommended = int(row.get("recommended_scouts") or 1)
+        seed = SeedCell(
+            seed_id=f"seed_{cycle_id}_P_{len(out):04d}_{_short_hash(source_cycle, row.get('cell_key'), directive)}",
+            entity=entity,
+            horizon=horizon,
+            lens=lens,
+            bias_mode=bias,
+            theme=str(row.get("theme") or f"information_perfusion_{directive}")[:80],
+            weight=_information_perfusion_route_weight(directive, metrics),
+            frontier_boost=max(1.0, 1.0 + float(metrics.get("pressure_gradient") or 0.0)),
+            coverage_penalty=max(0.1, min(1.0, 1.0 - float(metrics.get("resistance") or 0.0) * 0.35)),
+            payload={
+                "source": "information_perfusion_route",
+                "information_perfusion_source_cycle_id": source_cycle,
+                "information_perfusion_cell_key": row.get("cell_key"),
+                "information_perfusion_route_directive": directive,
+                "information_perfusion_recommended_scouts": recommended,
+                "information_pressure": float(metrics.get("information_pressure") or 0.0),
+                "price_absorption": float(metrics.get("price_absorption") or 0.0),
+                "pressure_gradient": float(metrics.get("pressure_gradient") or 0.0),
+                "source_oxygenation": float(metrics.get("source_oxygenation") or 0.0),
+                "resistance": float(metrics.get("resistance") or 0.0),
+                "dilation_score": float(metrics.get("dilation_score") or 0.0),
+                "source_families": row.get("source_families") or [],
+                "suggested_tools": suggested_tools,
+                "why_this_seed_exists": _information_perfusion_seed_reason(directive),
+            },
+        )
+        seed.payload["tool_candidates"] = _merge_tool_candidates(
+            [INFORMATION_PERFUSION_TOOL_URI],
+            suggested_tools,
+            narrow_tools_for_seed(seed, k=max(8, min(24, len(suggested_tools) + 8))),
+            k=24,
+        )
+        out.append(seed)
+        if len(out) >= min(budget, max(1, sum(max(1, int(r.get("recommended_scouts") or 1)) for r in route_rows))):
+            break
+    return out[:budget]
+
+
 # ----------------------------------------------------------------------
 # Coverage history loading
 # ----------------------------------------------------------------------
@@ -715,6 +823,26 @@ def _market_governor_seed_budget(
     return max(1, min(160, int(round(max(0, int(n_seed_budget)) * share))))
 
 
+def _information_perfusion_seed_budget(
+    *,
+    n_seed_budget: int,
+    program: Any = None,
+    max_seeds: Optional[int] = None,
+) -> int:
+    if max_seeds is not None:
+        return max(0, min(128, int(max_seeds)))
+    if int(n_seed_budget) <= 0:
+        return 0
+    genome = getattr(program, "genome", None) or {}
+    routing = dict((genome.get("routing_thresholds") if isinstance(genome, dict) else {}) or {})
+    share = _bounded_share(
+        routing.get("price_feedback_exploitation_budget_share"),
+        default=0.02,
+    )
+    share = max(0.01, min(0.20, share))
+    return max(1, min(96, int(round(max(0, int(n_seed_budget)) * share))))
+
+
 def _bounded_share(raw: Any, *, default: float) -> float:
     try:
         value = float(raw)
@@ -741,6 +869,24 @@ def _geometry_route_sort_key(row: dict[str, Any]) -> tuple[float, float, float, 
     )
 
 
+def _information_perfusion_route_sort_key(row: dict[str, Any]) -> tuple[float, float, float, float]:
+    directive = str(row.get("route_directive") or "")
+    metrics = dict(row.get("metrics") or {})
+    priority = {
+        "dilate_scouts": 5.0,
+        "attach_price_sensors": 4.2,
+        "oxygenate_sources": 3.8,
+        "decongest_or_repair": 2.8,
+        "harvest_outcome": 2.0,
+    }.get(directive, 0.0)
+    return (
+        priority,
+        float(metrics.get("dilation_score") or 0.0),
+        float(metrics.get("pressure_gradient") or 0.0),
+        float(row.get("recommended_scouts") or 0.0),
+    )
+
+
 def _bias_for_geometry_route(directive: str) -> str:
     return {
         "verify_now": "consensus_confirm",
@@ -748,6 +894,16 @@ def _bias_for_geometry_route(directive: str) -> str:
         "resolve_tension": "contrarian",
         "widen_sources": "frontier",
         "widen_scouts": "frontier",
+    }.get(directive, "frontier")
+
+
+def _bias_for_information_perfusion_route(directive: str) -> str:
+    return {
+        "dilate_scouts": "momentum",
+        "attach_price_sensors": "frontier",
+        "oxygenate_sources": "frontier",
+        "decongest_or_repair": "contrarian",
+        "harvest_outcome": "consensus_confirm",
     }.get(directive, "frontier")
 
 
@@ -762,6 +918,17 @@ def _geometry_route_weight(directive: str, metrics: dict[str, Any]) -> float:
     return round(base + min(1.0, float(metrics.get("trade_scream_score") or 0.0)), 4)
 
 
+def _information_perfusion_route_weight(directive: str, metrics: dict[str, Any]) -> float:
+    base = {
+        "dilate_scouts": 3.2,
+        "attach_price_sensors": 2.7,
+        "oxygenate_sources": 2.4,
+        "decongest_or_repair": 1.8,
+        "harvest_outcome": 1.5,
+    }.get(directive, 1.0)
+    return round(max(0.2, min(4.0, base + float(metrics.get("dilation_score") or 0.0))), 4)
+
+
 def _geometry_route_seed_reason(directive: str) -> str:
     return {
         "verify_now": "Prior alpha geometry crossed the verifier gate; allocate a scout to gather final source-backed confirmation.",
@@ -770,6 +937,16 @@ def _geometry_route_seed_reason(directive: str) -> str:
         "widen_sources": "Prior alpha geometry had frontier pressure with weak source independence; allocate a scout to find missing source families.",
         "widen_scouts": "Prior alpha geometry was thin but novel; allocate another scout to test whether the cell is real.",
     }.get(directive, "Prior alpha geometry requested more attention for this market cell.")
+
+
+def _information_perfusion_seed_reason(directive: str) -> str:
+    return {
+        "dilate_scouts": "Information pressure is high, sources are oxygenated, and price has not fully absorbed it.",
+        "attach_price_sensors": "The cell has information pressure but lacks enough price outcome observations.",
+        "oxygenate_sources": "The cell may matter, but independent source coverage is too thin for wider spend.",
+        "decongest_or_repair": "The cell carries pressure but resistance/crowding/fragility must be repaired before scale.",
+        "harvest_outcome": "Price has absorbed a prior string; replay the setup and extract reusable routing/tool lessons.",
+    }.get(directive, "Information perfusion matrix requested follow-up.")
 
 
 def _short_hash(*parts: str) -> str:

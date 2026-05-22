@@ -35,6 +35,7 @@ RAW_ARTIFACTS = [
     "live_price_observations_start.json",
     "live_price_observations_final.json",
     "information_price_outcomes.json",
+    "information_perfusion.json",
     "live_scout_tournament_report.json",
     "live_scout_tournament_report.md",
     "live_scout_transcript.json",
@@ -108,6 +109,10 @@ def build_agent_graph_state(
         _read_json(raw_dir / "information_price_outcomes.json", {})
         or _read_json(prompt_dir / "information_price_outcomes.json", {})
     )
+    information_perfusion = (
+        _read_json(raw_dir / "information_perfusion.json", {})
+        or _read_json(prompt_dir / "information_perfusion.json", {})
+    )
     launch_report = _read_json(root / "launch-gate" / "launch_gate_report.json", {}) or _read_json(root / "scout_system_launch_gate_report.json", {})
     market_evolve_scoreboard = (
         _read_json(raw_dir / "market_evolve_scoreboard.json", {})
@@ -160,6 +165,7 @@ def build_agent_graph_state(
         launch_report=launch_report,
         slice_preview=slice_preview,
         price_feedback=price_feedback,
+        information_perfusion=information_perfusion,
     )
     return {
         "schema_version": "talis_agent_graph_state_v1",
@@ -175,6 +181,7 @@ def build_agent_graph_state(
         "edges": edges,
         "reports": reports,
         "price_feedback": price_feedback,
+        "information_perfusion": information_perfusion,
         "timeline": _timeline(summary, canary_report, tournament_report, learning_report, repair_report, market_evolve_scoreboard, price_feedback),
     }
 
@@ -552,6 +559,7 @@ def _summary(
     launch_report: dict[str, Any],
     slice_preview: dict[str, Any],
     price_feedback: dict[str, Any],
+    information_perfusion: dict[str, Any],
 ) -> dict[str, Any]:
     metrics = canary_report.get("metrics") if isinstance(canary_report.get("metrics"), dict) else {}
     scout_metrics = metrics.get("scouts") if isinstance(metrics.get("scouts"), dict) else {}
@@ -573,6 +581,11 @@ def _summary(
     cadence_control = market_evolve_scoreboard.get("cadence_control") if isinstance(market_evolve_scoreboard.get("cadence_control"), dict) else {}
     price_summary = price_feedback.get("summary") if isinstance(price_feedback.get("summary"), dict) else {}
     outcome_summary = price_feedback.get("outcome_summary") if isinstance(price_feedback.get("outcome_summary"), dict) else {}
+    perfusion_metrics = (
+        information_perfusion.get("global_metrics")
+        if isinstance(information_perfusion.get("global_metrics"), dict)
+        else {}
+    )
     return {
         "run_name": root.name,
         "cycle_id": cycle_id,
@@ -635,6 +648,10 @@ def _summary(
         "early_repricing_hit_rate": outcome_summary.get("early_repricing_hit_rate", 0.0),
         "price_feedback_status": price_summary.get("status", "missing"),
         "price_feedback_top_outcomes": _top_price_outcomes(price_feedback),
+        "perfusion_cell_count": perfusion_metrics.get("cell_count", 0.0),
+        "perfusion_routed_cell_count": perfusion_metrics.get("routed_cell_count", 0.0),
+        "perfusion_max_dilation_score": perfusion_metrics.get("max_dilation_score", 0.0),
+        "perfusion_recommended_scouts": perfusion_metrics.get("recommended_scouts", 0.0),
         "market_evolve_status": market_evolve_scoreboard.get("status"),
         "market_evolve_summary": market_evolve_scoreboard.get("summary"),
         "market_evolve_best_delta": evolve_memory.get("best_score_delta_recent"),
@@ -675,6 +692,12 @@ def _timeline(
         {"id": "pressure", "label": "Pressure", "status": "pass" if summary.get("upward_pressure_count", 0) else "watch", "detail": f"{summary.get('upward_pressure_count', 0)} upward candidates"},
         {"id": "price", "label": "Price Tape", "status": "pass" if price_summary.get("observation_count") else "watch", "detail": f"{price_summary.get('observation_count', 0)} observations"},
         {"id": "outcomes", "label": "Outcomes", "status": "pass" if outcome_n else "watch", "detail": f"{outcome_n} strings scored"},
+        {
+            "id": "perfusion",
+            "label": "Perfusion",
+            "status": "pass" if float(summary.get("perfusion_routed_cell_count") or 0) else "watch",
+            "detail": f"{int(float(summary.get('perfusion_routed_cell_count') or 0))} cells routed",
+        },
         {"id": "graph", "label": "Graph", "status": "pass" if summary.get("nodes", 0) else "watch", "detail": f"{summary.get('nodes', 0)} nodes"},
         {"id": "cortex", "label": "Cortex", "status": "pass" if summary.get("situational_awareness_agents") else "watch", "detail": f"{len(summary.get('situational_awareness_agents') or [])} overseers"},
         {"id": "evolve", "label": "Evolve", "status": "pass" if evolve_status.startswith("learning") or "promoted" in evolve_status else "watch", "detail": evolve_detail},
@@ -902,6 +925,7 @@ def _report_links(*, root: Path, raw_dir: Path, artifact_href_prefix: str) -> li
         ("live_price_observations_start.json", "Price observations start", "Market prices captured before the scout layer runs"),
         ("live_price_observations_final.json", "Price observations final", "Market prices captured after scout output is persisted"),
         ("information_price_outcomes.json", "Information price outcomes", "Which strings saw pressure before price moved or failed to move"),
+        ("information_perfusion.json", "Information perfusion", "Pressure, absorption, source oxygenation, resistance, and scout-flow routing"),
         ("live_scout_transcript.json", "Prompt transcript", "System/user prompts and raw model text"),
         ("live_scout_slice_preview.json", "Slice preview", "Seed cells, source families, tool menus"),
         ("live_scout_tournament_report.json", "Tournament report", "Promotion authority for 100/1000"),

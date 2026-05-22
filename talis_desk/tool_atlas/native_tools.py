@@ -10,7 +10,7 @@ import json
 import os
 import urllib.error
 import urllib.request
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
@@ -74,6 +74,37 @@ def review_alpha_geometry_cortex_tool(
         model=str(model or "anthropic:claude-opus-4-7"),
         conn=get_desk_store().conn,
     )
+
+
+def compute_information_perfusion_tool(
+    *,
+    cycle_id: str,
+    scout_budget: int = 24,
+    limit: int = 2000,
+    persist: bool = False,
+    **_: Any,
+) -> dict[str, Any]:
+    """Return the information-pressure/perfusion matrix for a cycle."""
+    from ..information_map import compute_information_perfusion
+    from ..store import get_desk_store
+
+    if not str(cycle_id or "").strip():
+        raise ValueError("cycle_id_required")
+    snapshot = compute_information_perfusion(
+        cycle_id=str(cycle_id),
+        scout_budget=max(1, min(256, int(scout_budget or 24))),
+        limit=max(1, min(10000, int(limit or 2000))),
+        persist=bool(persist),
+        conn=get_desk_store().conn,
+    )
+    return {
+        "schema_version": "information_perfusion_tool_result_v1",
+        "cycle_id": snapshot.cycle_id,
+        "created_at": snapshot.created_at,
+        "global_metrics": snapshot.global_metrics,
+        "quality_flags": snapshot.quality_flags,
+        "cells": [asdict(cell) for cell in snapshot.cells[:64]],
+    }
 
 
 GROK_X_ALPHA_SYSTEM = (
@@ -382,6 +413,35 @@ NATIVE_TOOL_SPECS: tuple[NativeToolSpec, ...] = (
         cost_hint={"usd_per_call_estimate": 0.0, "local_read_only": True},
     ),
     NativeToolSpec(
+        tool_uri="tic://tool/talis_native/compute_information_perfusion@v1",
+        tool_name="compute_information_perfusion",
+        version="v1",
+        provider="talis_desk",
+        callable=compute_information_perfusion_tool,
+        description=(
+            "Read the information-perfusion matrix for a cycle: pressure, price "
+            "absorption, source oxygenation, resistance, and scout-flow routing."
+        ),
+        input_schema={
+            "type": "object",
+            "required": ["cycle_id"],
+            "properties": {
+                "cycle_id": {"type": "string"},
+                "scout_budget": {"type": "integer", "minimum": 1, "maximum": 256},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 10000},
+                "persist": {"type": "boolean"},
+            },
+            "timeout_ms": 5000,
+        },
+        source_dependencies=[
+            "information_strings",
+            "information_string_outcomes",
+            "information_geometry_snapshots",
+            "information_perfusion_snapshots",
+        ],
+        cost_hint={"usd_per_call_estimate": 0.0, "local_read_only": True},
+    ),
+    NativeToolSpec(
         tool_uri="tic://tool/talis_native/farm_grok_x_alpha@v1",
         tool_name="farm_grok_x_alpha",
         version="v1",
@@ -440,6 +500,7 @@ __all__ = [
     "get_native_callable",
     "native_tool_specs",
     "farm_grok_x_alpha_tool",
+    "compute_information_perfusion_tool",
     "plan_alpha_geometry_actions_tool",
     "review_alpha_geometry_cortex_tool",
 ]

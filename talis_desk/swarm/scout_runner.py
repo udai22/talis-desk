@@ -1311,6 +1311,20 @@ def _infer_tool_args(uri: str, seed: SeedCell) -> Optional[dict[str, Any]]:
         if isinstance(payload.get("routing_thresholds"), dict):
             args["routing_thresholds"] = payload["routing_thresholds"]
         return args
+    if slug == "compute_information_perfusion":
+        cycle_id = (
+            payload.get("information_perfusion_source_cycle_id")
+            or payload.get("cycle_id")
+            or payload.get("alpha_geometry_source_cycle_id")
+        )
+        if not cycle_id:
+            return None
+        return {
+            "cycle_id": str(cycle_id),
+            "scout_budget": int(payload.get("information_perfusion_recommended_scouts") or 24),
+            "limit": int(payload.get("information_perfusion_limit") or 2000),
+            "persist": False,
+        }
     if slug == "farm_grok_x_alpha":
         return {
             "entity": seed.entity,

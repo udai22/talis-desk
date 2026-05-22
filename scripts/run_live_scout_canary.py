@@ -32,6 +32,7 @@ from talis_desk.information_map import (
     build_market_evolve_lineage,
     collect_hyperliquid_mid_price_observations,
     compute_alpha_geometry,
+    compute_information_perfusion,
     evaluate_information_price_outcomes,
     load_market_evolve_policy_applications,
     prepare_market_evolve_experiment_seed_pairs,
@@ -298,6 +299,22 @@ def main() -> int:
             use_llm=False,
         )
         geometry = compute_alpha_geometry(cycle_id=cycle_id, conn=store.conn, persist=True)
+        perfusion = compute_information_perfusion(
+            cycle_id=cycle_id,
+            scout_budget=max(8, min(64, args.n_scouts)),
+            conn=store.conn,
+            persist=True,
+        )
+        _write_json(
+            prompt_output_dir / "information_perfusion.json",
+            {
+                "schema_version": "information_perfusion_export_v1",
+                "cycle_id": cycle_id,
+                "global_metrics": getattr(perfusion, "global_metrics", {}),
+                "quality_flags": getattr(perfusion, "quality_flags", []),
+                "cells": [_asdict(cell) for cell in (getattr(perfusion, "cells", []) or [])],
+            },
+        )
         action_plan = plan_alpha_geometry_actions(cycle_id=cycle_id, conn=store.conn, limit=64)
         cortex_review = build_alpha_geometry_cortex_review(
             cycle_id=cycle_id,
