@@ -3,7 +3,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from talis_desk.cadence import build_intelligence_cadence_plan, write_cadence_plan
+from talis_desk.cadence import (
+    build_cadence_control_decision,
+    build_intelligence_cadence_plan,
+    write_cadence_plan,
+)
 
 
 def test_sentinel_plan_is_always_on_flash_without_live_spend_by_default(tmp_path: Path) -> None:
@@ -26,6 +30,7 @@ def test_sentinel_plan_is_always_on_flash_without_live_spend_by_default(tmp_path
     assert _arg_after(live_cmd, "--max-tool-iterations") == "1"
     scoreboard_cmd = plan.commands[1].command
     assert _arg_after(scoreboard_cmd, "--db").endswith("live_canary/desk-live-canary.db")
+    assert _arg_after(scoreboard_cmd, "--cadence-mode") == "sentinel_tick"
     assert any(gate["id"] == "no_direct_trade_publication" for gate in plan.gates)
 
 
@@ -41,7 +46,9 @@ def test_sentinel_plan_can_open_explicit_live_spend_gate(tmp_path: Path) -> None
     )
 
     live_cmd = plan.commands[0].command
+    scoreboard_cmd = plan.commands[1].command
     assert "--allow-live-spend" in live_cmd
+    assert "--allow-live-spend" in scoreboard_cmd
     assert _arg_after(live_cmd, "--n-scouts") == "12"
     assert _arg_after(live_cmd, "--concurrency") == "3"
     assert _arg_after(live_cmd, "--cost-cap-usd") == "0.20"
@@ -67,7 +74,9 @@ def test_full_pipeline_plan_wires_launch_gate_and_daily_brief(tmp_path: Path) ->
     brief_cmd = plan.commands[2].command
     assert "scripts/run_scout_system_launch_gate.py" in launch_cmd
     assert "scripts/export_market_evolve_scoreboard.py" in scoreboard_cmd
+    assert _arg_after(scoreboard_cmd, "--cycle-id") == "cycle_full_deterministic_100"
     assert _arg_after(scoreboard_cmd, "--db").endswith("deterministic_100/desk-100-scout.db")
+    assert _arg_after(scoreboard_cmd, "--cadence-mode") == "full_pipeline"
     assert _arg_after(launch_cmd, "--live-scouts") == "1000"
     assert _arg_after(launch_cmd, "--live-cost-cap-usd") == "5.00"
     assert _arg_after(launch_cmd, "--ramp-policy") == "/tmp/policy.json"
@@ -87,6 +96,68 @@ def test_write_cadence_plan_persists_executable_commands(tmp_path: Path) -> None
     assert "scripts/run_live_scout_canary.py" in payload["commands"][0]["shell"]
     assert "scripts/export_market_evolve_scoreboard.py" in payload["commands"][1]["shell"]
     assert payload["cadence_policy"]["daily_brief_contract"]["brief_reads"]
+
+
+def test_cadence_control_decision_turns_open_experiments_into_paired_scout_step() -> None:
+    decision = build_cadence_control_decision(
+        mode="sentinel_tick",
+        allow_live_spend=False,
+        scoreboard={
+            "id": "score_open",
+            "status": "experiment_running",
+            "counts": {
+                "open_experiments": 2,
+                "candidate_programs": 2,
+                "result_window": 0,
+            },
+            "evolution_memory": {"best_score_delta_recent": 0.0},
+            "hard_experiment_gate_summary": {"triggered": 0},
+            "next_actions": [{"action": "run_scouts_before_deciding_experiment"}],
+        },
+    )
+
+    assert decision["decision"] == "collect_experiment_evidence"
+    assert decision["allowed_next_step"] == "paired_evolution_sentinel"
+    assert decision["recommended_next_run"]["scouts"] == 32
+    assert "open_experiment_without_result_window" in decision["quality_flags"]
+
+
+def test_cadence_control_decision_blocks_scale_on_repair_state() -> None:
+    decision = build_cadence_control_decision(
+        mode="full",
+        allow_live_spend=True,
+        scoreboard={
+            "id": "score_repair",
+            "status": "repair_needed",
+            "counts": {"open_experiments": 0, "candidate_programs": 1, "result_window": 1},
+            "hard_experiment_gate_summary": {"triggered": 1},
+            "evolution_memory": {"best_score_delta_recent": -0.1},
+        },
+    )
+
+    assert decision["decision"] == "repair_before_scale"
+    assert decision["blocks_wider_spend"] is True
+    assert decision["spend_gate"] == "closed"
+
+
+def test_cadence_control_decision_recommends_shadow_for_promoted_policy() -> None:
+    decision = build_cadence_control_decision(
+        mode="sentinel_tick",
+        allow_live_spend=False,
+        scoreboard={
+            "id": "score_promoted",
+            "status": "evolving_promoted_policy",
+            "counts": {"open_experiments": 0, "candidate_programs": 0, "result_window": 2},
+            "cadence_readiness": {"eligible_for_shadow_schedule_review": False},
+            "hard_experiment_gate_summary": {"triggered": 0},
+            "evolution_memory": {"best_score_delta_recent": 0.18},
+        },
+    )
+
+    assert decision["decision"] == "widen_shadow_evaluation"
+    assert decision["recommended_next_run"]["mode"] == "full_pipeline"
+    assert decision["recommended_next_run"]["scouts"] == 1000
+    assert "explicit_live_spend_gate_required_for_recommended_run" in decision["quality_flags"]
 
 
 def _arg_after(command: list[str], flag: str) -> str:

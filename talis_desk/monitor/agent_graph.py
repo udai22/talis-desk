@@ -481,6 +481,7 @@ def _summary(
     next_policy = learning_report.get("next_ramp_policy") if isinstance(learning_report.get("next_ramp_policy"), dict) else {}
     allowed_next_step = decision.get("allowed_next_step") or next_policy.get("allowed_next_step") or ""
     evolve_memory = market_evolve_scoreboard.get("evolution_memory") if isinstance(market_evolve_scoreboard.get("evolution_memory"), dict) else {}
+    cadence_control = market_evolve_scoreboard.get("cadence_control") if isinstance(market_evolve_scoreboard.get("cadence_control"), dict) else {}
     return {
         "run_name": root.name,
         "cycle_id": cycle_id,
@@ -536,6 +537,9 @@ def _summary(
         "market_evolve_summary": market_evolve_scoreboard.get("summary"),
         "market_evolve_best_delta": evolve_memory.get("best_score_delta_recent"),
         "market_evolve_next_actions": market_evolve_scoreboard.get("next_actions") or [],
+        "market_evolve_control_decision": cadence_control.get("decision"),
+        "market_evolve_control_next_step": cadence_control.get("allowed_next_step"),
+        "market_evolve_control_why": cadence_control.get("why"),
         "promotion_reason": promotion.get("reason") or decision.get("reason") or "",
         "coverage": (canary_report.get("metrics") or {}).get("coverage") if isinstance(canary_report.get("metrics"), dict) else {},
     }
@@ -552,6 +556,11 @@ def _timeline(
     promotion = tournament.get("promotion_decision") if isinstance(tournament.get("promotion_decision"), dict) else {}
     success_rate = _safe_float(summary.get("success_rate"), 0.0)
     evolve_status = str(market_evolve_scoreboard.get("status") or "pending")
+    cadence_control = market_evolve_scoreboard.get("cadence_control") if isinstance(market_evolve_scoreboard.get("cadence_control"), dict) else {}
+    evolve_detail = (
+        f"{evolve_status} / {cadence_control.get('decision')}"
+        if cadence_control.get("decision") else evolve_status
+    )
     return [
         {"id": "cadence", "label": "Cadence", "status": "pass", "detail": "2 full runs/day + always-on Flash sentinel"},
         {"id": "slice", "label": "Slice", "status": "pass", "detail": f"{summary.get('agents_requested', 0)} cells routed"},
@@ -560,7 +569,7 @@ def _timeline(
         {"id": "pressure", "label": "Pressure", "status": "pass" if summary.get("upward_pressure_count", 0) else "watch", "detail": f"{summary.get('upward_pressure_count', 0)} upward candidates"},
         {"id": "graph", "label": "Graph", "status": "pass" if summary.get("nodes", 0) else "watch", "detail": f"{summary.get('nodes', 0)} nodes"},
         {"id": "cortex", "label": "Cortex", "status": "pass" if summary.get("situational_awareness_agents") else "watch", "detail": f"{len(summary.get('situational_awareness_agents') or [])} overseers"},
-        {"id": "evolve", "label": "Evolve", "status": "pass" if evolve_status.startswith("learning") or "promoted" in evolve_status else "watch", "detail": evolve_status},
+        {"id": "evolve", "label": "Evolve", "status": "pass" if evolve_status.startswith("learning") or "promoted" in evolve_status else "watch", "detail": evolve_detail},
         {"id": "repair", "label": "Repair", "status": repair.get("status") or "pending", "detail": f"{repair.get('repairs_created', 0)} repairs"},
         {"id": "tournament", "label": "Tournament", "status": "pass" if promotion.get("ready_for_live_1000") else "watch", "detail": promotion.get("decision") or "pending"},
         {"id": "next", "label": "Next", "status": "locked", "detail": summary.get("allowed_next_step") or "human gate"},

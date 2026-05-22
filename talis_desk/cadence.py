@@ -259,18 +259,144 @@ def execute_cadence_plan(
         results.append(result)
         if stop_on_failure and proc.returncode != 0:
             break
+    scoreboard = _read_json_file(Path(plan.artifact_dir) / "market-evolve" / "market_evolve_scoreboard.json", {})
+    control_decision = build_cadence_control_decision(
+        scoreboard=scoreboard,
+        mode=plan.mode,
+        allow_live_spend=plan.allow_live_spend,
+    )
     report = {
         "schema_version": "talis_intelligence_cadence_run_report_v1",
         "plan": plan.to_dict(),
         "status": "pass" if results and all(r["ok"] for r in results) else "failed" if results else "not_run",
         "elapsed_s": round(time.perf_counter() - started, 3),
         "results": results,
+        "market_evolve_scoreboard": _scoreboard_report_summary(scoreboard),
+        "control_decision": control_decision,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
     report_path = Path(plan.artifact_dir) / "talis_intelligence_cadence_report.json"
     report_path.write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
     report["report_path"] = str(report_path)
     return report
+
+
+def build_cadence_control_decision(
+    *,
+    scoreboard: dict[str, Any],
+    mode: str,
+    allow_live_spend: bool,
+) -> dict[str, Any]:
+    """Convert the MarketEvolve scoreboard into an executable cadence decision."""
+    normalized_mode = _normalize_mode(mode)
+    if not isinstance(scoreboard, dict) or not scoreboard:
+        return {
+            "schema_version": "talis_cadence_control_decision_v1",
+            "decision": "scoreboard_missing",
+            "allowed_next_step": "rerun_market_evolve_scoreboard_export",
+            "recommended_next_run": {"mode": normalized_mode, "scouts": 8},
+            "spend_gate": "closed",
+            "blocks_wider_spend": True,
+            "why": "No MarketEvolve scoreboard artifact was available to read.",
+            "source_scoreboard_id": "",
+            "quality_flags": ["missing_market_evolve_scoreboard"],
+        }
+
+    status = str(scoreboard.get("status") or "unknown")
+    counts = scoreboard.get("counts") if isinstance(scoreboard.get("counts"), dict) else {}
+    readiness = scoreboard.get("cadence_readiness") if isinstance(scoreboard.get("cadence_readiness"), dict) else {}
+    memory = scoreboard.get("evolution_memory") if isinstance(scoreboard.get("evolution_memory"), dict) else {}
+    next_actions = scoreboard.get("next_actions") if isinstance(scoreboard.get("next_actions"), list) else []
+    primary_action = str((next_actions[0] or {}).get("action") or "") if next_actions else ""
+    open_experiments = int(counts.get("open_experiments") or 0)
+    candidate_count = int(counts.get("candidate_programs") or 0)
+    result_window = int(counts.get("result_window") or 0)
+    gate_summary = scoreboard.get("hard_experiment_gate_summary") if isinstance(scoreboard.get("hard_experiment_gate_summary"), dict) else {}
+    triggered_gates = int(gate_summary.get("triggered") or 0)
+    decision = "continue_sentinel_memory"
+    allowed_next_step = "sentinel_tick"
+    recommended_mode = "sentinel_tick"
+    recommended_scouts = 24
+    blocks_wider_spend = False
+    why = "Keep the always-on market memory warm until a hard experiment or geometry gate changes state."
+    flags: list[str] = []
+
+    if status == "not_started":
+        decision = "initialize_market_evolve"
+        allowed_next_step = "seed_default_policy_then_sentinel"
+        recommended_scouts = 8
+        blocks_wider_spend = True
+        why = "MarketEvolve has no active policy yet; initialize before scaling calls."
+    elif status.startswith("repair_needed") or triggered_gates > 0:
+        decision = "repair_before_scale"
+        allowed_next_step = "tool_prompt_route_repair"
+        recommended_scouts = 8
+        blocks_wider_spend = True
+        why = "A candidate or hard gate failed; preserve the failure as repair signal before widening spend."
+        flags.append("hard_gate_or_candidate_failure_blocks_scale")
+    elif status == "experiment_running":
+        decision = "collect_experiment_evidence"
+        allowed_next_step = "paired_evolution_sentinel"
+        recommended_scouts = max(16, min(96, open_experiments * 16 or 24))
+        why = (
+            "Open control/candidate experiments exist. Run matched scout evidence "
+            "before accepting, rejecting, or mutating the policy."
+        )
+        if result_window <= 0:
+            flags.append("open_experiment_without_result_window")
+    elif status == "learning_continue_candidate":
+        decision = "continue_candidate_experiment"
+        allowed_next_step = "repeat_matched_experiment"
+        recommended_scouts = max(32, min(128, candidate_count * 32 or 64))
+        why = "Candidate beat control once but needs repeated out-of-sample evidence before promotion."
+    elif status == "evolving_promoted_policy":
+        if bool(readiness.get("eligible_for_shadow_schedule_review")):
+            decision = "request_shadow_schedule_review"
+            allowed_next_step = "shadow_schedule_review"
+            recommended_mode = "full_pipeline"
+            recommended_scouts = 1000
+            why = "A promoted policy has repeated evidence and is eligible for human shadow-schedule review."
+        else:
+            decision = "widen_shadow_evaluation"
+            allowed_next_step = "live_1000_shadow_candidate"
+            recommended_mode = "full_pipeline"
+            recommended_scouts = 1000
+            why = "A policy was promoted; gather repeat 1,000-scout shadow evidence before scheduling."
+    elif status == "baseline_active" and bool(memory.get("evolves")) is False:
+        decision = "mutate_active_policy"
+        allowed_next_step = "sentinel_mutation_tick"
+        recommended_scouts = 24
+        why = "Only the baseline is active and no mutation memory exists; create candidate pressure."
+    elif status == "candidate_waiting_for_experiment":
+        decision = "assign_candidate_experiment"
+        allowed_next_step = "paired_evolution_sentinel"
+        recommended_scouts = max(16, min(96, candidate_count * 16 or 24))
+        why = "Candidate programs exist but need matched control/candidate evidence."
+
+    spend_gate = "open" if allow_live_spend and not blocks_wider_spend else "closed"
+    if recommended_mode == "full_pipeline" and not allow_live_spend:
+        flags.append("explicit_live_spend_gate_required_for_recommended_run")
+    return {
+        "schema_version": "talis_cadence_control_decision_v1",
+        "decision": decision,
+        "allowed_next_step": allowed_next_step,
+        "recommended_next_run": {
+            "mode": recommended_mode,
+            "scouts": recommended_scouts,
+            "requires_allow_live_spend": recommended_mode == "full_pipeline" or recommended_scouts > 64,
+            "primary_market_evolve_action": primary_action,
+        },
+        "spend_gate": spend_gate,
+        "blocks_wider_spend": blocks_wider_spend,
+        "why": why,
+        "source_scoreboard_id": str(scoreboard.get("id") or ""),
+        "scoreboard_status": status,
+        "open_experiment_count": open_experiments,
+        "candidate_program_count": candidate_count,
+        "result_window_count": result_window,
+        "best_score_delta_recent": memory.get("best_score_delta_recent"),
+        "quality_flags": sorted(set(flags)),
+    }
 
 
 def _normalize_mode(mode: str) -> str:
@@ -286,6 +412,35 @@ def _normalize_mode(mode: str) -> str:
         "twice_daily": "full_pipeline",
     }
     return aliases.get(raw, raw)
+
+
+def _read_json_file(path: Path, default: Any) -> Any:
+    try:
+        if path.exists():
+            return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return default
+    return default
+
+
+def _scoreboard_report_summary(scoreboard: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(scoreboard, dict) or not scoreboard:
+        return {}
+    memory = scoreboard.get("evolution_memory") if isinstance(scoreboard.get("evolution_memory"), dict) else {}
+    counts = scoreboard.get("counts") if isinstance(scoreboard.get("counts"), dict) else {}
+    return {
+        "id": scoreboard.get("id"),
+        "cycle_id": scoreboard.get("cycle_id"),
+        "status": scoreboard.get("status"),
+        "summary": scoreboard.get("summary"),
+        "active_programs": counts.get("active_programs"),
+        "candidate_programs": counts.get("candidate_programs"),
+        "open_experiments": counts.get("open_experiments"),
+        "result_window": counts.get("result_window"),
+        "best_score_delta_recent": memory.get("best_score_delta_recent"),
+        "next_actions": (scoreboard.get("next_actions") or [])[:4],
+        "quality_flags": scoreboard.get("quality_flags") or [],
+    }
 
 
 def _sentinel_commands(
@@ -333,6 +488,20 @@ def _sentinel_commands(
         command.extend(["--ramp-policy", ramp_policy])
     if allow_live_spend:
         command.append("--allow-live-spend")
+    scoreboard_command = [
+        sys.executable,
+        "scripts/export_market_evolve_scoreboard.py",
+        "--cycle-id",
+        cycle_id,
+        "--db",
+        str(live_root / "desk-live-canary.db"),
+        "--cadence-mode",
+        "sentinel_tick",
+        "--output-dir",
+        str(root / "market-evolve"),
+    ]
+    if allow_live_spend:
+        scoreboard_command.append("--allow-live-spend")
     return [
         CadenceCommand(
             name="sentinel_live_canary",
@@ -347,16 +516,7 @@ def _sentinel_commands(
         ),
         CadenceCommand(
             name="sentinel_market_evolve_scoreboard",
-            command=[
-                sys.executable,
-                "scripts/export_market_evolve_scoreboard.py",
-                "--cycle-id",
-                cycle_id,
-                "--db",
-                str(live_root / "desk-live-canary.db"),
-                "--output-dir",
-                str(root / "market-evolve"),
-            ],
+            command=scoreboard_command,
             purpose="Persist the evaluator-guided learning scoreboard for this sentinel tick.",
             expected_artifacts={
                 "scoreboard": str(root / "market-evolve" / "market_evolve_scoreboard.json"),
@@ -395,6 +555,7 @@ def _full_pipeline_commands(
 ) -> list[CadenceCommand]:
     scouts = int(scout_count or 1000)
     cost_cap = live_cost_cap_usd if live_cost_cap_usd is not None else 5.0
+    scoreboard_cycle_id = f"{cycle_id}_live_{scouts}" if allow_live_spend else f"{cycle_id}_deterministic_100"
     scoreboard_db = (
         root / "live_canary" / "desk-live-canary.db"
         if allow_live_spend else root / "deterministic_100" / "desk-100-scout.db"
@@ -426,6 +587,20 @@ def _full_pipeline_commands(
         launch_cmd.extend(["--ramp-policy", ramp_policy])
     if allow_live_spend:
         launch_cmd.append("--allow-live-spend")
+    scoreboard_cmd = [
+        sys.executable,
+        "scripts/export_market_evolve_scoreboard.py",
+        "--cycle-id",
+        scoreboard_cycle_id,
+        "--db",
+        str(scoreboard_db),
+        "--cadence-mode",
+        "full_pipeline",
+        "--output-dir",
+        str(root / "market-evolve"),
+    ]
+    if allow_live_spend:
+        scoreboard_cmd.append("--allow-live-spend")
     brief_cmd = [
         sys.executable,
         "run_full_desk.py",
@@ -451,16 +626,7 @@ def _full_pipeline_commands(
         ),
         CadenceCommand(
             name="full_market_evolve_scoreboard",
-            command=[
-                sys.executable,
-                "scripts/export_market_evolve_scoreboard.py",
-                "--cycle-id",
-                cycle_id,
-                "--db",
-                str(scoreboard_db),
-                "--output-dir",
-                str(root / "market-evolve"),
-            ],
+            command=scoreboard_cmd,
             purpose="Freeze the evolution scoreboard before composing the daily brief.",
             expected_artifacts={
                 "scoreboard": str(root / "market-evolve" / "market_evolve_scoreboard.json"),
@@ -513,6 +679,7 @@ def _cadence_gates(mode: str, *, allow_live_spend: bool) -> list[dict[str, Any]]
 __all__ = [
     "CadenceCommand",
     "CadenceRunPlan",
+    "build_cadence_control_decision",
     "build_intelligence_cadence_plan",
     "default_intelligence_cadence_policy",
     "execute_cadence_plan",
