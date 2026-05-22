@@ -72,6 +72,17 @@ def build_live_scout_learning_report(
         market_evolve=market_evolve,
         source_family_counts=source_family_counts,
     )
+    repair_work_orders = _repair_work_orders(
+        failure_modes=failure_modes,
+        weak_rows=weak_rows,
+        evolution_arms=evolution_arms,
+        geometry=geometry,
+    )
+    pre_1000_gate = _pre_1000_gate(
+        decision=decision,
+        failure_modes=failure_modes,
+        repair_work_orders=repair_work_orders,
+    )
     return {
         "schema_version": "talis_live_scout_learning_report_v1",
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -112,7 +123,9 @@ def build_live_scout_learning_report(
         "weak_scouts": weak_rows[:20],
         "top_geometry_actions": (geometry.get("top_actions") or [])[:10],
         "evolution_arms": evolution_arms,
-        "next_run": _next_run(decision, failure_modes, evolution_arms),
+        "repair_work_orders": repair_work_orders,
+        "pre_1000_gate": pre_1000_gate,
+        "next_run": _next_run(decision, failure_modes, evolution_arms, pre_1000_gate=pre_1000_gate),
         "artifacts": {
             "live_report": str(live_report_path),
             "outputs": str(output_dir / "live_scout_canary_outputs.json"),
@@ -170,7 +183,18 @@ def render_learning_report_markdown(report: dict[str, Any]) -> str:
     lines.extend(["", "## Evolution Arms", ""])
     for arm in report.get("evolution_arms") or []:
         lines.append(f"- `{arm.get('id')}`: {arm.get('purpose')} Gate: {arm.get('success_gate')}")
+    lines.extend(["", "## Repair Work Orders", ""])
+    for order in report.get("repair_work_orders") or []:
+        lines.append(
+            f"- `{order.get('work_order_id')}` owner={order.get('owner')} "
+            f"priority={order.get('priority')}: {order.get('success_gate')}"
+        )
     lines.extend([
+        "",
+        "## Pre-1000 Gate",
+        "",
+        f"- ready_for_authorized_1000: `{(report.get('pre_1000_gate') or {}).get('ready_for_authorized_1000')}`",
+        f"- must_watch: `{', '.join((report.get('pre_1000_gate') or {}).get('must_watch_metrics') or [])}`",
         "",
         "## Next Run",
         "",
@@ -321,7 +345,216 @@ def _evolution_arms(
     return arms
 
 
-def _next_run(decision: dict[str, Any], failure_modes: list[dict[str, Any]], evolution_arms: list[dict[str, Any]]) -> dict[str, Any]:
+def _repair_work_orders(
+    *,
+    failure_modes: list[dict[str, Any]],
+    weak_rows: list[dict[str, Any]],
+    evolution_arms: list[dict[str, Any]],
+    geometry: dict[str, Any],
+) -> list[dict[str, Any]]:
+    mode_by_id = {str(mode.get("id")): mode for mode in failure_modes if isinstance(mode, dict)}
+    examples_by_mode = {
+        mode_id: [
+            {
+                "seed_id": row.get("seed_id"),
+                "entity": row.get("entity"),
+                "horizon": row.get("horizon"),
+                "lens": row.get("lens"),
+                "prompt_quality": row.get("prompt_quality"),
+                "weak_flags": row.get("weak_flags"),
+            }
+            for row in weak_rows
+            if any(
+                _mode_matches_row(mode_id, flag)
+                for flag in [*row.get("weak_flags", []), *row.get("quality_flags", [])]
+            )
+        ][:5]
+        for mode_id in mode_by_id
+    }
+    specs = [
+        {
+            "mode_id": "json_unparseable",
+            "owner": "scout_harness",
+            "target_surface": "talis_desk/swarm/scout_runner.py::json_repair",
+            "action": "Run fallback JSON repair before dropping non-calendar scouts; preserve raw transcript and flag repair success/failure.",
+            "metric": "json_unparseable_rate",
+            "success_gate": "json_unparseable_rate == 0 across the next ramp or every parse miss has scout_json_retry_success.",
+            "priority": "P0",
+        },
+        {
+            "mode_id": "invented_tools",
+            "owner": "tool_harness",
+            "target_surface": "talis_desk/swarm/scout_runner.py::suggested_tools",
+            "action": "Filter suggested_tools against allowed_tool_candidates and keep invented tool desire only as an analysis_tool_proposal.",
+            "metric": "invented_tool_persist_rate",
+            "success_gate": "invented_tool_persist_rate == 0; proposed missing tools appear only in tool_requests/tool_proposals.",
+            "priority": "P0",
+        },
+        {
+            "mode_id": "empty_hypothesis",
+            "owner": "prompt_policy",
+            "target_surface": "flash_temporal_v4 hypothesis/string consistency",
+            "action": "Force hypothesis to summarize the best valid string; if no valid string exists, emit a gap string or abstain with explicit missing edge.",
+            "metric": "empty_hypothesis_with_strings_rate",
+            "success_gate": "empty_hypothesis_with_strings_rate == 0 and low_prompt_quality_rate <= 0.05.",
+            "priority": "P1",
+        },
+        {
+            "mode_id": "missing_information_strings",
+            "owner": "prompt_policy",
+            "target_surface": "flash_temporal_v4 gap-string contract",
+            "action": "Convert thin/stale evidence into low-conviction source-gap strings with kill signals instead of empty packets.",
+            "metric": "missing_information_strings_rate",
+            "success_gate": "missing_information_strings_rate <= 0.01 for scouts with usable evidence or allowed repair tools.",
+            "priority": "P1",
+        },
+        {
+            "mode_id": "missing_evidence_refs",
+            "owner": "source_router",
+            "target_surface": "information_strings.evidence_refs",
+            "action": "Reject or route strings that cannot cite provided tool_call_log_id/source refs; ask for a follow-up tool when the edge is missing.",
+            "metric": "missing_evidence_refs_rate",
+            "success_gate": "missing_evidence_refs_rate <= 0.01 and tool_request_followup_rate rises on missing-edge cells.",
+            "priority": "P1",
+        },
+        {
+            "mode_id": "stale_date_directionality",
+            "owner": "source_router",
+            "target_surface": "freshness and temporal contract",
+            "action": "Treat stale observations as source-health gaps unless a fresh ref bridges the time horizon.",
+            "metric": "stale_directionality_flag_rate",
+            "success_gate": "stale_directionality_flag_rate <= 0.01 and stale evidence produces repair_source/gap strings.",
+            "priority": "P1",
+        },
+        {
+            "mode_id": "adversarial_quarantine",
+            "owner": "adversarial_reviewer",
+            "target_surface": "review_information_string route outcome",
+            "action": "Route quarantined strings to source repair or independent replication before verifier spend.",
+            "metric": "quarantine_to_repair_route_rate",
+            "success_gate": "quarantine_to_repair_route_rate >= 0.95 and quarantined strings are excluded from promoted trade hypotheses.",
+            "priority": "P1",
+        },
+        {
+            "mode_id": "node_not_promoted",
+            "owner": "node_intelligence",
+            "target_surface": "Hydromancer/HL-node promotion contract",
+            "action": "Upgrade node intelligence from sidecar context to actor/source-backed graph edges when wallet quality, reject behavior, or builder flow is source-backed.",
+            "metric": "node_promoted_string_rate",
+            "success_gate": "node_promoted_string_rate improves while adversarial_quarantine_rate does not rise.",
+            "priority": "P2",
+        },
+    ]
+    orders: list[dict[str, Any]] = []
+    for spec in specs:
+        mode = mode_by_id.get(spec["mode_id"]) or {}
+        count = int(mode.get("count") or 0)
+        if count <= 0 and spec["priority"] != "P0":
+            continue
+        orders.append({
+            "work_order_id": "lso_" + _slug(spec["mode_id"] + "_" + spec["owner"]),
+            "status": "open_watch_next_ramp" if count else "guardrail_installed_watch",
+            "trigger_failure_mode": spec["mode_id"],
+            "trigger_count": count,
+            "severity": mode.get("severity") or "green",
+            "priority": spec["priority"],
+            "owner": spec["owner"],
+            "target_surface": spec["target_surface"],
+            "action": spec["action"],
+            "metric": spec["metric"],
+            "success_gate": spec["success_gate"],
+            "examples": examples_by_mode.get(spec["mode_id"], []),
+            "source_learning_report_field": f"failure_modes.{spec['mode_id']}",
+        })
+    top_actions = [row for row in (geometry.get("top_actions") or []) if isinstance(row, dict)]
+    if top_actions:
+        orders.append({
+            "work_order_id": "lso_geometry_replication",
+            "status": "open_route_next_ramp",
+            "trigger_failure_mode": "geometry_frontier_cells",
+            "trigger_count": len(top_actions),
+            "severity": "yellow",
+            "priority": "P1",
+            "owner": "seed_router",
+            "target_surface": "alpha_geometry.routing_queue",
+            "action": "Allocate independent follow-up scouts to top geometry cells before verifier spend.",
+            "metric": "top_geometry_confirmation_rate",
+            "success_gate": "Each top cell receives confirmation, contradiction, or kill signal from an independent scout/source family.",
+            "examples": [
+                {
+                    "cell_key": row.get("cell_key"),
+                    "route_directive": row.get("route_directive"),
+                    "trade_scream_score": ((row.get("metrics") or {}) if isinstance(row.get("metrics"), dict) else {}).get("trade_scream_score"),
+                }
+                for row in top_actions[:5]
+            ],
+            "source_learning_report_field": "top_geometry_actions",
+        })
+    if any(arm.get("id") == "market_evolve_policy_arena" for arm in evolution_arms):
+        orders.append({
+            "work_order_id": "lso_market_evolve_arena",
+            "status": "open_watch_next_ramp",
+            "trigger_failure_mode": "policy_mutation_arena",
+            "trigger_count": 1,
+            "severity": "yellow",
+            "priority": "P1",
+            "owner": "market_evolve",
+            "target_surface": "matched control/candidate seed slices",
+            "action": "Keep paired control/candidate policy slices in the next ramp and reject mutations that improve quality by spending low-EV tools.",
+            "metric": "accepted_unique_high_quality_coverage_per_dollar_delta",
+            "success_gate": "Candidate arm wins hard gates or is rejected with falsification evidence.",
+            "examples": [],
+            "source_learning_report_field": "market_evolve",
+        })
+    return orders
+
+
+def _pre_1000_gate(
+    *,
+    decision: dict[str, Any],
+    failure_modes: list[dict[str, Any]],
+    repair_work_orders: list[dict[str, Any]],
+) -> dict[str, Any]:
+    red_modes = [
+        str(mode.get("id"))
+        for mode in failure_modes
+        if mode.get("severity") == "red" and int(mode.get("count") or 0) > 0
+    ]
+    must_watch = [
+        str(order.get("metric"))
+        for order in repair_work_orders
+        if order.get("priority") in {"P0", "P1"} and order.get("metric")
+    ]
+    return {
+        "ready_for_authorized_1000": bool(decision.get("ready_for_live_1000")),
+        "scheduled_production_allowed": bool(decision.get("ready_for_scheduled_production")),
+        "red_failure_modes_from_prior_ramp": red_modes,
+        "blocking_before_1000": [],
+        "must_watch_metrics": sorted(set(must_watch)),
+        "ramp_success_requirements": [
+            "provider_error_rate <= 0.02",
+            "success_rate >= 0.90",
+            "duplicate_hypothesis_rate <= 0.20",
+            "low_prompt_quality_rate <= 0.05",
+            "json_unparseable_rate == 0 or scout_json_retry_success covers every miss",
+            "invented_tool_persist_rate == 0",
+            "top_geometry_confirmation_rate improves on frontier/tension cells",
+            "scheduled production remains blocked until two independent 1,000-scout shadow runs pass repeatability gates",
+        ],
+        "interpretation": (
+            "The 1,000 ramp may run only as an explicitly authorized experiment. "
+            "The listed repair metrics must be watched; passing the ramp does not schedule production."
+        ),
+    }
+
+
+def _next_run(
+    decision: dict[str, Any],
+    failure_modes: list[dict[str, Any]],
+    evolution_arms: list[dict[str, Any]],
+    *,
+    pre_1000_gate: dict[str, Any],
+) -> dict[str, Any]:
     ready_1000 = bool(decision.get("ready_for_live_1000"))
     red_modes = [mode["id"] for mode in failure_modes if mode.get("severity") == "red" and int(mode.get("count") or 0) > 0]
     return {
@@ -340,6 +573,7 @@ def _next_run(decision: dict[str, Any], failure_modes: list[dict[str, Any]], evo
             "Repeat the 100-scout distribution after repair arms reduce red failure modes."
         ),
         "watch_before_promoting": red_modes or [arm["id"] for arm in evolution_arms[:3]],
+        "pre_1000_gate": pre_1000_gate,
     }
 
 
@@ -383,6 +617,30 @@ def _prompt_quality(flags: list[str]) -> float | None:
         if str(flag).startswith("prompt_quality:"):
             return _float(str(flag).split(":", 1)[1], default=None)
     return None
+
+
+def _mode_matches_row(mode_id: str, flag: str) -> bool:
+    mapping = {
+        "json_unparseable": {"scout_json_unparseable"},
+        "empty_hypothesis": {"prompt_missing_hypothesis", "scout_empty_hypothesis", "empty_hypothesis_text"},
+        "missing_information_strings": {"prompt_missing_information_strings"},
+        "invented_tools": {"prompt_invented_tool"},
+        "missing_evidence_refs": {"prompt_string_missing_evidence_refs"},
+        "stale_date_directionality": {"prompt_string_stale_date_reference"},
+        "adversarial_quarantine": {"adversarial_review:quarantine"},
+        "node_not_promoted": {"node_intelligence_not_promoted"},
+    }
+    return str(flag) in mapping.get(mode_id, set())
+
+
+def _slug(text: str) -> str:
+    out = []
+    for ch in str(text).lower():
+        if ch.isalnum():
+            out.append(ch)
+        elif out and out[-1] != "_":
+            out.append("_")
+    return "".join(out).strip("_")[:64] or "work_order"
 
 
 def _read_nearby_tournament(live_report_path: Path) -> dict[str, Any]:

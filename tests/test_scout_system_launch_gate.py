@@ -56,6 +56,8 @@ def test_launch_gate_preflight_blocks_before_live_spend_but_allows_authorized_ca
     assert "MarketEvolve: control" in html
     assert "tic://tool/builtin/query_events_recent@v1" in html
     assert "launch_gate_report.json" in html
+    assert "Repair Work Orders" in html
+    assert "Pre-1000 Watchlist" in html
 
 
 def test_launch_gate_uses_tournament_as_only_1000_promotion_authority():
@@ -262,5 +264,44 @@ def _live_pass_report(*, n_scouts: int):
                 "total_cost_usd_estimate": 0.04,
             },
             "information_map": {"string_count": n_scouts * 2},
+        },
+        "learning_report": {
+            "summary": "The live run opened the next ramp while surfacing repair work.",
+            "scorecard": {
+                "avg_prompt_quality": 0.86,
+                "weak_scout_count": 6,
+            },
+            "failure_modes": [
+                {
+                    "id": "json_unparseable",
+                    "count": 1,
+                    "severity": "red",
+                    "mitigation": "Run fallback JSON repair before dropping scouts.",
+                }
+            ],
+            "evolution_arms": [
+                {
+                    "id": "harness_repair_arm",
+                    "type": "harness",
+                }
+            ],
+            "repair_work_orders": [
+                {
+                    "work_order_id": "lso_json_unparseable_scout_harness",
+                    "owner": "scout_harness",
+                    "priority": "P0",
+                    "trigger_count": 1,
+                    "metric": "json_unparseable_rate",
+                }
+            ],
+            "pre_1000_gate": {
+                "ready_for_authorized_1000": True,
+                "scheduled_production_allowed": False,
+                "red_failure_modes_from_prior_ramp": ["json_unparseable"],
+                "must_watch_metrics": ["json_unparseable_rate"],
+            },
+            "next_run": {
+                "allowed_next_step": "live_1000_scout_ramp",
+            },
         },
     }

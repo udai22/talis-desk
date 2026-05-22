@@ -101,6 +101,11 @@ def test_live_scout_learning_report_extracts_repair_modes_and_next_gate(tmp_path
     assert any(mode["id"] == "json_unparseable" and mode["count"] == 1 for mode in report["failure_modes"])
     assert any(arm["id"] == "harness_repair_arm" for arm in report["evolution_arms"])
     assert any(arm["id"] == "geometry_replication_arm" for arm in report["evolution_arms"])
+    assert report["pre_1000_gate"]["ready_for_authorized_1000"] is True
+    assert report["pre_1000_gate"]["scheduled_production_allowed"] is False
+    assert any(order["owner"] == "scout_harness" for order in report["repair_work_orders"])
+    assert any(order["work_order_id"] == "lso_geometry_replication" for order in report["repair_work_orders"])
+    assert "json_unparseable_rate" in report["next_run"]["pre_1000_gate"]["must_watch_metrics"]
 
     json_path, md_path = write_learning_report_artifacts(report, output_dir=tmp_path / "out")
     assert json_path.exists()

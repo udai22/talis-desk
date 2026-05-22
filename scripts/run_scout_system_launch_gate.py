@@ -397,6 +397,8 @@ def render_launch_gate_html(report: dict[str, Any]) -> str:
     learning = live.get("learning_report") if isinstance(live.get("learning_report"), dict) else {}
     learning_mode_rows = _learning_failure_rows(learning)
     learning_arm_rows = _learning_arm_rows(learning)
+    learning_order_rows = _learning_work_order_rows(learning)
+    pre_1000_rows = _pre_1000_rows(learning)
     next_command = str(decision.get("next_command") or "")
     scout_viewer = str(report.get("viewer_index") or "")
     return f"""<!doctype html>
@@ -575,6 +577,19 @@ def render_launch_gate_html(report: dict[str, Any]) -> str:
   <section>
     <h2>Remaining Repair Pockets</h2>
     <div class="grid hero-grid">{learning_mode_rows}</div>
+  </section>
+
+  <section class="grid two">
+    <div class="panel">
+      <h2>Repair Work Orders</h2>
+      <p>Every weak spot from the live run becomes a dispatchable owner, target surface, and proof metric. This is the loop that keeps the scout layer from merely spending more calls.</p>
+      <ul class="list">{learning_order_rows}</ul>
+    </div>
+    <div class="panel">
+      <h2>Pre-1000 Watchlist</h2>
+      <p>The 100-scout run opened the next experimental ramp, but scheduled production stays blocked until repeatability is proven. These are the gates to watch in the next authorized run.</p>
+      <ul class="list">{pre_1000_rows}</ul>
+    </div>
   </section>
 
   <section>
@@ -955,6 +970,11 @@ def _learning_report_summary(report: dict[str, Any]) -> dict[str, Any]:
             row for row in (learning.get("evolution_arms") or [])
             if isinstance(row, dict)
         ][:8],
+        "repair_work_orders": [
+            row for row in (learning.get("repair_work_orders") or [])
+            if isinstance(row, dict)
+        ][:12],
+        "pre_1000_gate": learning.get("pre_1000_gate") if isinstance(learning.get("pre_1000_gate"), dict) else {},
         "next_run": learning.get("next_run") if isinstance(learning.get("next_run"), dict) else {},
         "artifacts": learning.get("artifacts") if isinstance(learning.get("artifacts"), dict) else {},
     }
@@ -1056,6 +1076,54 @@ def _learning_arm_rows(learning: dict[str, Any]) -> str:
             f'<b>{html.escape(str(arm.get("type") or "evaluator"))}</b></li>'
         )
     return "".join(rows) or "<li><span>No evolution arms captured</span><b>none</b></li>"
+
+
+def _learning_work_order_rows(learning: dict[str, Any]) -> str:
+    rows = []
+    for order in (learning.get("repair_work_orders") or [])[:8]:
+        if not isinstance(order, dict):
+            continue
+        owner = str(order.get("owner") or "unassigned").replace("_", " ")
+        label = str(order.get("work_order_id") or order.get("trigger_failure_mode") or "repair")
+        metric = str(order.get("metric") or "metric not captured")
+        priority = str(order.get("priority") or "?")
+        count = int(order.get("trigger_count") or 0)
+        rows.append(
+            "<li>"
+            f"<span>{html.escape(label.replace('_', ' '))}<small>{html.escape(owner)} · {html.escape(metric)}</small></span>"
+            f"<b>{html.escape(priority)} / {html.escape(str(count))}</b>"
+            "</li>"
+        )
+    return "".join(rows) or "<li><span>No repair work orders captured<small>learning report did not emit owner/metric routing</small></span><b>none</b></li>"
+
+
+def _pre_1000_rows(learning: dict[str, Any]) -> str:
+    gate = learning.get("pre_1000_gate") if isinstance(learning.get("pre_1000_gate"), dict) else {}
+    if not gate:
+        return "<li><span>No pre-1000 gate captured<small>run the live learning report first</small></span><b>unknown</b></li>"
+    rows = [
+        (
+            "Authorized 1,000 experiment",
+            str(bool(gate.get("ready_for_authorized_1000"))),
+            "human approval still required before spend",
+        ),
+        (
+            "Scheduled production",
+            str(bool(gate.get("scheduled_production_allowed"))),
+            "requires independent shadow-run repeatability",
+        ),
+    ]
+    for mode in (gate.get("red_failure_modes_from_prior_ramp") or [])[:4]:
+        rows.append(("Prior red pocket", str(mode).replace("_", " "), "must be watched or repaired"))
+    for metric in (gate.get("must_watch_metrics") or [])[:5]:
+        rows.append(("Watch metric", str(metric), "tracked during the next ramp"))
+    return "".join(
+        "<li>"
+        f"<span>{html.escape(label)}<small>{html.escape(note)}</small></span>"
+        f"<b>{html.escape(value)}</b>"
+        "</li>"
+        for label, value, note in rows
+    )
 
 
 def _publish_live_artifacts(report: dict[str, Any], *, output_dir: Path) -> dict[str, str]:
