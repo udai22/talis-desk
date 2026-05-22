@@ -155,6 +155,27 @@
     </div>
   </section>
 
+  <section class="grid two">
+    <div class="panel">
+      <h2>What The Run Learned</h2>
+      <p>The live run earned `promote_to_1000_scout_ramp` with average prompt quality 0.862 and 15/100 scouts carrying at least one repair signal. The system should treat the next scale step as an evaluator-gated ramp, not production; the main repair pockets are node_not_promoted, empty_hypothesis, missing_evidence_refs.</p>
+      <ul class="list">
+        <li><span>Average prompt quality</span><b>0.8622</b></li>
+        <li><span>Weak scout packets</span><b>15</b></li>
+        <li><span>Next allowed</span><b>live 1000 scout ramp</b></li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h2>Evaluator Arms</h2>
+      <ul class="list"><li><span>harness repair arm</span><b>harness</b></li><li><span>source freshness gap arm</span><b>prompt_and_tooling</b></li><li><span>node intelligence promotion arm</span><b>source_surface</b></li><li><span>geometry replication arm</span><b>routing</b></li><li><span>market evolve policy arena</span><b>evaluator</b></li></ul>
+    </div>
+  </section>
+
+  <section>
+    <h2>Remaining Repair Pockets</h2>
+    <div class="grid hero-grid"><div class="card"><span>yellow</span><h3 class="blocked">node not promoted: 52</h3><p>Node payloads are captured but need stronger actor/source coverage before promotion into trade strings.</p></div><div class="card"><span>yellow</span><h3 class="blocked">empty hypothesis: 19</h3><p>Keep strict pressure: if strings exist, hypothesis must summarize the best valid string.</p></div><div class="card"><span>yellow</span><h3 class="blocked">missing evidence refs: 4</h3><p>Strings without provided refs should become tool_requests or be rejected by prompt quality.</p></div><div class="card"><span>yellow</span><h3 class="blocked">adversarial quarantine: 4</h3><p>Quarantined strings should route to source repair or independent scout replication before verifier spend.</p></div><div class="card"><span>yellow</span><h3 class="blocked">missing information strings: 3</h3><p>Stale/thin data should become a low-conviction gap string with evidence refs, not an empty packet.</p></div><div class="card"><span>red</span><h3 class="fail">invented tools: 2</h3><p>Suggested tools are filtered against allowed_tool_candidates before persistence.</p></div><div class="card"><span>yellow</span><h3 class="blocked">stale date directionality: 2</h3><p>Stale evidence should map source-health gaps instead of directional trade claims.</p></div><div class="card"><span>red</span><h3 class="fail">json unparseable: 1</h3><p>One fallback-model JSON repair is now attempted before a non-calendar scout is dropped.</p></div></div>
+  </section>
+
   <section>
     <h2>First Live Scout Preview</h2>
     <p>This is what the first scout would see if the spend gate were opened: the routed market cell, evolved prompt variant, MarketEvolve stamp, and allowed tool surface.</p>
@@ -185,7 +206,7 @@
     <h2>Raw Run Artifacts</h2>
     <p>These are the live 100-scout files behind the story: report, outputs, transcript, prompt preview, and route sheet. The page explains the system; these let you audit the data.</p>
     <div class="panel">
-      <ul class="list"><li><span>Live canary report</span><b><a href="raw/live_scout_canary_report.json">open</a></b></li><li><span>All scout outputs</span><b><a href="raw/live_scout_canary_outputs.json">open</a></b></li><li><span>Provider transcript</span><b><a href="raw/live_scout_transcript.json">open</a></b></li><li><span>Route sheet</span><b><a href="raw/live_scout_slice_preview.json">open</a></b></li><li><span>First prompt packet</span><b><a href="raw/live_scout_prompt_preview.json">open</a></b></li><li><span>System prompt</span><b><a href="raw/live_scout_preview_system_prompt.md">open</a></b></li><li><span>User prompt</span><b><a href="raw/live_scout_preview_user_prompt.md">open</a></b></li><li><span>Tournament report</span><b><a href="raw/live_scout_tournament_report.json">open</a></b></li><li><span>Canary markdown</span><b><a href="raw/live_scout_canary_report.md">open</a></b></li></ul>
+      <ul class="list"><li><span>Live canary report</span><b><a href="raw/live_scout_canary_report.json">open</a></b></li><li><span>All scout outputs</span><b><a href="raw/live_scout_canary_outputs.json">open</a></b></li><li><span>Provider transcript</span><b><a href="raw/live_scout_transcript.json">open</a></b></li><li><span>Route sheet</span><b><a href="raw/live_scout_slice_preview.json">open</a></b></li><li><span>First prompt packet</span><b><a href="raw/live_scout_prompt_preview.json">open</a></b></li><li><span>System prompt</span><b><a href="raw/live_scout_preview_system_prompt.md">open</a></b></li><li><span>User prompt</span><b><a href="raw/live_scout_preview_user_prompt.md">open</a></b></li><li><span>Learning report</span><b><a href="raw/live_scout_learning_report.json">open</a></b></li><li><span>Learning markdown</span><b><a href="raw/live_scout_learning_report.md">open</a></b></li><li><span>Tournament report</span><b><a href="raw/live_scout_tournament_report.json">open</a></b></li><li><span>Canary markdown</span><b><a href="raw/live_scout_canary_report.md">open</a></b></li></ul>
     </div>
   </section>
 

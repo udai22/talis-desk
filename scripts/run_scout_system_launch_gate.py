@@ -155,6 +155,17 @@ def main() -> int:
         tournament.report = _read_json(tournament_report)
         stages.append(tournament)
 
+    if live_report_path and live.report:
+        learning_report = _build_live_learning_report(
+            live_report_path=live_report_path,
+            tournament_report_path=(
+                tournament_dir / "live_scout_tournament_report.json"
+                if tournament_dir.exists() else None
+            ),
+        )
+        if learning_report:
+            live.report["learning_report"] = learning_report
+
     report = build_launch_gate_report(
         deterministic_report=deterministic.report,
         live_report=live.report,
@@ -269,6 +280,7 @@ def build_launch_gate_report(
             "metrics": _live_summary(live_report),
             "prompt_preview": _prompt_preview_summary(live_report),
             "slice_preview": _slice_preview_summary(live_report),
+            "learning_report": _learning_report_summary(live_report),
             "prompt_output_dir": live_report.get("prompt_output_dir") or "",
             "artifacts": live_report.get("artifacts") or {},
         },
@@ -382,6 +394,9 @@ def render_launch_gate_html(report: dict[str, Any]) -> str:
         for uri in (prompt_preview.get("allowed_tool_candidates") or [])[:8]
     ) or "<li><span>No tool candidates captured</span><b>blocked</b></li>"
     artifact_rows = _artifact_rows(report)
+    learning = live.get("learning_report") if isinstance(live.get("learning_report"), dict) else {}
+    learning_mode_rows = _learning_failure_rows(learning)
+    learning_arm_rows = _learning_arm_rows(learning)
     next_command = str(decision.get("next_command") or "")
     scout_viewer = str(report.get("viewer_index") or "")
     return f"""<!doctype html>
@@ -539,6 +554,27 @@ def render_launch_gate_html(report: dict[str, Any]) -> str:
         <li><span>100-scout viewer</span><b>{_viewer_link(scout_viewer)}</b></li>
       </ul>
     </div>
+  </section>
+
+  <section class="grid two">
+    <div class="panel">
+      <h2>What The Run Learned</h2>
+      <p>{html.escape(str(learning.get("summary") or "No live learning report was captured for this run."))}</p>
+      <ul class="list">
+        <li><span>Average prompt quality</span><b>{html.escape(str((learning.get("scorecard") or {}).get("avg_prompt_quality") or 0))}</b></li>
+        <li><span>Weak scout packets</span><b>{html.escape(str((learning.get("scorecard") or {}).get("weak_scout_count") or 0))}</b></li>
+        <li><span>Next allowed</span><b>{html.escape(str((learning.get("next_run") or {}).get("allowed_next_step") or "unknown").replace("_", " "))}</b></li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h2>Evaluator Arms</h2>
+      <ul class="list">{learning_arm_rows}</ul>
+    </div>
+  </section>
+
+  <section>
+    <h2>Remaining Repair Pockets</h2>
+    <div class="grid hero-grid">{learning_mode_rows}</div>
   </section>
 
   <section>
@@ -894,6 +930,61 @@ def _slice_preview_summary(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _learning_report_summary(report: dict[str, Any]) -> dict[str, Any]:
+    learning = report.get("learning_report") if isinstance(report.get("learning_report"), dict) else {}
+    scorecard = learning.get("scorecard") if isinstance(learning.get("scorecard"), dict) else {}
+    return {
+        "summary": learning.get("summary") or "",
+        "scorecard": {
+            "requested": scorecard.get("requested"),
+            "provider_calls": scorecard.get("provider_calls"),
+            "completed": scorecard.get("completed"),
+            "success_rate": scorecard.get("success_rate"),
+            "estimated_cost_usd": scorecard.get("estimated_cost_usd"),
+            "strings": scorecard.get("strings"),
+            "geometry_cells": scorecard.get("geometry_cells"),
+            "avg_prompt_quality": scorecard.get("avg_prompt_quality"),
+            "low_prompt_quality_count": scorecard.get("low_prompt_quality_count"),
+            "weak_scout_count": scorecard.get("weak_scout_count"),
+        },
+        "failure_modes": [
+            row for row in (learning.get("failure_modes") or [])
+            if isinstance(row, dict)
+        ][:8],
+        "evolution_arms": [
+            row for row in (learning.get("evolution_arms") or [])
+            if isinstance(row, dict)
+        ][:8],
+        "next_run": learning.get("next_run") if isinstance(learning.get("next_run"), dict) else {},
+        "artifacts": learning.get("artifacts") if isinstance(learning.get("artifacts"), dict) else {},
+    }
+
+
+def _build_live_learning_report(
+    *,
+    live_report_path: Path,
+    tournament_report_path: Path | None,
+) -> dict[str, Any]:
+    try:
+        from scripts.analyze_live_scout_run import (
+            build_live_scout_learning_report,
+            write_learning_report_artifacts,
+        )
+
+        report = build_live_scout_learning_report(
+            live_report_path,
+            tournament_report_path=tournament_report_path if tournament_report_path and tournament_report_path.exists() else None,
+        )
+        write_learning_report_artifacts(report, output_dir=live_report_path.parent)
+        return report
+    except Exception as exc:
+        return {
+            "schema_version": "talis_live_scout_learning_report_v1",
+            "summary": f"Learning report failed: {type(exc).__name__}: {exc}",
+            "quality_flags": ["learning_report_failed"],
+        }
+
+
 def _inline_counts(counts: Any, *, limit: int = 6) -> str:
     if not isinstance(counts, dict) or not counts:
         return "none"
@@ -938,6 +1029,35 @@ def _slice_card(row: dict[str, Any]) -> str:
     )
 
 
+def _learning_failure_rows(learning: dict[str, Any]) -> str:
+    rows = []
+    for mode in (learning.get("failure_modes") or [])[:8]:
+        if not isinstance(mode, dict):
+            continue
+        count = int(mode.get("count") or 0)
+        klass = "pass" if count == 0 else "fail" if mode.get("severity") == "red" else "blocked"
+        rows.append(
+            '<div class="card">'
+            f'<span>{html.escape(str(mode.get("severity") or "unknown"))}</span>'
+            f'<h3 class="{klass}">{html.escape(str(mode.get("id") or "mode").replace("_", " "))}: {count}</h3>'
+            f'<p>{html.escape(str(mode.get("mitigation") or ""))}</p>'
+            '</div>'
+        )
+    return "".join(rows) or '<div class="card"><span>learning</span><h3>No repair pockets captured</h3><p>The learning report did not emit failure modes.</p></div>'
+
+
+def _learning_arm_rows(learning: dict[str, Any]) -> str:
+    rows = []
+    for arm in (learning.get("evolution_arms") or [])[:6]:
+        if not isinstance(arm, dict):
+            continue
+        rows.append(
+            f'<li><span>{html.escape(str(arm.get("id") or "").replace("_", " "))}</span>'
+            f'<b>{html.escape(str(arm.get("type") or "evaluator"))}</b></li>'
+        )
+    return "".join(rows) or "<li><span>No evolution arms captured</span><b>none</b></li>"
+
+
 def _publish_live_artifacts(report: dict[str, Any], *, output_dir: Path) -> dict[str, str]:
     live = report.get("live") if isinstance(report.get("live"), dict) else {}
     prompt_output_dir = Path(str(live.get("prompt_output_dir") or "")).expanduser()
@@ -954,6 +1074,8 @@ def _publish_live_artifacts(report: dict[str, Any], *, output_dir: Path) -> dict
         "live_scout_prompt_preview_json": prompt_output_dir / "live_scout_prompt_preview.json",
         "live_scout_preview_system_prompt_md": prompt_output_dir / "live_scout_preview_system_prompt.md",
         "live_scout_preview_user_prompt_md": prompt_output_dir / "live_scout_preview_user_prompt.md",
+        "live_scout_learning_report_json": prompt_output_dir / "live_scout_learning_report.json",
+        "live_scout_learning_report_md": prompt_output_dir / "live_scout_learning_report.md",
     }
     raw_dir.mkdir(parents=True, exist_ok=True)
     for key, src in candidates.items():
@@ -986,6 +1108,8 @@ def _artifact_rows(report: dict[str, Any]) -> str:
         "live_scout_prompt_preview_json": "First prompt packet",
         "live_scout_preview_system_prompt_md": "System prompt",
         "live_scout_preview_user_prompt_md": "User prompt",
+        "live_scout_learning_report_json": "Learning report",
+        "live_scout_learning_report_md": "Learning markdown",
         "live_scout_tournament_report_json": "Tournament report",
         "live_scout_canary_report_md": "Canary markdown",
     }
