@@ -1567,7 +1567,7 @@ def evaluate_market_evolve_experiments(
             _reject_candidate_program(candidate=candidate, result=result, conn=db)
             _set_mutation_status_for_child(candidate.program_id, "rejected", conn=db)
             _set_experiment_status(experiment_id, "rejected", conn=db)
-        elif result["decision"] == "insufficient_sample":
+        elif result["decision"] in {"insufficient_sample", "insufficient_proof"}:
             _set_mutation_status_for_child(candidate.program_id, "needs_more_data", conn=db)
             _set_experiment_status(experiment_id, "running", conn=db)
         elif result["decision"] == "continue_candidate":
@@ -3719,6 +3719,40 @@ def _experiment_decision(
             "quality_flags": sorted(set(flags)),
             "falsification_gate_results": gate_results,
         }
+    unobserved_proof_gates = [
+        gate for gate in gate_results
+        if str(gate.get("status") or "") == "not_observed"
+        and str(gate.get("decision") or "") in {
+            "reject_candidate",
+            "reject_or_continue_candidate",
+            "needs_more_source_evidence",
+            "inspect",
+        }
+    ]
+    if unobserved_proof_gates:
+        flags.extend([
+            "hard_experiment_proof_incomplete",
+            "proof_gate_observation_pending",
+            *[
+                f"proof_gate_not_observed_blocker:{_metric_flag_slug(str(gate.get('metric') or 'unknown'))}"
+                for gate in unobserved_proof_gates
+            ],
+        ])
+        pending_metrics = ", ".join(
+            str(gate.get("metric") or "unknown")
+            for gate in unobserved_proof_gates[:6]
+        )
+        return {
+            "decision": "insufficient_proof",
+            "score_delta": score_delta,
+            "rationale": (
+                "candidate passed measured score gates, but hard-experiment "
+                f"proof metrics were not observed yet: {pending_metrics}; "
+                "keep the matched experiment running instead of counting this as a win"
+            ),
+            "quality_flags": sorted(set(flags)),
+            "falsification_gate_results": gate_results,
+        }
     prior_results = list(prior_results or [])
     prior_completed = [
         r for r in prior_results
@@ -5161,6 +5195,24 @@ def _scoreboard_next_actions(
         actions.append({
             "action": "run_scouts_before_deciding_experiment",
             "why": "The experiment exists, but this window has no measured result yet.",
+        })
+    pending_proof = [
+        row for row in result_window
+        if str(row.get("decision") or "") == "insufficient_proof"
+    ]
+    if pending_proof:
+        pending_metrics = sorted({
+            metric
+            for row in pending_proof
+            for metric in _proof_gate_summary(
+                row.get("falsification_gate_results") or {}
+            ).get("not_observed_metrics", [])
+            if str(metric).strip()
+        })
+        actions.append({
+            "action": "collect_missing_falsification_gate_metrics",
+            "why": "A candidate beat measured score gates, but promotion proof gates were not observed.",
+            "metrics": pending_metrics[:8],
         })
     for row in frontier[:4]:
         action = str(row.get("next_action") or "")

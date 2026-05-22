@@ -3315,6 +3315,64 @@ def test_market_evolve_experiment_uses_mutation_falsification_gates():
     assert result["falsification_gate_results"][0]["observed"] == 0.75
 
 
+def test_market_evolve_experiment_waits_when_falsification_gate_not_observed():
+    experiment = {
+        "matched_slice": {"min_seeds_per_arm": 20},
+        "success_criteria": {
+            "min_score_delta": 0.05,
+            "min_completed_cycles": 1,
+            "min_candidate_wins": 1,
+            "min_consecutive_candidate_wins": 1,
+            "min_valid_string_rate": 0.60,
+            "min_source_independence": 0.45,
+            "max_avg_fragility": 0.65,
+            "max_low_ev_tool_rate": 0.25,
+            "max_tool_eval_failed_rate": 0.50,
+            "falsification_gates": [
+                {
+                    "metric": "candidate_fragile_verify_rate",
+                    "operator": "<=",
+                    "threshold": 0.20,
+                    "decision": "reject_candidate",
+                }
+            ],
+        },
+    }
+    control_metrics = {
+        "scout_count": 20.0,
+        "valid_string_rate": 1.0,
+        "avg_source_independence": 0.72,
+        "avg_fragility": 0.18,
+        "low_ev_tool_rate": 0.0,
+        "tool_eval_failed_rate": 0.0,
+        "policy_cost_usd": 0.01,
+        "geometry_cell_count": 1.0,
+    }
+    candidate_metrics = {
+        **control_metrics,
+        "avg_source_independence": 0.80,
+        "avg_fragility": 0.22,
+        "geometry_cell_count": 0.0,
+        "policy_cost_usd": 0.01,
+    }
+
+    result = _experiment_decision(
+        experiment=experiment,
+        control_metrics=control_metrics,
+        candidate_metrics=candidate_metrics,
+        control_score=0.55,
+        candidate_score=0.72,
+    )
+
+    assert result["decision"] == "insufficient_proof"
+    assert result["score_delta"] == 0.17
+    assert "hard_experiment_proof_incomplete" in result["quality_flags"]
+    assert "proof_gate_observation_pending" in result["quality_flags"]
+    assert "proof_gate_not_observed_blocker:candidate_fragile_verify_rate" in result["quality_flags"]
+    assert "candidate_passed_promotion_gates" not in result["quality_flags"]
+    assert result["falsification_gate_results"][0]["status"] == "not_observed"
+
+
 def test_market_evolve_prepares_paired_experiment_seed_slices(tmp_path):
     store = DeskStore(db_path=tmp_path / "desk.db")
     import talis_desk.store as store_mod
