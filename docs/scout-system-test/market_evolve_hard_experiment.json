@@ -4,14 +4,14 @@
     "candidate": 50,
     "control": 50
   },
-  "cycle_id": "cycle_readiness_market_evolve2_20260522",
-  "experiment_id": "mexp_805c18d0ad6d7803",
+  "cycle_id": "cycle_readiness_market_evolve3_20260522",
+  "experiment_id": "mexp_43b79e6debf993b1",
   "experiment_ids": [
-    "mexp_805c18d0ad6d7803"
+    "mexp_43b79e6debf993b1"
   ],
   "experiment_kind": "matched_policy_ab",
   "final_decision": "reject_candidate",
-  "final_score_delta": -0.0003,
+  "final_score_delta": 0.0001,
   "paired_seed_slices": 20,
   "plans": [
     {
@@ -31,10 +31,10 @@
         }
       ],
       "candidate_program_id": "mprog_96570525068fa415",
-      "created_at": "2026-05-22T14:45:27.497265+00:00",
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "created_at": "2026-05-22T15:03:28.703545+00:00",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "experiment_kind": "matched_policy_ab",
-      "id": "mexp_805c18d0ad6d7803",
+      "id": "mexp_43b79e6debf993b1",
       "matched_slice": {
         "assignment": "paired_seed_clone_then_deterministic_hash",
         "axes": [
@@ -192,9 +192,9 @@
           "evolution_proof_required"
         ]
       },
-      "transaction_from": "2026-05-22T14:45:29.655735+00:00",
+      "transaction_from": "2026-05-22T15:03:31.120577+00:00",
       "transaction_to": null,
-      "valid_from": "2026-05-22T14:45:27.497265+00:00"
+      "valid_from": "2026-05-22T15:03:28.703545+00:00"
     },
     {
       "arms": [
@@ -213,10 +213,10 @@
         }
       ],
       "candidate_program_id": "mprog_f3702ed4079fa381",
-      "created_at": "2026-05-22T14:45:27.495557+00:00",
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "created_at": "2026-05-22T15:03:28.702001+00:00",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "experiment_kind": "matched_policy_ab",
-      "id": "mexp_424a3623edd0af20",
+      "id": "mexp_4f848f9a860ebdb4",
       "matched_slice": {
         "assignment": "paired_seed_clone_then_deterministic_hash",
         "axes": [
@@ -382,9 +382,9 @@
           "evolution_proof_required"
         ]
       },
-      "transaction_from": "2026-05-22T14:45:27.495557+00:00",
+      "transaction_from": "2026-05-22T15:03:28.702001+00:00",
       "transaction_to": null,
-      "valid_from": "2026-05-22T14:45:27.495557+00:00"
+      "valid_from": "2026-05-22T15:03:28.702001+00:00"
     }
   ],
   "policy_application_count": 100,
@@ -408,15 +408,15 @@
   },
   "results": [
     {
-      "candidate_score": 0.8107,
-      "control_score": 0.811,
+      "candidate_score": 0.8109,
+      "control_score": 0.8108,
       "decision": "reject_candidate",
-      "experiment_id": "mexp_805c18d0ad6d7803",
+      "experiment_id": "mexp_43b79e6debf993b1",
       "falsification_gate_results": [
         {
           "decision": "reject_or_continue_candidate",
           "metric": "score_delta",
-          "observed": -0.0003,
+          "observed": 0.0001,
           "operator": "<",
           "status": "triggered",
           "threshold": 0.05,
@@ -441,7 +441,7 @@
           "triggered": false
         }
       ],
-      "id": "mres_28078915dc2c1b82",
+      "id": "mres_be34323824684cab",
       "quality_flags": [
         "falsification_gates_evaluated:3",
         "market_evolve_online_experiment_v1",
@@ -451,8 +451,8 @@
         "proof_gate_triggered:score_delta",
         "score_delta_below_gate"
       ],
-      "rationale": "candidate failed gates: score_delta_below_gate, proof_gate_failed:score_delta; delta=-0.000",
-      "score_delta": -0.0003
+      "rationale": "candidate failed gates: score_delta_below_gate, proof_gate_failed:score_delta; delta=0.000",
+      "score_delta": 0.0001
     }
   ],
   "schema_version": "market_evolve_hard_experiment_episode_v1",

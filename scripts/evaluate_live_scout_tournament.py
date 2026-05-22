@@ -38,6 +38,7 @@ DEFAULT_THRESHOLDS = {
     "distribution_max_structural_flag_rate": 0.10,
     "distribution_max_tool_error_rate": 0.02,
     "distribution_min_geometry_cells": 50,
+    "distribution_min_market_evolve_pairs": 20,
     "scale_min_scouts": 1000,
     "scale_min_success_rate": 0.90,
     "scale_max_provider_error_rate": 0.02,
@@ -46,6 +47,7 @@ DEFAULT_THRESHOLDS = {
     "scale_max_tool_error_rate": 0.02,
     "scale_min_geometry_cells": 500,
     "scale_min_information_strings": 1000,
+    "scale_min_market_evolve_pairs": 20,
     "production_min_shadow_runs": 2,
     "production_max_success_rate_delta": 0.05,
     "production_max_duplicate_rate_delta": 0.08,
@@ -76,6 +78,7 @@ def main() -> int:
         "distribution_max_structural_flag_rate": args.distribution_max_structural_flag_rate,
         "distribution_max_tool_error_rate": args.distribution_max_tool_error_rate,
         "distribution_min_geometry_cells": args.distribution_min_geometry_cells,
+        "distribution_min_market_evolve_pairs": args.distribution_min_market_evolve_pairs,
         "scale_min_scouts": args.scale_min_scouts,
         "scale_min_success_rate": args.scale_min_success_rate,
         "scale_max_provider_error_rate": args.scale_max_provider_error_rate,
@@ -84,6 +87,7 @@ def main() -> int:
         "scale_max_tool_error_rate": args.scale_max_tool_error_rate,
         "scale_min_geometry_cells": args.scale_min_geometry_cells,
         "scale_min_information_strings": args.scale_min_information_strings,
+        "scale_min_market_evolve_pairs": args.scale_min_market_evolve_pairs,
         "production_min_shadow_runs": args.production_min_shadow_runs,
         "production_max_success_rate_delta": args.production_max_success_rate_delta,
         "production_max_duplicate_rate_delta": args.production_max_duplicate_rate_delta,
@@ -131,6 +135,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--distribution-max-structural-flag-rate", type=float, default=DEFAULT_THRESHOLDS["distribution_max_structural_flag_rate"])
     parser.add_argument("--distribution-max-tool-error-rate", type=float, default=DEFAULT_THRESHOLDS["distribution_max_tool_error_rate"])
     parser.add_argument("--distribution-min-geometry-cells", type=int, default=DEFAULT_THRESHOLDS["distribution_min_geometry_cells"])
+    parser.add_argument("--distribution-min-market-evolve-pairs", type=int, default=DEFAULT_THRESHOLDS["distribution_min_market_evolve_pairs"])
     parser.add_argument("--scale-min-scouts", type=int, default=DEFAULT_THRESHOLDS["scale_min_scouts"])
     parser.add_argument("--scale-min-success-rate", type=float, default=DEFAULT_THRESHOLDS["scale_min_success_rate"])
     parser.add_argument("--scale-max-provider-error-rate", type=float, default=DEFAULT_THRESHOLDS["scale_max_provider_error_rate"])
@@ -139,6 +144,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--scale-max-tool-error-rate", type=float, default=DEFAULT_THRESHOLDS["scale_max_tool_error_rate"])
     parser.add_argument("--scale-min-geometry-cells", type=int, default=DEFAULT_THRESHOLDS["scale_min_geometry_cells"])
     parser.add_argument("--scale-min-information-strings", type=int, default=DEFAULT_THRESHOLDS["scale_min_information_strings"])
+    parser.add_argument("--scale-min-market-evolve-pairs", type=int, default=DEFAULT_THRESHOLDS["scale_min_market_evolve_pairs"])
     parser.add_argument("--production-min-shadow-runs", type=int, default=DEFAULT_THRESHOLDS["production_min_shadow_runs"])
     parser.add_argument("--production-max-success-rate-delta", type=float, default=DEFAULT_THRESHOLDS["production_max_success_rate_delta"])
     parser.add_argument("--production-max-duplicate-rate-delta", type=float, default=DEFAULT_THRESHOLDS["production_max_duplicate_rate_delta"])
@@ -224,6 +230,7 @@ def evaluate_live_scout_candidate(path: Path, *, thresholds: dict[str, float | i
     geometry = metrics.get("geometry") if isinstance(metrics.get("geometry"), dict) else {}
     coverage = metrics.get("coverage") if isinstance(metrics.get("coverage"), dict) else {}
     self_healing = metrics.get("self_healing") if isinstance(metrics.get("self_healing"), dict) else {}
+    market_evolve = _market_evolve_proof_metrics(report, path)
     transcript = _load_transcript(path)
     transcript_summary = report.get("transcript_summary") if isinstance(report.get("transcript_summary"), dict) else {}
     original_verdict = report.get("verdict") if isinstance(report.get("verdict"), dict) else {}
@@ -302,6 +309,12 @@ def evaluate_live_scout_candidate(path: Path, *, thresholds: dict[str, float | i
             "distribution_structural_flag_rate_le_0_10": structural_flag_rate <= float(thresholds["distribution_max_structural_flag_rate"]),
             "distribution_tool_error_rate_le_0_02": tool_error_rate <= float(thresholds["distribution_max_tool_error_rate"]),
             "distribution_geometry_cells_ge_50": int(geometry.get("cell_count") or 0) >= int(thresholds["distribution_min_geometry_cells"]),
+            "distribution_market_evolve_policy_applied": int(market_evolve.get("policy_application_count") or 0) >= n_requested,
+            "distribution_market_evolve_pairs_ge_min": int(market_evolve.get("paired_seed_slices") or 0) >= int(thresholds["distribution_min_market_evolve_pairs"]),
+            "distribution_market_evolve_control_candidate_arms": bool(market_evolve.get("control_arm_present")) and bool(market_evolve.get("candidate_arm_present")),
+            "distribution_market_evolve_hard_experiment_planned": bool(market_evolve.get("hard_experiment_planned")),
+            "distribution_market_evolve_result_evaluated": bool(market_evolve.get("experiment_result_evaluated")),
+            "distribution_market_evolve_falsification_gates_evaluated": bool(market_evolve.get("falsification_gates_evaluated")),
         })
     if n_requested >= int(thresholds["scale_min_scouts"]):
         gates.update({
@@ -313,6 +326,12 @@ def evaluate_live_scout_candidate(path: Path, *, thresholds: dict[str, float | i
             "scale_tool_error_rate_le_0_02": tool_error_rate <= float(thresholds["scale_max_tool_error_rate"]),
             "scale_geometry_cells_ge_500": int(geometry.get("cell_count") or 0) >= int(thresholds["scale_min_geometry_cells"]),
             "scale_information_strings_ge_1000": string_count >= int(thresholds["scale_min_information_strings"]),
+            "scale_market_evolve_policy_applied": int(market_evolve.get("policy_application_count") or 0) >= n_requested,
+            "scale_market_evolve_pairs_ge_min": int(market_evolve.get("paired_seed_slices") or 0) >= int(thresholds["scale_min_market_evolve_pairs"]),
+            "scale_market_evolve_control_candidate_arms": bool(market_evolve.get("control_arm_present")) and bool(market_evolve.get("candidate_arm_present")),
+            "scale_market_evolve_hard_experiment_planned": bool(market_evolve.get("hard_experiment_planned")),
+            "scale_market_evolve_result_evaluated": bool(market_evolve.get("experiment_result_evaluated")),
+            "scale_market_evolve_falsification_gates_evaluated": bool(market_evolve.get("falsification_gates_evaluated")),
         })
     failed_gates = [name for name, ok in gates.items() if not ok]
     prompt_variants = _prompt_variants(report, scouts, output_rows)
@@ -373,6 +392,7 @@ def evaluate_live_scout_candidate(path: Path, *, thresholds: dict[str, float | i
             "self_healing_failed": int(self_healing.get("failed_tasks") or 0),
             "tool_proposals": int(self_healing.get("tool_proposals") or 0),
         },
+        "market_evolve": market_evolve,
         "original_canary_verdict": original_verdict,
         "gates": gates,
         "failed_gates": failed_gates,
@@ -384,6 +404,67 @@ def evaluate_live_scout_candidate(path: Path, *, thresholds: dict[str, float | i
     candidate["promotion_eligible"] = not failed_gates
     candidate["interpretation"] = _interpret_candidate(candidate)
     return candidate
+
+
+def _market_evolve_proof_metrics(report: dict[str, Any], path: Path) -> dict[str, Any]:
+    metrics = report.get("metrics") if isinstance(report.get("metrics"), dict) else {}
+    raw = metrics.get("market_evolve") if isinstance(metrics.get("market_evolve"), dict) else {}
+    hard = _read_sibling_json(path, "market_evolve_hard_experiment.json")
+    hard = hard if isinstance(hard, dict) else {}
+    proof = hard.get("proof") if isinstance(hard.get("proof"), dict) else {}
+    results = hard.get("results") if isinstance(hard.get("results"), list) else []
+    plans = hard.get("plans") if isinstance(hard.get("plans"), list) else []
+    latest_result = results[0] if results and isinstance(results[0], dict) else {}
+    raw_arms = raw.get("arm_counts") if isinstance(raw.get("arm_counts"), dict) else {}
+    hard_arms = hard.get("arm_counts") if isinstance(hard.get("arm_counts"), dict) else {}
+    arm_counts = {**raw_arms, **hard_arms}
+    planning_count = max(
+        int(raw.get("planning_experiment_count") or 0),
+        int(raw.get("experiment_plan_count") or 0),
+        len(plans),
+    )
+    result_count = max(int(raw.get("experiment_result_count") or 0), len(results))
+    status = str(hard.get("status") or "").strip()
+    control_arm_present = bool(proof.get("control_arm_present")) or int(arm_counts.get("control") or 0) > 0
+    candidate_arm_present = bool(proof.get("candidate_arm_present")) or int(arm_counts.get("candidate") or 0) > 0
+    experiment_result_evaluated = (
+        bool(proof.get("experiment_result_evaluated"))
+        or result_count > 0
+        or status == "evaluated"
+    )
+    falsification_gates_evaluated = (
+        bool(proof.get("falsification_gates_evaluated"))
+        or bool(latest_result.get("falsification_gate_results"))
+    )
+    return {
+        "hard_experiment_observed": bool(hard),
+        "hard_experiment_status": status,
+        "hard_experiment_planned": planning_count > 0 or status in {"planned", "evaluated"},
+        "hard_experiment_final_decision": hard.get("final_decision") or raw.get("latest_experiment_decision"),
+        "policy_application_count": max(
+            int(raw.get("policy_application_count") or 0),
+            int(hard.get("policy_application_count") or 0),
+        ),
+        "paired_seed_slices": max(
+            int(raw.get("paired_seed_slices") or 0),
+            int(hard.get("paired_seed_slices") or 0),
+        ),
+        "arm_counts": arm_counts,
+        "planning_experiment_count": planning_count,
+        "experiment_result_count": result_count,
+        "latest_experiment_decision": raw.get("latest_experiment_decision") or hard.get("final_decision"),
+        "final_score": raw.get("final_score"),
+        "final_passed": raw.get("final_passed"),
+        "final_score_delta": hard.get("final_score_delta"),
+        "policy_stamped_on_seeds": bool(proof.get("policy_stamped_on_seeds")) or int(raw.get("policy_application_count") or 0) > 0,
+        "matched_seed_pairs_present": bool(proof.get("matched_seed_pairs_present")) or int(raw.get("paired_seed_slices") or 0) > 0,
+        "control_arm_present": control_arm_present,
+        "candidate_arm_present": candidate_arm_present,
+        "experiment_result_evaluated": experiment_result_evaluated,
+        "falsification_gates_evaluated": falsification_gates_evaluated,
+        "candidate_promoted_or_continued": bool(proof.get("candidate_promoted_or_continued")),
+        "quality_flags": list(proof.get("quality_flags") or []),
+    }
 
 
 def render_tournament_markdown(report: dict[str, Any]) -> str:
@@ -406,6 +487,7 @@ def render_tournament_markdown(report: dict[str, Any]) -> str:
     for c in report.get("candidates") or []:
         q = c.get("quality") or {}
         sample = c.get("sample") or {}
+        evolve = c.get("market_evolve") or {}
         lines.extend([
             f"### {c.get('candidate_id')}",
             "",
@@ -418,6 +500,9 @@ def render_tournament_markdown(report: dict[str, Any]) -> str:
             f"- strings_per_scout: `{q.get('strings_per_scout')}`",
             f"- duplicate_rate: `{q.get('duplicate_hypothesis_rate')}`",
             f"- avg_latency_s: `{q.get('avg_latency_s')}`",
+            f"- market_evolve_pairs: `{evolve.get('paired_seed_slices')}`",
+            f"- market_evolve_decision: `{evolve.get('latest_experiment_decision') or evolve.get('hard_experiment_final_decision')}`",
+            f"- market_evolve_proof: `policy={evolve.get('policy_stamped_on_seeds')} arms={evolve.get('control_arm_present') and evolve.get('candidate_arm_present')} falsified={evolve.get('falsification_gates_evaluated')}`",
             f"- failed_gates: `{', '.join(c.get('failed_gates') or []) or 'none'}`",
             "",
             str(c.get("interpretation") or ""),
@@ -437,6 +522,7 @@ def _score_candidate(candidate: dict[str, Any]) -> float:
     q = candidate["quality"]
     sample = candidate["sample"]
     m = candidate["map_effect"]
+    e = candidate.get("market_evolve") if isinstance(candidate.get("market_evolve"), dict) else {}
     success = _to_float(q.get("success_rate"))
     strings = min(1.0, _to_float(q.get("strings_per_scout")) / 1.5)
     evidence = _to_float(q.get("evidence_ok_rate"))
@@ -450,7 +536,22 @@ def _score_candidate(candidate: dict[str, Any]) -> float:
     cost_eff = max(0.0, 1.0 - min(1.0, cost_per / DEFAULT_THRESHOLDS["max_cost_per_scout_usd"]))
     avg_latency = q.get("avg_latency_s")
     latency = max(0.0, 1.0 - (_to_float(avg_latency) / 60.0)) if avg_latency is not None else 0.35
-    sample_bonus = min(1.0, int(sample.get("requested") or 0) / DEFAULT_THRESHOLDS["min_scouts"])
+    requested = int(sample.get("requested") or 0)
+    sample_bonus = min(1.0, requested / DEFAULT_THRESHOLDS["min_scouts"])
+    if requested >= DEFAULT_THRESHOLDS["distribution_min_scouts"]:
+        market_evolve_proof = sum(
+            1.0 for ok in (
+                e.get("policy_stamped_on_seeds"),
+                e.get("matched_seed_pairs_present"),
+                e.get("control_arm_present") and e.get("candidate_arm_present"),
+                e.get("hard_experiment_planned"),
+                e.get("experiment_result_evaluated"),
+                e.get("falsification_gates_evaluated"),
+            )
+            if ok
+        ) / 6.0
+    else:
+        market_evolve_proof = 0.5
     score = (
         0.24 * success
         + 0.18 * strings
@@ -458,6 +559,7 @@ def _score_candidate(candidate: dict[str, Any]) -> float:
         + 0.08 * prompt_quality
         + 0.10 * geometry
         + 0.08 * self_healing
+        + 0.06 * market_evolve_proof
         + 0.08 * cost_eff
         + 0.10 * latency
         + 0.02 * sample_bonus
@@ -686,9 +788,9 @@ def _promotion_decision(
                 "reason": (
                     "The 1,000-scout live distribution passed provider reliability, "
                     "string yield, duplicate, prompt-quality, temporal-structure, "
-                    "geometry, self-healing, and scale-volume gates. It earns a repeat "
-                    "1,000-scout shadow-production trial. Scheduled production remains "
-                    "blocked until repeatability is proven across independent runs."
+                    "geometry, self-healing, MarketEvolve proof, and scale-volume gates. "
+                    "It earns a repeat 1,000-scout shadow-production trial. Scheduled "
+                    "production remains blocked until repeatability is proven across independent runs."
                 ),
             }
         if int(sample.get("requested") or 0) >= int(thresholds["distribution_min_scouts"]):
@@ -701,8 +803,9 @@ def _promotion_decision(
                 "reason": (
                     "The 100+ scout live distribution passed provider reliability, "
                     "string yield, duplicate, prompt-quality, temporal-structure, "
-                    "geometry, and self-healing gates. A 1,000-scout ramp is allowed "
-                    "under a hard cap; it is still a ramp, not an always-on production schedule."
+                    "geometry, self-healing, and MarketEvolve proof gates. A 1,000-scout "
+                    "ramp is allowed under a hard cap; it is still a ramp, not an always-on "
+                    "production schedule."
                 ),
             }
         return {
@@ -855,6 +958,26 @@ def _next_experiment_plan(
         "scale_structural_flag_rate_le_0_10",
         "scale_information_strings_ge_1000",
     }.intersection(failed))
+    market_evolve_failed = any(name.startswith("distribution_market_evolve_") or name.startswith("scale_market_evolve_") for name in failed)
+    if market_evolve_failed:
+        plan.append({
+            "id": "market_evolve_proof_repair_100",
+            "purpose": (
+                "Repair the evolution harness before buying scale: every 100+ run must stamp policy "
+                "on seeds, include matched control/candidate slices, and evaluate falsification gates."
+            ),
+            "command": (
+                "PYTHONPATH=.:talis_tic python scripts/run_live_scout_canary.py --n-scouts 100 "
+                "--concurrency 4 --cost-cap-usd 1.00 --provider-timeout-s 45 "
+                "--prompt-variant flash_temporal_v4 --max-tool-iterations 0 "
+                "--market-evolve-pairs 20 --allow-live-spend"
+            ),
+            "promotion_rule": (
+                "Do not promote any 100+ scout distribution unless the tournament sees "
+                "MarketEvolve policy applications for every seed, at least 20 matched pairs, "
+                "both experiment arms, an evaluated result, and falsification gates."
+            ),
+        })
     if requested >= int(thresholds["scale_min_scouts"]) and scale_quality_failed:
         plan.append({
             "id": "flash_temporal_v4_repair_200",
@@ -983,15 +1106,17 @@ def _system_performance(
                 "The live 1,000-scout distribution is clean enough for a repeated "
                 "shadow-production trial: provider calls completed, strings were stored, "
                 "synthesis promoted hypotheses, geometry cells were created, and self-healing "
-                "tasks ran at scale. The remaining blocker is repeatability across an "
-                "independent 1,000-scout run before any scheduled production posture."
+                "tasks ran at scale, with MarketEvolve proof captured. The remaining blocker "
+                "is repeatability across an independent 1,000-scout run before any scheduled "
+                "production posture."
             )
         elif requested >= int(DEFAULT_THRESHOLDS["distribution_min_scouts"]):
             summary = (
                 "The live 100+ scout distribution is clean enough for a capped 1,000-scout ramp: "
                 "provider calls completed, strings were stored, synthesis promoted hypotheses, "
-                "geometry cells were created, and self-healing tasks ran. The remaining blocker "
-                "is 1,000-scout stability before any scheduled production posture."
+                "geometry cells were created, self-healing tasks ran, and MarketEvolve evaluated "
+                "matched control/candidate slices. The remaining blocker is 1,000-scout stability "
+                "before any scheduled production posture."
             )
         else:
             summary = (
@@ -1025,6 +1150,7 @@ def _system_performance(
         "best_duplicate_rate": q["duplicate_hypothesis_rate"],
         "best_geometry_cells": m["geometry_cells"],
         "best_coverage_ratio": m["coverage_ratio"],
+        "best_market_evolve": best.get("market_evolve") or {},
         "shadow_repeatability": repeatability,
         "full_run_boundary": (
             "A guarded scheduled shadow-production job is allowed; live trading remains out of scope until verifier/trade-execution gates are separately proven."
@@ -1070,6 +1196,8 @@ def _interpret_candidate(candidate: dict[str, Any]) -> str:
         fragments.append("structural misses are above the 10% distribution gate")
     if "distribution_success_rate_ge_0_90" in failed or "scale_success_rate_ge_0_90" in failed:
         fragments.append("useful scout completion is below the 90% scale gate")
+    if any(name.startswith("distribution_market_evolve_") or name.startswith("scale_market_evolve_") for name in failed):
+        fragments.append("the evolution proof loop did not run cleanly across matched control/candidate slices")
     if "avg_prompt_quality_ge_min" in failed or "low_prompt_quality_rate_le_max" in failed:
         fragments.append("prompt quality is not consistently high enough")
     if "success_rate_ge_min" in failed:

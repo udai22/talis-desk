@@ -1675,8 +1675,8 @@
         "tool_uri": "tic://tool/builtin/query_events_recent@v1"
       }
     ],
-    "cycle_id": "cycle_readiness_market_evolve2_20260522",
-    "generated_at": "2026-05-22T14:45:28.213881+00:00",
+    "cycle_id": "cycle_readiness_market_evolve3_20260522",
+    "generated_at": "2026-05-22T15:03:29.600429+00:00",
     "global_shape": {
       "avg_fragility": 0.1325,
       "avg_frontier_pressure": 0.4571,
@@ -3147,12 +3147,12 @@
           "y_frontier_pressure": 0.7139,
           "z_tension": 0.28
         },
-        "created_at": "2026-05-22T14:45:28.199180+00:00",
-        "cycle_id": "cycle_readiness_market_evolve2_20260522",
+        "created_at": "2026-05-22T15:03:29.585304+00:00",
+        "cycle_id": "cycle_readiness_market_evolve3_20260522",
         "entity": "XPL",
         "evidence_ref_count": 10,
         "horizon": "1q",
-        "id": "igeo_0e0791be4510d7ab",
+        "id": "igeo_aa7606b68109203f",
         "lens": "polymarket",
         "metrics": {
           "avg_attention": 0.6776,
@@ -3201,9 +3201,9 @@
         "string_count": 8,
         "theme": "",
         "trade_scream_score": 0.6381,
-        "transaction_from": "2026-05-22T14:45:28.199180+00:00",
+        "transaction_from": "2026-05-22T15:03:29.585304+00:00",
         "transaction_to": null,
-        "valid_from": "2026-05-22T14:45:28.199180+00:00",
+        "valid_from": "2026-05-22T15:03:29.585304+00:00",
         "verifier_readiness": 0.8401
       },
       {
@@ -3215,12 +3215,12 @@
           "y_frontier_pressure": 0.7059,
           "z_tension": 0.28
         },
-        "created_at": "2026-05-22T14:45:28.199180+00:00",
-        "cycle_id": "cycle_readiness_market_evolve2_20260522",
+        "created_at": "2026-05-22T15:03:29.585304+00:00",
+        "cycle_id": "cycle_readiness_market_evolve3_20260522",
         "entity": "DYDX",
         "evidence_ref_count": 10,
         "horizon": "1w",
-        "id": "igeo_f69c9fb0368502ba",
+        "id": "igeo_e5a7269741ad8b25",
         "lens": "sentiment",
         "metrics": {
           "avg_attention": 0.666,
@@ -3269,9 +3269,9 @@
         "string_count": 8,
         "theme": "calendar_catalyst",
         "trade_scream_score": 0.6327,
-        "transaction_from": "2026-05-22T14:45:28.199180+00:00",
+        "transaction_from": "2026-05-22T15:03:29.585304+00:00",
         "transaction_to": null,
-        "valid_from": "2026-05-22T14:45:28.199180+00:00",
+        "valid_from": "2026-05-22T15:03:29.585304+00:00",
         "verifier_readiness": 0.8366
       },
       {
@@ -3283,12 +3283,12 @@
           "y_frontier_pressure": 0.6825,
           "z_tension": 0.28
         },
-        "created_at": "2026-05-22T14:45:28.199180+00:00",
-        "cycle_id": "cycle_readiness_market_evolve2_20260522",
+        "created_at": "2026-05-22T15:03:29.585304+00:00",
+        "cycle_id": "cycle_readiness_market_evolve3_20260522",
         "entity": "GRIFFAIN",
         "evidence_ref_count": 5,
         "horizon": "1m",
-        "id": "igeo_a4d2eabc4dd9bd8d",
+        "id": "igeo_07b37e326a0bb719",
         "lens": "sentiment",
         "metrics": {
           "avg_attention": 0.6697,
@@ -3338,9 +3338,9 @@
         "string_count": 4,
         "theme": "",
         "trade_scream_score": 0.6156,
-        "transaction_from": "2026-05-22T14:45:28.199180+00:00",
+        "transaction_from": "2026-05-22T15:03:29.585304+00:00",
         "transaction_to": null,
-        "valid_from": "2026-05-22T14:45:28.199180+00:00",
+        "valid_from": "2026-05-22T15:03:29.585304+00:00",
         "verifier_readiness": 0.802
       },
       {
@@ -3352,12 +3352,12 @@
           "y_frontier_pressure": 0.6734,
           "z_tension": 0.28
         },
-        "created_at": "2026-05-22T14:45:28.199180+00:00",
-        "cycle_id": "cycle_readiness_market_evolve2_20260522",
+        "created_at": "2026-05-22T15:03:29.585304+00:00",
+        "cycle_id": "cycle_readiness_market_evolve3_20260522",
         "entity": "ARB",
         "evidence_ref_count": 7,
         "horizon": "1d",
-        "id": "igeo_91fb16efb9088e69",
+        "id": "igeo_d557d327698022d8",
         "lens": "polymarket",
         "metrics": {
           "avg_attention": 0.6689,
@@ -3407,9 +3407,9 @@
         "string_count": 4,
         "theme": "",
         "trade_scream_score": 0.6126,
-        "transaction_from": "2026-05-22T14:45:28.199180+00:00",
+        "transaction_from": "2026-05-22T15:03:29.585304+00:00",
         "transaction_to": null,
-        "valid_from": "2026-05-22T14:45:28.199180+00:00",
+        "valid_from": "2026-05-22T15:03:29.585304+00:00",
         "verifier_readiness": 0.8026
       },
       {
@@ -3421,12 +3421,12 @@
           "y_frontier_pressure": 0.6636,
           "z_tension": 0.144
         },
-        "created_at": "2026-05-22T14:45:28.199180+00:00",
-        "cycle_id": "cycle_readiness_market_evolve2_20260522",
+        "created_at": "2026-05-22T15:03:29.585304+00:00",
+        "cycle_id": "cycle_readiness_market_evolve3_20260522",
         "entity": "AMZN",
         "evidence_ref_count": 6,
         "horizon": "structural",
-        "id": "igeo_4a63ee37035c9dad",
+        "id": "igeo_46f2ac40d6a5a4c9",
         "lens": "filing",
         "metrics": {
           "avg_attention": 0.7279,
@@ -3473,9 +3473,9 @@
         "string_count": 6,
         "theme": "",
         "trade_scream_score": 0.5955,
-        "transaction_from": "2026-05-22T14:45:28.199180+00:00",
+        "transaction_from": "2026-05-22T15:03:29.585304+00:00",
         "transaction_to": null,
-        "valid_from": "2026-05-22T14:45:28.199180+00:00",
+        "valid_from": "2026-05-22T15:03:29.585304+00:00",
         "verifier_readiness": 0.853
       },
       {
@@ -3487,12 +3487,12 @@
           "y_frontier_pressure": 0.6489,
           "z_tension": 0.2749
         },
-        "created_at": "2026-05-22T14:45:28.199180+00:00",
-        "cycle_id": "cycle_readiness_market_evolve2_20260522",
+        "created_at": "2026-05-22T15:03:29.585304+00:00",
+        "cycle_id": "cycle_readiness_market_evolve3_20260522",
         "entity": "NEAR",
         "evidence_ref_count": 5,
         "horizon": "1m",
-        "id": "igeo_9de5bc57a9c87b38",
+        "id": "igeo_f4ec8f6f2590505f",
         "lens": "sentiment",
         "metrics": {
           "avg_attention": 0.6356,
@@ -3542,9 +3542,9 @@
         "string_count": 4,
         "theme": "",
         "trade_scream_score": 0.5955,
-        "transaction_from": "2026-05-22T14:45:28.199180+00:00",
+        "transaction_from": "2026-05-22T15:03:29.585304+00:00",
         "transaction_to": null,
-        "valid_from": "2026-05-22T14:45:28.199180+00:00",
+        "valid_from": "2026-05-22T15:03:29.585304+00:00",
         "verifier_readiness": 0.7933
       },
       {
@@ -3556,12 +3556,12 @@
           "y_frontier_pressure": 0.6219,
           "z_tension": 0.28
         },
-        "created_at": "2026-05-22T14:45:28.199180+00:00",
-        "cycle_id": "cycle_readiness_market_evolve2_20260522",
+        "created_at": "2026-05-22T15:03:29.585304+00:00",
+        "cycle_id": "cycle_readiness_market_evolve3_20260522",
         "entity": "CRM",
         "evidence_ref_count": 7,
         "horizon": "1d",
-        "id": "igeo_5d2e678cda488fee",
+        "id": "igeo_2927bda786102b5e",
         "lens": "polymarket",
         "metrics": {
           "avg_attention": 0.6488,
@@ -3611,9 +3611,9 @@
         "string_count": 4,
         "theme": "",
         "trade_scream_score": 0.5901,
-        "transaction_from": "2026-05-22T14:45:28.199180+00:00",
+        "transaction_from": "2026-05-22T15:03:29.585304+00:00",
         "transaction_to": null,
-        "valid_from": "2026-05-22T14:45:28.199180+00:00",
+        "valid_from": "2026-05-22T15:03:29.585304+00:00",
         "verifier_readiness": 0.7985
       },
       {
@@ -3625,12 +3625,12 @@
           "y_frontier_pressure": 0.6502,
           "z_tension": 0.28
         },
-        "created_at": "2026-05-22T14:45:28.199180+00:00",
-        "cycle_id": "cycle_readiness_market_evolve2_20260522",
+        "created_at": "2026-05-22T15:03:29.585304+00:00",
+        "cycle_id": "cycle_readiness_market_evolve3_20260522",
         "entity": "ETHFI",
         "evidence_ref_count": 16,
         "horizon": "intraday",
-        "id": "igeo_33a6078ab1e87954",
+        "id": "igeo_05eddc5be6cd138f",
         "lens": "on_chain",
         "metrics": {
           "avg_attention": 0.7137,
@@ -3676,9 +3676,9 @@
         "string_count": 8,
         "theme": "market_structure_break",
         "trade_scream_score": 0.5899,
-        "transaction_from": "2026-05-22T14:45:28.199180+00:00",
+        "transaction_from": "2026-05-22T15:03:29.585304+00:00",
         "transaction_to": null,
-        "valid_from": "2026-05-22T14:45:28.199180+00:00",
+        "valid_from": "2026-05-22T15:03:29.585304+00:00",
         "verifier_readiness": 0.7702
       },
       {
@@ -3690,12 +3690,12 @@
           "y_frontier_pressure": 0.6147,
           "z_tension": 0.28
         },
-        "created_at": "2026-05-22T14:45:28.199180+00:00",
-        "cycle_id": "cycle_readiness_market_evolve2_20260522",
+        "created_at": "2026-05-22T15:03:29.585304+00:00",
+        "cycle_id": "cycle_readiness_market_evolve3_20260522",
         "entity": "APE",
         "evidence_ref_count": 7,
         "horizon": "structural",
-        "id": "igeo_ab198190671312ab",
+        "id": "igeo_05a510c6d6dbfdc2",
         "lens": "polymarket",
         "metrics": {
           "avg_attention": 0.6497,
@@ -3745,9 +3745,9 @@
         "string_count": 4,
         "theme": "",
         "trade_scream_score": 0.5881,
-        "transaction_from": "2026-05-22T14:45:28.199180+00:00",
+        "transaction_from": "2026-05-22T15:03:29.585304+00:00",
         "transaction_to": null,
-        "valid_from": "2026-05-22T14:45:28.199180+00:00",
+        "valid_from": "2026-05-22T15:03:29.585304+00:00",
         "verifier_readiness": 0.7995
       },
       {
@@ -3759,12 +3759,12 @@
           "y_frontier_pressure": 0.6087,
           "z_tension": 0.28
         },
-        "created_at": "2026-05-22T14:45:28.199180+00:00",
-        "cycle_id": "cycle_readiness_market_evolve2_20260522",
+        "created_at": "2026-05-22T15:03:29.585304+00:00",
+        "cycle_id": "cycle_readiness_market_evolve3_20260522",
         "entity": "AXS",
         "evidence_ref_count": 7,
         "horizon": "1q",
-        "id": "igeo_483b79447d48e768",
+        "id": "igeo_0e6c69231c922c38",
         "lens": "polymarket",
         "metrics": {
           "avg_attention": 0.6459,
@@ -3814,9 +3814,9 @@
         "string_count": 4,
         "theme": "",
         "trade_scream_score": 0.5849,
-        "transaction_from": "2026-05-22T14:45:28.199180+00:00",
+        "transaction_from": "2026-05-22T15:03:29.585304+00:00",
         "transaction_to": null,
-        "valid_from": "2026-05-22T14:45:28.199180+00:00",
+        "valid_from": "2026-05-22T15:03:29.585304+00:00",
         "verifier_readiness": 0.7983
       },
       {
@@ -3828,12 +3828,12 @@
           "y_frontier_pressure": 0.6139,
           "z_tension": 0.2797
         },
-        "created_at": "2026-05-22T14:45:28.199180+00:00",
-        "cycle_id": "cycle_readiness_market_evolve2_20260522",
+        "created_at": "2026-05-22T15:03:29.585304+00:00",
+        "cycle_id": "cycle_readiness_market_evolve3_20260522",
         "entity": "ZEN",
         "evidence_ref_count": 5,
         "horizon": "structural",
-        "id": "igeo_871fb5ace462e402",
+        "id": "igeo_67c60eff2b0b3064",
         "lens": "catalyst",
         "metrics": {
           "avg_attention": 0.6236,
@@ -3883,9 +3883,9 @@
         "string_count": 4,
         "theme": "",
         "trade_scream_score": 0.5817,
-        "transaction_from": "2026-05-22T14:45:28.199180+00:00",
+        "transaction_from": "2026-05-22T15:03:29.585304+00:00",
         "transaction_to": null,
-        "valid_from": "2026-05-22T14:45:28.199180+00:00",
+        "valid_from": "2026-05-22T15:03:29.585304+00:00",
         "verifier_readiness": 0.7911
       },
       {
@@ -3897,12 +3897,12 @@
           "y_frontier_pressure": 0.5944,
           "z_tension": 0.2745
         },
-        "created_at": "2026-05-22T14:45:28.199180+00:00",
-        "cycle_id": "cycle_readiness_market_evolve2_20260522",
+        "created_at": "2026-05-22T15:03:29.585304+00:00",
+        "cycle_id": "cycle_readiness_market_evolve3_20260522",
         "entity": "ADA",
         "evidence_ref_count": 7,
         "horizon": "1q",
-        "id": "igeo_be2e09c9512cac36",
+        "id": "igeo_4c5f93649bc469c8",
         "lens": "polymarket",
         "metrics": {
           "avg_attention": 0.627,
@@ -3952,9 +3952,9 @@
         "string_count": 4,
         "theme": "",
         "trade_scream_score": 0.5749,
-        "transaction_from": "2026-05-22T14:45:28.199180+00:00",
+        "transaction_from": "2026-05-22T15:03:29.585304+00:00",
         "transaction_to": null,
-        "valid_from": "2026-05-22T14:45:28.199180+00:00",
+        "valid_from": "2026-05-22T15:03:29.585304+00:00",
         "verifier_readiness": 0.7937
       },
       {
@@ -3966,12 +3966,12 @@
           "y_frontier_pressure": 0.5814,
           "z_tension": 0.28
         },
-        "created_at": "2026-05-22T14:45:28.199180+00:00",
-        "cycle_id": "cycle_readiness_market_evolve2_20260522",
+        "created_at": "2026-05-22T15:03:29.585304+00:00",
+        "cycle_id": "cycle_readiness_market_evolve3_20260522",
         "entity": "GALA",
         "evidence_ref_count": 5,
         "horizon": "1w",
-        "id": "igeo_14336bd1b10318a5",
+        "id": "igeo_9bbdcdcde0c67537",
         "lens": "sentiment",
         "metrics": {
           "avg_attention": 0.6101,
@@ -4021,9 +4021,9 @@
         "string_count": 4,
         "theme": "",
         "trade_scream_score": 0.5687,
-        "transaction_from": "2026-05-22T14:45:28.199180+00:00",
+        "transaction_from": "2026-05-22T15:03:29.585304+00:00",
         "transaction_to": null,
-        "valid_from": "2026-05-22T14:45:28.199180+00:00",
+        "valid_from": "2026-05-22T15:03:29.585304+00:00",
         "verifier_readiness": 0.79
       },
       {
@@ -4035,12 +4035,12 @@
           "y_frontier_pressure": 0.6056,
           "z_tension": 0.2534
         },
-        "created_at": "2026-05-22T14:45:28.199180+00:00",
-        "cycle_id": "cycle_readiness_market_evolve2_20260522",
+        "created_at": "2026-05-22T15:03:29.585304+00:00",
+        "cycle_id": "cycle_readiness_market_evolve3_20260522",
         "entity": "OGN",
         "evidence_ref_count": 5,
         "horizon": "1d",
-        "id": "igeo_0d90bbfc175bd08e",
+        "id": "igeo_7f9db47627e105c9",
         "lens": "catalyst",
         "metrics": {
           "avg_attention": 0.6056,
@@ -4090,9 +4090,9 @@
         "string_count": 4,
         "theme": "",
         "trade_scream_score": 0.5684,
-        "transaction_from": "2026-05-22T14:45:28.199180+00:00",
+        "transaction_from": "2026-05-22T15:03:29.585304+00:00",
         "transaction_to": null,
-        "valid_from": "2026-05-22T14:45:28.199180+00:00",
+        "valid_from": "2026-05-22T15:03:29.585304+00:00",
         "verifier_readiness": 0.7855
       },
       {
@@ -4104,12 +4104,12 @@
           "y_frontier_pressure": 0.5768,
           "z_tension": 0.28
         },
-        "created_at": "2026-05-22T14:45:28.199180+00:00",
-        "cycle_id": "cycle_readiness_market_evolve2_20260522",
+        "created_at": "2026-05-22T15:03:29.585304+00:00",
+        "cycle_id": "cycle_readiness_market_evolve3_20260522",
         "entity": "kDOGS",
         "evidence_ref_count": 5,
         "horizon": "structural",
-        "id": "igeo_39e0c64a2ad2815e",
+        "id": "igeo_c516a717eaff9897",
         "lens": "catalyst",
         "metrics": {
           "avg_attention": 0.6156,
@@ -4159,9 +4159,9 @@
         "string_count": 4,
         "theme": "",
         "trade_scream_score": 0.5683,
-        "transaction_from": "2026-05-22T14:45:28.199180+00:00",
+        "transaction_from": "2026-05-22T15:03:29.585304+00:00",
         "transaction_to": null,
-        "valid_from": "2026-05-22T14:45:28.199180+00:00",
+        "valid_from": "2026-05-22T15:03:29.585304+00:00",
         "verifier_readiness": 0.7919
       },
       {
@@ -4173,12 +4173,12 @@
           "y_frontier_pressure": 0.6146,
           "z_tension": 0.28
         },
-        "created_at": "2026-05-22T14:45:28.199180+00:00",
-        "cycle_id": "cycle_readiness_market_evolve2_20260522",
+        "created_at": "2026-05-22T15:03:29.585304+00:00",
+        "cycle_id": "cycle_readiness_market_evolve3_20260522",
         "entity": "BCH",
         "evidence_ref_count": 16,
         "horizon": "1m",
-        "id": "igeo_ca89518634083ee6",
+        "id": "igeo_db113980445c5645",
         "lens": "on_chain",
         "metrics": {
           "avg_attention": 0.6739,
@@ -4224,9 +4224,9 @@
         "string_count": 8,
         "theme": "source_health_gap",
         "trade_scream_score": 0.5678,
-        "transaction_from": "2026-05-22T14:45:28.199180+00:00",
+        "transaction_from": "2026-05-22T15:03:29.585304+00:00",
         "transaction_to": null,
-        "valid_from": "2026-05-22T14:45:28.199180+00:00",
+        "valid_from": "2026-05-22T15:03:29.585304+00:00",
         "verifier_readiness": 0.7581
       }
     ]
@@ -4241,7 +4241,7 @@
         "y_frontier_pressure": 0.7139,
         "z_tension": 0.28
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "XPL",
       "evidence_ref_count": 10,
       "horizon": "1q",
@@ -4302,7 +4302,7 @@
         "y_frontier_pressure": 0.7059,
         "z_tension": 0.28
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "DYDX",
       "evidence_ref_count": 10,
       "horizon": "1w",
@@ -4363,7 +4363,7 @@
         "y_frontier_pressure": 0.6825,
         "z_tension": 0.28
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "GRIFFAIN",
       "evidence_ref_count": 5,
       "horizon": "1m",
@@ -4425,7 +4425,7 @@
         "y_frontier_pressure": 0.6734,
         "z_tension": 0.28
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "ARB",
       "evidence_ref_count": 7,
       "horizon": "1d",
@@ -4487,7 +4487,7 @@
         "y_frontier_pressure": 0.6489,
         "z_tension": 0.2749
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "NEAR",
       "evidence_ref_count": 5,
       "horizon": "1m",
@@ -4549,7 +4549,7 @@
         "y_frontier_pressure": 0.6636,
         "z_tension": 0.144
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "AMZN",
       "evidence_ref_count": 6,
       "horizon": "structural",
@@ -4608,7 +4608,7 @@
         "y_frontier_pressure": 0.6219,
         "z_tension": 0.28
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "CRM",
       "evidence_ref_count": 7,
       "horizon": "1d",
@@ -4670,7 +4670,7 @@
         "y_frontier_pressure": 0.6502,
         "z_tension": 0.28
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "ETHFI",
       "evidence_ref_count": 16,
       "horizon": "intraday",
@@ -4728,7 +4728,7 @@
         "y_frontier_pressure": 0.6147,
         "z_tension": 0.28
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "APE",
       "evidence_ref_count": 7,
       "horizon": "structural",
@@ -4790,7 +4790,7 @@
         "y_frontier_pressure": 0.6087,
         "z_tension": 0.28
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "AXS",
       "evidence_ref_count": 7,
       "horizon": "1q",
@@ -4852,7 +4852,7 @@
         "y_frontier_pressure": 0.6139,
         "z_tension": 0.2797
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "ZEN",
       "evidence_ref_count": 5,
       "horizon": "structural",
@@ -4914,7 +4914,7 @@
         "y_frontier_pressure": 0.5944,
         "z_tension": 0.2745
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "ADA",
       "evidence_ref_count": 7,
       "horizon": "1q",
@@ -4976,7 +4976,7 @@
         "y_frontier_pressure": 0.5814,
         "z_tension": 0.28
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "GALA",
       "evidence_ref_count": 5,
       "horizon": "1w",
@@ -5038,7 +5038,7 @@
         "y_frontier_pressure": 0.6056,
         "z_tension": 0.2534
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "OGN",
       "evidence_ref_count": 5,
       "horizon": "1d",
@@ -5100,7 +5100,7 @@
         "y_frontier_pressure": 0.5768,
         "z_tension": 0.28
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "kDOGS",
       "evidence_ref_count": 5,
       "horizon": "structural",
@@ -5162,7 +5162,7 @@
         "y_frontier_pressure": 0.6146,
         "z_tension": 0.28
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "BCH",
       "evidence_ref_count": 16,
       "horizon": "1m",
@@ -5220,7 +5220,7 @@
         "y_frontier_pressure": 0.608,
         "z_tension": 0.2496
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "TURBO",
       "evidence_ref_count": 5,
       "horizon": "1m",
@@ -5282,7 +5282,7 @@
         "y_frontier_pressure": 0.5925,
         "z_tension": 0.28
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "BANANA",
       "evidence_ref_count": 16,
       "horizon": "1m",
@@ -5340,7 +5340,7 @@
         "y_frontier_pressure": 0.6014,
         "z_tension": 0.23
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "WIF",
       "evidence_ref_count": 7,
       "horizon": "1q",
@@ -5399,7 +5399,7 @@
         "y_frontier_pressure": 0.6293,
         "z_tension": 0.0794
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "JPM",
       "evidence_ref_count": 4,
       "horizon": "1w",
@@ -5461,7 +5461,7 @@
         "y_frontier_pressure": 0.5673,
         "z_tension": 0.28
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "SUPER",
       "evidence_ref_count": 13,
       "horizon": "1d",
@@ -5519,7 +5519,7 @@
         "y_frontier_pressure": 0.5839,
         "z_tension": 0.2288
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "0G",
       "evidence_ref_count": 5,
       "horizon": "intraday",
@@ -5581,7 +5581,7 @@
         "y_frontier_pressure": 0.5728,
         "z_tension": 0.2316
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "RUNE",
       "evidence_ref_count": 5,
       "horizon": "1m",
@@ -5643,7 +5643,7 @@
         "y_frontier_pressure": 0.5692,
         "z_tension": 0.28
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "HYPER",
       "evidence_ref_count": 9,
       "horizon": "intraday",
@@ -5704,7 +5704,7 @@
         "y_frontier_pressure": 0.5698,
         "z_tension": 0.28
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "JTO",
       "evidence_ref_count": 9,
       "horizon": "1w",
@@ -5765,7 +5765,7 @@
         "y_frontier_pressure": 0.5524,
         "z_tension": 0.28
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "GRIFFAIN",
       "evidence_ref_count": 16,
       "horizon": "1q",
@@ -5823,7 +5823,7 @@
         "y_frontier_pressure": 0.5372,
         "z_tension": 0.28
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "ALGO",
       "evidence_ref_count": 11,
       "horizon": "1m",
@@ -5884,7 +5884,7 @@
         "y_frontier_pressure": 0.5401,
         "z_tension": 0.28
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "POLYX",
       "evidence_ref_count": 9,
       "horizon": "intraday",
@@ -5945,7 +5945,7 @@
         "y_frontier_pressure": 0.5144,
         "z_tension": 0.28
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "SKY",
       "evidence_ref_count": 9,
       "horizon": "structural",
@@ -6006,7 +6006,7 @@
         "y_frontier_pressure": 0.527,
         "z_tension": 0.28
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "GMX",
       "evidence_ref_count": 11,
       "horizon": "1d",
@@ -6067,7 +6067,7 @@
         "y_frontier_pressure": 0.4897,
         "z_tension": 0.28
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "ZETA",
       "evidence_ref_count": 11,
       "horizon": "1w",
@@ -6128,7 +6128,7 @@
         "y_frontier_pressure": 0.4085,
         "z_tension": 0.1266
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "DXY",
       "evidence_ref_count": 6,
       "horizon": "1q",
@@ -6189,7 +6189,7 @@
         "y_frontier_pressure": 0.4091,
         "z_tension": 0.121
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "ACE",
       "evidence_ref_count": 6,
       "horizon": "1m",
@@ -6250,7 +6250,7 @@
         "y_frontier_pressure": 0.4306,
         "z_tension": 0.1037
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "BRETT",
       "evidence_ref_count": 4,
       "horizon": "1w",
@@ -6309,7 +6309,7 @@
         "y_frontier_pressure": 0.4306,
         "z_tension": 0.1037
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "SMCI",
       "evidence_ref_count": 4,
       "horizon": "1w",
@@ -6368,7 +6368,7 @@
         "y_frontier_pressure": 0.424,
         "z_tension": 0.0991
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "ZEREBRO",
       "evidence_ref_count": 6,
       "horizon": "1w",
@@ -6425,7 +6425,7 @@
         "y_frontier_pressure": 0.4258,
         "z_tension": 0.1037
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "TRUMP",
       "evidence_ref_count": 4,
       "horizon": "1q",
@@ -6484,7 +6484,7 @@
         "y_frontier_pressure": 0.4281,
         "z_tension": 0.0994
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "VVV",
       "evidence_ref_count": 5,
       "horizon": "1w",
@@ -6543,7 +6543,7 @@
         "y_frontier_pressure": 0.4253,
         "z_tension": 0.1008
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "WLFI",
       "evidence_ref_count": 4,
       "horizon": "intraday",
@@ -6602,7 +6602,7 @@
         "y_frontier_pressure": 0.4267,
         "z_tension": 0.0973
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "HEMI",
       "evidence_ref_count": 4,
       "horizon": "1q",
@@ -6661,7 +6661,7 @@
         "y_frontier_pressure": 0.3861,
         "z_tension": 0.1037
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "BABY",
       "evidence_ref_count": 6,
       "horizon": "1m",
@@ -6718,7 +6718,7 @@
         "y_frontier_pressure": 0.4238,
         "z_tension": 0.0752
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "ONDO",
       "evidence_ref_count": 5,
       "horizon": "structural",
@@ -6777,7 +6777,7 @@
         "y_frontier_pressure": 0.3739,
         "z_tension": 0.1037
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "TNSR",
       "evidence_ref_count": 6,
       "horizon": "1d",
@@ -6834,7 +6834,7 @@
         "y_frontier_pressure": 0.3738,
         "z_tension": 0.1028
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "kFLOKI",
       "evidence_ref_count": 9,
       "horizon": "1d",
@@ -6891,7 +6891,7 @@
         "y_frontier_pressure": 0.3773,
         "z_tension": 0.1037
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "LINEA",
       "evidence_ref_count": 4,
       "horizon": "1d",
@@ -6950,7 +6950,7 @@
         "y_frontier_pressure": 0.3789,
         "z_tension": 0.0991
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "BOME",
       "evidence_ref_count": 4,
       "horizon": "structural",
@@ -7009,7 +7009,7 @@
         "y_frontier_pressure": 0.3878,
         "z_tension": 0.0777
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "NEO",
       "evidence_ref_count": 5,
       "horizon": "1q",
@@ -7068,7 +7068,7 @@
         "y_frontier_pressure": 0.3896,
         "z_tension": 0.066
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "SEI",
       "evidence_ref_count": 5,
       "horizon": "1m",
@@ -7127,7 +7127,7 @@
         "y_frontier_pressure": 0.3923,
         "z_tension": 0.0608
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "PLTR",
       "evidence_ref_count": 4,
       "horizon": "1q",
@@ -7186,7 +7186,7 @@
         "y_frontier_pressure": 0.378,
         "z_tension": 0.0651
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "XAI",
       "evidence_ref_count": 8,
       "horizon": "1d",
@@ -7243,7 +7243,7 @@
         "y_frontier_pressure": 0.3721,
         "z_tension": 0.0754
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "AVGO",
       "evidence_ref_count": 4,
       "horizon": "1q",
@@ -7304,7 +7304,7 @@
         "y_frontier_pressure": 0.375,
         "z_tension": 0.0679
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "XMR",
       "evidence_ref_count": 6,
       "horizon": "intraday",
@@ -7363,7 +7363,7 @@
         "y_frontier_pressure": 0.3759,
         "z_tension": 0.0654
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "SPX",
       "evidence_ref_count": 6,
       "horizon": "1w",
@@ -7422,7 +7422,7 @@
         "y_frontier_pressure": 0.3444,
         "z_tension": 0.1008
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "AAPL",
       "evidence_ref_count": 6,
       "horizon": "1d",
@@ -7479,7 +7479,7 @@
         "y_frontier_pressure": 0.3729,
         "z_tension": 0.0843
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "AAVE",
       "evidence_ref_count": 4,
       "horizon": "intraday",
@@ -7540,7 +7540,7 @@
         "y_frontier_pressure": 0.3781,
         "z_tension": 0.0705
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "PENDLE",
       "evidence_ref_count": 4,
       "horizon": "1w",
@@ -7599,7 +7599,7 @@
         "y_frontier_pressure": 0.3479,
         "z_tension": 0.0608
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "PYTH",
       "evidence_ref_count": 6,
       "horizon": "1w",
@@ -7660,7 +7660,7 @@
         "y_frontier_pressure": 0.3327,
         "z_tension": 0.1037
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "CHIP",
       "evidence_ref_count": 6,
       "horizon": "1m",
@@ -7717,7 +7717,7 @@
         "y_frontier_pressure": 0.3429,
         "z_tension": 0.0987
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "ZEREBRO",
       "evidence_ref_count": 4,
       "horizon": "structural",
@@ -7776,7 +7776,7 @@
         "y_frontier_pressure": 0.3416,
         "z_tension": 0.0966
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "AI",
       "evidence_ref_count": 6,
       "horizon": "1m",
@@ -7835,7 +7835,7 @@
         "y_frontier_pressure": 0.3293,
         "z_tension": 0.0975
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "MINA",
       "evidence_ref_count": 6,
       "horizon": "1q",
@@ -7892,7 +7892,7 @@
         "y_frontier_pressure": 0.3495,
         "z_tension": 0.066
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "CELO",
       "evidence_ref_count": 6,
       "horizon": "1q",
@@ -7949,7 +7949,7 @@
         "y_frontier_pressure": 0.358,
         "z_tension": 0.0809
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "GRASS",
       "evidence_ref_count": 6,
       "horizon": "intraday",
@@ -8008,7 +8008,7 @@
         "y_frontier_pressure": 0.3743,
         "z_tension": 0.0671
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "XRP",
       "evidence_ref_count": 6,
       "horizon": "intraday",
@@ -8067,7 +8067,7 @@
         "y_frontier_pressure": 0.3312,
         "z_tension": 0.0973
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "MANTA",
       "evidence_ref_count": 6,
       "horizon": "1d",
@@ -8124,7 +8124,7 @@
         "y_frontier_pressure": 0.3401,
         "z_tension": 0.0858
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "MON",
       "evidence_ref_count": 4,
       "horizon": "1d",
@@ -8183,7 +8183,7 @@
         "y_frontier_pressure": 0.3325,
         "z_tension": 0.098
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "MEW",
       "evidence_ref_count": 6,
       "horizon": "1m",
@@ -8242,7 +8242,7 @@
         "y_frontier_pressure": 0.3238,
         "z_tension": 0.1028
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "DOGE",
       "evidence_ref_count": 4,
       "horizon": "intraday",
@@ -8301,7 +8301,7 @@
         "y_frontier_pressure": 0.3552,
         "z_tension": 0.0752
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "ME",
       "evidence_ref_count": 4,
       "horizon": "structural",
@@ -8360,7 +8360,7 @@
         "y_frontier_pressure": 0.3531,
         "z_tension": 0.0597
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "kPEPE",
       "evidence_ref_count": 4,
       "horizon": "1q",
@@ -8419,7 +8419,7 @@
         "y_frontier_pressure": 0.3191,
         "z_tension": 0.1037
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "ETHFI",
       "evidence_ref_count": 4,
       "horizon": "intraday",
@@ -8478,7 +8478,7 @@
         "y_frontier_pressure": 0.3481,
         "z_tension": 0.051
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "PEOPLE",
       "evidence_ref_count": 8,
       "horizon": "1w",
@@ -8535,7 +8535,7 @@
         "y_frontier_pressure": 0.3355,
         "z_tension": 0.0706
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "MERL",
       "evidence_ref_count": 4,
       "horizon": "intraday",
@@ -8594,7 +8594,7 @@
         "y_frontier_pressure": 0.3142,
         "z_tension": 0.1037
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "LTC",
       "evidence_ref_count": 6,
       "horizon": "1d",
@@ -8653,7 +8653,7 @@
         "y_frontier_pressure": 0.3438,
         "z_tension": 0.0752
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "IO",
       "evidence_ref_count": 6,
       "horizon": "1w",
@@ -8712,7 +8712,7 @@
         "y_frontier_pressure": 0.3315,
         "z_tension": 0.0621
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "CC",
       "evidence_ref_count": 5,
       "horizon": "1d",
@@ -8771,7 +8771,7 @@
         "y_frontier_pressure": 0.3167,
         "z_tension": 0.0809
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "V",
       "evidence_ref_count": 4,
       "horizon": "1q",
@@ -8830,7 +8830,7 @@
         "y_frontier_pressure": 0.3188,
         "z_tension": 0.0752
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "RDNT",
       "evidence_ref_count": 4,
       "horizon": "structural",
@@ -8889,7 +8889,7 @@
         "y_frontier_pressure": 0.3122,
         "z_tension": 0.0695
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "ALT",
       "evidence_ref_count": 6,
       "horizon": "1w",
@@ -8948,7 +8948,7 @@
         "y_frontier_pressure": 0.302,
         "z_tension": 0.0739
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "entity": "AERO",
       "evidence_ref_count": 4,
       "horizon": "structural",
@@ -9066,7 +9066,7 @@
       "tool_uri": "tic://tool/builtin/query_events_recent@v1"
     }
   ],
-  "cycle_id": "cycle_readiness_market_evolve2_20260522",
+  "cycle_id": "cycle_readiness_market_evolve3_20260522",
   "global_metrics": {
     "avg_fragility": 0.1325,
     "avg_trade_scream_score": 0.4462,
@@ -10413,7 +10413,7 @@
       "y_frontier_pressure": 0.7139,
       "z_tension": 0.28
     },
-    "cycle_id": "cycle_readiness_market_evolve2_20260522",
+    "cycle_id": "cycle_readiness_market_evolve3_20260522",
     "entity": "XPL",
     "evidence_ref_count": 10,
     "horizon": "1q",

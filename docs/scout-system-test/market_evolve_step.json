@@ -87,8 +87,8 @@
       "verifier_fail_rate": 0.0,
       "verifier_pass_rate": 0.0
     },
-    "cycle_id": "cycle_readiness_market_evolve2_20260522",
-    "evaluation_id": "meval_19eb3b9ce7fc4799",
+    "cycle_id": "cycle_readiness_market_evolve3_20260522",
+    "evaluation_id": "meval_f680e155a1b24749",
     "evaluator_version": "market_evolve_v1",
     "metrics": {
       "accepted_unique_high_quality_coverage_per_dollar": 0.8346,
@@ -186,7 +186,7 @@
     "score": 0.5777
   },
   "child_programs": [],
-  "cycle_id": "cycle_readiness_market_evolve2_20260522",
+  "cycle_id": "cycle_readiness_market_evolve3_20260522",
   "evaluations": [
     {
       "baseline_metrics": {
@@ -276,8 +276,8 @@
         "verifier_fail_rate": 0.0,
         "verifier_pass_rate": 0.0
       },
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
-      "evaluation_id": "meval_19eb3b9ce7fc4799",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
+      "evaluation_id": "meval_f680e155a1b24749",
       "evaluator_version": "market_evolve_v1",
       "metrics": {
         "accepted_unique_high_quality_coverage_per_dollar": 0.8346,
@@ -393,10 +393,10 @@
         }
       ],
       "candidate_program_id": "mprog_96570525068fa415",
-      "created_at": "2026-05-22T14:45:27.497265+00:00",
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "created_at": "2026-05-22T15:03:28.703545+00:00",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "experiment_kind": "matched_policy_ab",
-      "id": "mexp_805c18d0ad6d7803",
+      "id": "mexp_43b79e6debf993b1",
       "matched_slice": {
         "assignment": "paired_seed_clone_then_deterministic_hash",
         "axes": [
@@ -554,9 +554,9 @@
           "evolution_proof_required"
         ]
       },
-      "transaction_from": "2026-05-22T14:45:29.655735+00:00",
+      "transaction_from": "2026-05-22T15:03:31.120577+00:00",
       "transaction_to": null,
-      "valid_from": "2026-05-22T14:45:27.497265+00:00"
+      "valid_from": "2026-05-22T15:03:28.703545+00:00"
     },
     {
       "arms": [
@@ -575,10 +575,10 @@
         }
       ],
       "candidate_program_id": "mprog_f3702ed4079fa381",
-      "created_at": "2026-05-22T14:45:27.495557+00:00",
-      "cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "created_at": "2026-05-22T15:03:28.702001+00:00",
+      "cycle_id": "cycle_readiness_market_evolve3_20260522",
       "experiment_kind": "matched_policy_ab",
-      "id": "mexp_424a3623edd0af20",
+      "id": "mexp_4f848f9a860ebdb4",
       "matched_slice": {
         "assignment": "paired_seed_clone_then_deterministic_hash",
         "axes": [
@@ -744,22 +744,22 @@
           "evolution_proof_required"
         ]
       },
-      "transaction_from": "2026-05-22T14:45:27.495557+00:00",
+      "transaction_from": "2026-05-22T15:03:28.702001+00:00",
       "transaction_to": null,
-      "valid_from": "2026-05-22T14:45:27.495557+00:00"
+      "valid_from": "2026-05-22T15:03:28.702001+00:00"
     }
   ],
   "experiment_results": [
     {
-      "candidate_score": 0.8107,
-      "control_score": 0.811,
+      "candidate_score": 0.8109,
+      "control_score": 0.8108,
       "decision": "reject_candidate",
-      "experiment_id": "mexp_805c18d0ad6d7803",
+      "experiment_id": "mexp_43b79e6debf993b1",
       "falsification_gate_results": [
         {
           "decision": "reject_or_continue_candidate",
           "metric": "score_delta",
-          "observed": -0.0003,
+          "observed": 0.0001,
           "operator": "<",
           "status": "triggered",
           "threshold": 0.05,
@@ -784,7 +784,7 @@
           "triggered": false
         }
       ],
-      "id": "mres_28078915dc2c1b82",
+      "id": "mres_be34323824684cab",
       "quality_flags": [
         "falsification_gates_evaluated:3",
         "market_evolve_online_experiment_v1",
@@ -794,8 +794,8 @@
         "proof_gate_triggered:score_delta",
         "score_delta_below_gate"
       ],
-      "rationale": "candidate failed gates: score_delta_below_gate, proof_gate_failed:score_delta; delta=-0.000",
-      "score_delta": -0.0003
+      "rationale": "candidate failed gates: score_delta_below_gate, proof_gate_failed:score_delta; delta=0.000",
+      "score_delta": 0.0001
     }
   ],
   "mutations": [],

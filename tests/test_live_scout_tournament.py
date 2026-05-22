@@ -63,6 +63,27 @@ def test_live_scout_tournament_promotes_clean_hundred_scout_distribution_to_1000
     assert tournament["next_experiment_plan"][0]["id"] == "live_1000_ramp"
 
 
+def test_live_scout_tournament_blocks_hundred_scout_distribution_without_market_evolve_proof(tmp_path):
+    report_path = _write_canary(
+        tmp_path,
+        n_requested=100,
+        success_rate=0.93,
+        transcript_errors=0,
+        duplicate_rate=0.06,
+        completed=93,
+        geometry_cells=100,
+        include_market_evolve=False,
+    )
+
+    tournament = evaluate_live_scout_tournament([report_path])
+
+    assert tournament["promotion_decision"]["decision"] == "no_promotion"
+    assert tournament["winner"]["promotion_eligible"] is False
+    assert "distribution_market_evolve_policy_applied" in tournament["winner"]["failed_gates"]
+    assert "distribution_market_evolve_falsification_gates_evaluated" in tournament["winner"]["failed_gates"]
+    assert tournament["next_experiment_plan"][0]["id"] == "market_evolve_proof_repair_100"
+
+
 def test_live_scout_tournament_promotes_clean_thousand_scout_distribution_to_shadow_trial(tmp_path):
     report_path = _write_canary(
         tmp_path,
@@ -302,6 +323,7 @@ def _write_canary(
     tool_call_count: int = 10,
     tool_error_count: int = 0,
     verdict_status: str | None = None,
+    include_market_evolve: bool = True,
 ) -> Path:
     tmp_path.mkdir(parents=True, exist_ok=True)
     report_path = tmp_path / "live_scout_canary_report.json"
@@ -377,6 +399,62 @@ def _write_canary(
         for _ in range(n_requested)
     ]
     (tmp_path / "live_scout_canary_outputs.json").write_text(json.dumps(outputs), encoding="utf-8")
+    if include_market_evolve:
+        paired_seed_slices = 20 if n_requested >= 100 else 0
+        control = n_requested // 2 if paired_seed_slices else 0
+        candidate = n_requested - control if paired_seed_slices else 0
+        arm_counts = (
+            {"control": control, "candidate": candidate}
+            if paired_seed_slices else
+            {"active": n_requested}
+        )
+        report["metrics"]["market_evolve"] = {
+            "planning_experiment_count": 1 if paired_seed_slices else 0,
+            "policy_application_count": n_requested,
+            "paired_seed_slices": paired_seed_slices,
+            "arm_counts": arm_counts,
+            "final_score": 0.58,
+            "final_passed": True,
+            "mutation_count": 1,
+            "child_program_count": 1,
+            "experiment_plan_count": 1 if paired_seed_slices else 0,
+            "experiment_result_count": 1 if paired_seed_slices else 0,
+            "latest_experiment_decision": "reject_candidate" if paired_seed_slices else None,
+            "lineage_nodes": 2,
+            "lineage_edges": 1,
+            "frontier_count": 1,
+        }
+        report_path.write_text(json.dumps(report), encoding="utf-8")
+        (tmp_path / "market_evolve_hard_experiment.json").write_text(
+            json.dumps({
+                "schema_version": "market_evolve_hard_experiment_episode_v1",
+                "status": "evaluated" if paired_seed_slices else "not_planned",
+                "paired_seed_slices": paired_seed_slices,
+                "policy_application_count": n_requested,
+                "arm_counts": arm_counts,
+                "plans": [{"experiment_kind": "matched_policy_ab"}] if paired_seed_slices else [],
+                "results": [
+                    {
+                        "decision": "reject_candidate",
+                        "score_delta": -0.001,
+                        "falsification_gate_results": {"score_delta_positive": False},
+                    }
+                ] if paired_seed_slices else [],
+                "final_decision": "reject_candidate" if paired_seed_slices else "pending",
+                "final_score_delta": -0.001 if paired_seed_slices else None,
+                "proof": {
+                    "policy_stamped_on_seeds": n_requested > 0,
+                    "matched_seed_pairs_present": paired_seed_slices > 0,
+                    "control_arm_present": control > 0,
+                    "candidate_arm_present": candidate > 0,
+                    "experiment_result_evaluated": paired_seed_slices > 0,
+                    "falsification_gates_evaluated": paired_seed_slices > 0,
+                    "candidate_promoted_or_continued": False,
+                    "quality_flags": [],
+                },
+            }),
+            encoding="utf-8",
+        )
     return report_path
 
 

@@ -8,12 +8,12 @@
   "edges": [
     {
       "decision": "reject_candidate",
-      "experiment_id": "mexp_805c18d0ad6d7803",
+      "experiment_id": "mexp_43b79e6debf993b1",
       "experiment_status": "rejected",
       "falsification_gate_count": 3,
       "from_program_id": "mprog_305b736b8ad24821",
       "kill_signal": "Candidate fails hard gates, loses to control out of sample, or creates cost/quality regressions.",
-      "mutation_id": "mmut_27f739e36c6e4f3a",
+      "mutation_id": "mmut_e8f1e6b75cb747cc",
       "mutation_kind": "widen_source_families",
       "mutation_source": "market_evolve_metric_heuristic",
       "mutation_status": "rejected",
@@ -43,18 +43,18 @@
           "score_delta"
         ]
       },
-      "score_delta": -0.0003,
+      "score_delta": 0.0001,
       "source_candidate_rank": 1,
       "to_program_id": "mprog_96570525068fa415"
     },
     {
       "decision": "",
-      "experiment_id": "mexp_424a3623edd0af20",
+      "experiment_id": "mexp_4f848f9a860ebdb4",
       "experiment_status": "planned",
       "falsification_gate_count": 3,
       "from_program_id": "mprog_305b736b8ad24821",
       "kill_signal": "Candidate does not improve prompt quality/pass rate or reduces valid string yield enough to lose the experiment.",
-      "mutation_id": "mmut_ade6bbc8170348d9",
+      "mutation_id": "mmut_046465dea92741af",
       "mutation_kind": "tighten_prompt_contract",
       "mutation_source": "market_evolve_metric_heuristic",
       "mutation_status": "proposed",
@@ -117,11 +117,11 @@
     {
       "diversity_signature": "a780915307b2",
       "falsification_gate_count": 3,
-      "frontier_priority_score": 0.4245,
+      "frontier_priority_score": 0.4246,
       "generation": 1,
       "kill_signal": "Candidate fails hard gates, loses to control out of sample, or creates cost/quality regressions.",
       "latest_decision": "reject_candidate",
-      "latest_score_delta": -0.0003,
+      "latest_score_delta": 0.0001,
       "mutation_kind": "widen_source_families",
       "mutation_source": "market_evolve_metric_heuristic",
       "name": "rosewood_research_policy_v1__widen_source_families",
@@ -146,7 +146,7 @@
           "score_delta"
         ]
       },
-      "score": 0.8107,
+      "score": 0.8109,
       "source_candidate_rank": 1,
       "status": "rejected"
     },
@@ -185,7 +185,7 @@
       "status": "candidate"
     }
   ],
-  "generated_at": "2026-05-22T14:45:29.669877+00:00",
+  "generated_at": "2026-05-22T15:03:31.137237+00:00",
   "mutation_count": 2,
   "nodes": [
     {
@@ -234,16 +234,16 @@
         "tool_request_policy.prefer_missing_source_family",
         "tool_request_policy.max_tool_candidates_per_seed"
       ],
-      "created_from_cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "created_from_cycle_id": "cycle_readiness_market_evolve3_20260522",
       "diversity_signature": "a780915307b2",
       "falsification_gate_count": 3,
       "generation": 1,
       "intended_effect": "The map is too dependent on a narrow source family; widen scout tool surfaces before scaling spend.",
       "kill_signal": "Candidate fails hard gates, loses to control out of sample, or creates cost/quality regressions.",
       "latest_decision": "reject_candidate",
-      "latest_experiment_id": "mexp_805c18d0ad6d7803",
+      "latest_experiment_id": "mexp_43b79e6debf993b1",
       "latest_experiment_status": "rejected",
-      "latest_score_delta": -0.0003,
+      "latest_score_delta": 0.0001,
       "mutation_hypothesis": "If the source surface broadens, map fragility falls and cross-source confirmation improves.",
       "mutation_kind": "widen_source_families",
       "mutation_source": "market_evolve_metric_heuristic",
@@ -282,11 +282,11 @@
       "proof_schema": "market_evolve_mutation_proof_v1",
       "quality_flags": [
         "candidate_program",
-        "experiment_result:mres_28078915dc2c1b82",
+        "experiment_result:mres_be34323824684cab",
         "mutation:widen_source_families",
         "rejected_by_market_evolve_experiment"
       ],
-      "score": 0.8107,
+      "score": 0.8109,
       "source_candidate_rank": 1,
       "source_diagnostic_codes": [
         "source_independence_pressure"
@@ -306,14 +306,14 @@
         "prompt_policy.min_information_strings",
         "prompt_policy.contract_pressure"
       ],
-      "created_from_cycle_id": "cycle_readiness_market_evolve2_20260522",
+      "created_from_cycle_id": "cycle_readiness_market_evolve3_20260522",
       "diversity_signature": "0ec794652037",
       "falsification_gate_count": 3,
       "generation": 1,
       "intended_effect": "Too few scout strings passed structural and evidence checks.",
       "kill_signal": "Candidate does not improve prompt quality/pass rate or reduces valid string yield enough to lose the experiment.",
       "latest_decision": "",
-      "latest_experiment_id": "mexp_424a3623edd0af20",
+      "latest_experiment_id": "mexp_4f848f9a860ebdb4",
       "latest_experiment_status": "planned",
       "latest_score_delta": null,
       "mutation_hypothesis": "If the scout contract is stricter, cheap model calls emit more valid decision-changing strings per dollar.",
