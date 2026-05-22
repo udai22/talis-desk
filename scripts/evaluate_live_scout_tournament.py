@@ -26,6 +26,9 @@ DEFAULT_THRESHOLDS = {
     "min_evidence_ok_rate": 0.60,
     "max_cost_per_scout_usd": 0.008,
     "max_avg_latency_s": 45.0,
+    "max_structural_flag_rate": 0.20,
+    "min_avg_prompt_quality": 0.70,
+    "max_low_prompt_quality_rate": 0.20,
 }
 
 
@@ -39,6 +42,9 @@ def main() -> int:
         "max_duplicate_rate": args.max_duplicate_rate,
         "min_strings_per_scout": args.min_strings_per_scout,
         "max_avg_latency_s": args.max_avg_latency_s,
+        "max_structural_flag_rate": args.max_structural_flag_rate,
+        "min_avg_prompt_quality": args.min_avg_prompt_quality,
+        "max_low_prompt_quality_rate": args.max_low_prompt_quality_rate,
     }
     report_paths = [Path(p).expanduser().resolve() for p in args.reports]
     tournament = evaluate_live_scout_tournament(report_paths, thresholds=thresholds)
@@ -69,6 +75,9 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--max-duplicate-rate", type=float, default=DEFAULT_THRESHOLDS["max_duplicate_rate"])
     parser.add_argument("--min-strings-per-scout", type=float, default=DEFAULT_THRESHOLDS["min_strings_per_scout"])
     parser.add_argument("--max-avg-latency-s", type=float, default=DEFAULT_THRESHOLDS["max_avg_latency_s"])
+    parser.add_argument("--max-structural-flag-rate", type=float, default=DEFAULT_THRESHOLDS["max_structural_flag_rate"])
+    parser.add_argument("--min-avg-prompt-quality", type=float, default=DEFAULT_THRESHOLDS["min_avg_prompt_quality"])
+    parser.add_argument("--max-low-prompt-quality-rate", type=float, default=DEFAULT_THRESHOLDS["max_low_prompt_quality_rate"])
     return parser.parse_args()
 
 
@@ -84,7 +93,7 @@ def evaluate_live_scout_tournament(
         if path.exists()
     ]
     candidates = [c for c in candidates if c]
-    candidates.sort(key=lambda row: row["score"], reverse=True)
+    candidates.sort(key=lambda row: (bool(row["promotion_eligible"]), row["score"]), reverse=True)
     promoted = [c for c in candidates if c["promotion_eligible"]]
     winner = promoted[0] if promoted else (candidates[0] if candidates else None)
     decision = _promotion_decision(winner=winner, promoted=promoted)
@@ -100,7 +109,7 @@ def evaluate_live_scout_tournament(
         "promotion_decision": decision,
         "winner": winner,
         "candidates": candidates,
-        "system_performance": _system_performance(candidates),
+        "system_performance": _system_performance(candidates, winner=winner),
         "next_experiment_plan": _next_experiment_plan(winner=winner, candidates=candidates, thresholds=thresholds),
     }
     return report
@@ -134,6 +143,9 @@ def evaluate_live_scout_candidate(path: Path, *, thresholds: dict[str, float | i
     call_count = int(transcript_summary.get("call_count") or len(transcript.get("calls") or []) or 0)
     transcript_errors = _transcript_errors(transcript, transcript_summary)
     quality_provider_errors = _provider_quality_errors(scouts)
+    structural_flag_count = _structural_quality_flags(scouts)
+    structural_flag_rate = structural_flag_count / max(n_requested, 1)
+    prompt_quality = _prompt_quality_metrics(scouts, n_requested=n_requested)
     provider_error_rate = max(
         len(transcript_errors) / max(call_count, 1),
         quality_provider_errors / max(n_requested, 1),
@@ -164,6 +176,9 @@ def evaluate_live_scout_candidate(path: Path, *, thresholds: dict[str, float | i
         "evidence_ok_rate_ge_min": evidence_ok_rate >= float(thresholds["min_evidence_ok_rate"]),
         "cost_per_scout_le_max": cost_per_scout <= float(thresholds["max_cost_per_scout_usd"]),
         "avg_latency_le_max": avg_latency_s is not None and avg_latency_s <= float(thresholds["max_avg_latency_s"]),
+        "structural_flag_rate_le_max": structural_flag_rate <= float(thresholds["max_structural_flag_rate"]),
+        "avg_prompt_quality_ge_min": prompt_quality["avg_prompt_quality"] >= float(thresholds["min_avg_prompt_quality"]),
+        "low_prompt_quality_rate_le_max": prompt_quality["low_prompt_quality_rate"] <= float(thresholds["max_low_prompt_quality_rate"]),
         "information_strings_created": string_count > 0,
         "synthesis_promoted": int(info.get("promoted_hypotheses") or 0) > 0,
         "geometry_cells_created": int(geometry.get("cell_count") or 0) > 0,
@@ -196,6 +211,9 @@ def evaluate_live_scout_candidate(path: Path, *, thresholds: dict[str, float | i
             "provider_error_rate": round(provider_error_rate, 4),
             "transcript_error_count": len(transcript_errors),
             "quality_provider_error_count": quality_provider_errors,
+            "structural_flag_count": structural_flag_count,
+            "structural_flag_rate": round(structural_flag_rate, 4),
+            **prompt_quality,
             "strings_per_scout": round(strings_per_scout, 4),
             "string_count": string_count,
             "evidence_ok_rate": round(evidence_ok_rate, 4),
@@ -284,6 +302,7 @@ def _score_candidate(candidate: dict[str, Any]) -> float:
     success = _to_float(q.get("success_rate"))
     strings = min(1.0, _to_float(q.get("strings_per_scout")) / 1.5)
     evidence = _to_float(q.get("evidence_ok_rate"))
+    prompt_quality = _to_float(q.get("avg_prompt_quality"), default=0.0)
     geometry = 1.0 if m.get("geometry_cells") else 0.0
     self_healing = 1.0 if not m.get("self_healing_failed") else 0.0
     provider_error = _to_float(q.get("provider_error_rate"))
@@ -297,11 +316,12 @@ def _score_candidate(candidate: dict[str, Any]) -> float:
         0.24 * success
         + 0.18 * strings
         + 0.12 * evidence
+        + 0.08 * prompt_quality
         + 0.10 * geometry
         + 0.08 * self_healing
         + 0.08 * cost_eff
         + 0.10 * latency
-        + 0.10 * sample_bonus
+        + 0.02 * sample_bonus
         - 0.22 * provider_error
         - 0.10 * duplicate
     )
@@ -414,35 +434,55 @@ def _next_experiment_plan(
             ),
             "promotion_rule": "Duplicate hypothesis rate must fall below 35% while preserving string yield and evidence support.",
         })
+    if "structural_flag_rate_le_max" in failed or "avg_prompt_quality_ge_min" in failed or "low_prompt_quality_rate_le_max" in failed:
+        plan.append({
+            "id": "flash_temporal_quality_arm",
+            "purpose": "Keep the compact latency envelope while restoring mandatory temporal metadata.",
+            "command": (
+                "PYTHONPATH=. python scripts/run_live_scout_canary.py --n-scouts 10 "
+                "--concurrency 1 --cost-cap-usd 0.10 --provider-timeout-s 45 "
+                "--prompt-variant flash_temporal_v3 --max-tool-iterations 0 --allow-live-spend"
+            ),
+            "promotion_rule": "Temporal/structural quality flags must stay <= 10% while provider errors remain <= 10%.",
+        })
     if "sample_size_ge_min" in failed:
         plan.append({
             "id": "complete_10_scout_sample",
             "purpose": "One-scout success is not proof. Finish a full 10-scout sample under the same capture harness.",
             "command": (
                 "PYTHONPATH=. python scripts/run_live_scout_canary.py --n-scouts 10 "
-                "--concurrency 1 --cost-cap-usd 0.10 --provider-timeout-s 45 "
-                "--prompt-variant flash_compact_v2 --max-tool-iterations 0 --allow-live-spend"
-            ),
+                    "--concurrency 1 --cost-cap-usd 0.10 --provider-timeout-s 45 "
+                    "--prompt-variant flash_temporal_v3 --max-tool-iterations 0 --allow-live-spend"
+                ),
             "promotion_rule": "The 10-scout sample must pass every tournament gate.",
         })
     return plan[:4]
 
 
-def _system_performance(candidates: list[dict[str, Any]]) -> dict[str, Any]:
+def _system_performance(candidates: list[dict[str, Any]], *, winner: dict[str, Any] | None) -> dict[str, Any]:
     if not candidates:
         return {
             "summary": "No canary evidence was available.",
             "ready_for_full_run": False,
         }
-    best = candidates[0]
+    best = winner or candidates[0]
     q = best["quality"]
     m = best["map_effect"]
-    return {
-        "summary": (
+    if best.get("promotion_eligible"):
+        summary = (
+            "The live 10-scout distribution is clean enough for a 100-scout ramp: "
+            "provider calls completed, strings were stored, synthesis promoted hypotheses, "
+            "geometry cells were created, and self-healing tasks ran. The remaining blocker "
+            "is distributional stability at 100, not the 10-scout gate."
+        )
+    else:
+        summary = (
             "The map path is functioning when provider calls complete: strings are stored, "
             "synthesis promotes hypotheses, geometry cells are created, and self-healing tasks run. "
             "The current blocker is provider/prompt reliability, not graph storage."
-        ),
+        )
+    return {
+        "summary": summary,
         "ready_for_full_run": False,
         "best_candidate_id": best["candidate_id"],
         "best_score": best["score"],
@@ -466,6 +506,10 @@ def _interpret_candidate(candidate: dict[str, Any]) -> str:
     fragments = []
     if "provider_error_rate_le_max" in failed:
         fragments.append("provider reliability is not stable enough")
+    if "structural_flag_rate_le_max" in failed:
+        fragments.append("the output contract is missing required temporal/structural fields")
+    if "avg_prompt_quality_ge_min" in failed or "low_prompt_quality_rate_le_max" in failed:
+        fragments.append("prompt quality is not consistently high enough")
     if "success_rate_ge_min" in failed:
         fragments.append("too few scouts completed")
     if "duplicate_rate_le_max" in failed:
@@ -542,6 +586,57 @@ def _provider_quality_errors(scouts: dict[str, Any]) -> int:
             except Exception:
                 total += 1
     return total
+
+
+def _structural_quality_flags(scouts: dict[str, Any]) -> int:
+    flags = scouts.get("top_quality_flags") if isinstance(scouts.get("top_quality_flags"), dict) else {}
+    total = 0
+    for key, value in flags.items():
+        text = str(key).lower()
+        if (
+            "missing_temporal_metadata" in text
+            or "missing_information_strings" in text
+            or "string_missing" in text
+            or "rubric_failed" in text
+            or "unresolved_evidence_refs" in text
+        ):
+            try:
+                total += int(value)
+            except Exception:
+                total += 1
+    return total
+
+
+def _prompt_quality_metrics(scouts: dict[str, Any], *, n_requested: int) -> dict[str, Any]:
+    flags = scouts.get("top_quality_flags") if isinstance(scouts.get("top_quality_flags"), dict) else {}
+    weighted_total = 0.0
+    count = 0
+    low_count = 0
+    for key, value in flags.items():
+        text = str(key)
+        if not text.startswith("prompt_quality:"):
+            continue
+        quality = _to_float(text.split(":", 1)[1], default=0.0)
+        try:
+            n = int(value)
+        except Exception:
+            n = 1
+        weighted_total += quality * n
+        count += n
+        if quality < 0.70:
+            low_count += n
+    if count <= 0:
+        return {
+            "avg_prompt_quality": 0.0,
+            "low_prompt_quality_count": max(0, int(n_requested or 0)),
+            "low_prompt_quality_rate": 1.0,
+        }
+    denominator = max(count, int(n_requested or 0), 1)
+    return {
+        "avg_prompt_quality": round(weighted_total / count, 4),
+        "low_prompt_quality_count": low_count,
+        "low_prompt_quality_rate": round(low_count / denominator, 4),
+    }
 
 
 def _read_sibling_json(report_path: Path, filename: str) -> Any:

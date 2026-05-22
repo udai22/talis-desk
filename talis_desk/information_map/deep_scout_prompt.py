@@ -33,6 +33,7 @@ PromptVariant = Literal[
     "adversarial_alpha_v1",
     "concise_contract_v1",
     "flash_compact_v2",
+    "flash_temporal_v3",
 ]
 
 
@@ -172,6 +173,39 @@ _FLASH_COMPACT_CONTRACT = (
     '      "conviction": 0.0,\n'
     '      "novelty_score": 0.0,\n'
     '      "evidence_refs": ["<tool_call_log_id/source ref>"]\n'
+    "    }\n"
+    "  ]\n"
+    "}"
+)
+
+
+_FLASH_TEMPORAL_CONTRACT = (
+    "{\n"
+    '  "hypothesis": "<falsifiable one-sentence claim, or empty string to abstain>",\n'
+    '  "confidence": 0.0,\n'
+    '  "rationale_brief": "<mechanism, max 180 chars>",\n'
+    '  "suggested_tools": ["<copy tic://... from allowed_tool_candidates>", "..."],\n'
+    '  "information_strings": [\n'
+    "    {\n"
+    '      "title": "<short title>",\n'
+    '      "thesis": "<entity -> mechanism -> market implication>",\n'
+    '      "entities_chain": ["<entity>", "<actor/venue/theme>"],\n'
+    '      "mechanism": "<why this should reprice or update the map>",\n'
+    '      "depth_layers": [{"layer": 1, "claim": "<direct effect>"}, {"layer": 2, "claim": "<second-order effect>"}],\n'
+    '      "expected_outcome": "<observable confirmation>",\n'
+    '      "time_horizon": "<tick|minute|hour|intraday|1d|1w|1m|structural>",\n'
+    '      "time_scale": "<same grain as claim>",\n'
+    '      "observed_at": "<ISO8601 source/tool observation time, or as_of_utc>",\n'
+    '      "source_time_basis": "<event_time|ingestion_time|publication_time|valid_time|unknown>",\n'
+    '      "kill_signal": "<what breaks the chain>",\n'
+    '      "extends_or_contradicts": "<new|extends|contradicts|abandons>",\n'
+    '      "would_change_decision": true,\n'
+    '      "expires_at": "<when stale>",\n'
+    '      "crowdedness": 0.0,\n'
+    '      "conviction": 0.0,\n'
+    '      "novelty_score": 0.0,\n'
+    '      "evidence_refs": ["<tool_call_log_id/source ref>"],\n'
+    '      "temporal_confidence": 0.0\n'
     "    }\n"
     "  ]\n"
     "}"
@@ -343,6 +377,19 @@ def build_deep_scout_system_prompt(variant: PromptVariant = "receptive_field_v1"
             "- suggested_tools must be copied exactly from allowed_tool_candidates.\n"
             "- Keep JSON small; no prose outside JSON.\n\n"
             f"Return strict JSON only:\n{_FLASH_COMPACT_CONTRACT}"
+        )
+    if variant == "flash_temporal_v3":
+        return (
+            "You are a Talis Flash scout. Study only the assigned market cell and emit "
+            "1-2 decision-changing information strings, or abstain if the evidence is too stale.\n\n"
+            "Non-negotiables:\n"
+            "- No headline summaries, invented tools, or invented evidence.\n"
+            "- Every string must include time_horizon, time_scale, observed_at, source_time_basis, expires_at, and temporal_confidence.\n"
+            "- Separate event/publication/ingestion time. If unsure, set source_time_basis='unknown' and explain the freshness in kill_signal.\n"
+            "- Every string needs mechanism, expected outcome, kill signal, evidence_refs, and a second-order link.\n"
+            "- suggested_tools must be copied exactly from allowed_tool_candidates.\n"
+            "- Keep JSON small; no prose outside JSON.\n\n"
+            f"Return strict JSON only:\n{_FLASH_TEMPORAL_CONTRACT}"
         )
     return base + (
         "\nVariant emphasis: behave like a neural receptive field. Stay narrow, "

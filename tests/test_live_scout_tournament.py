@@ -42,6 +42,25 @@ def test_live_scout_tournament_promotes_clean_ten_scout_candidate(tmp_path):
     assert not tournament["winner"]["failed_gates"]
 
 
+def test_live_scout_tournament_blocks_temporal_contract_regression(tmp_path):
+    report_path = _write_canary(
+        tmp_path,
+        success_rate=1.0,
+        transcript_errors=0,
+        duplicate_rate=0.0,
+        completed=10,
+        structural_flags=10,
+    )
+
+    tournament = evaluate_live_scout_tournament([report_path])
+
+    assert tournament["promotion_decision"]["decision"] == "no_promotion"
+    winner = tournament["winner"]
+    assert winner["promotion_eligible"] is False
+    assert "structural_flag_rate_le_max" in winner["failed_gates"]
+    assert any(item["id"] == "flash_temporal_quality_arm" for item in tournament["next_experiment_plan"])
+
+
 def _write_canary(
     tmp_path: Path,
     *,
@@ -49,6 +68,7 @@ def _write_canary(
     transcript_errors: int,
     duplicate_rate: float,
     completed: int,
+    structural_flags: int = 0,
 ) -> Path:
     report_path = tmp_path / "live_scout_canary_report.json"
     report = {
@@ -71,7 +91,11 @@ def _write_canary(
                 "evidence_ok_rate": 0.9,
                 "duplicate_hypothesis_rate": duplicate_rate,
                 "total_cost_usd_estimate": 0.04,
-                "top_quality_flags": {"scout_provider_unavailable": transcript_errors},
+                "top_quality_flags": {
+                    "scout_provider_unavailable": transcript_errors,
+                    "prompt_string_missing_temporal_metadata": structural_flags,
+                    "prompt_quality:0.90": 10,
+                },
             },
             "information_map": {
                 "string_count": 12,
