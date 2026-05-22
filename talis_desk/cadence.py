@@ -346,6 +346,23 @@ def _sentinel_commands(
             },
         ),
         CadenceCommand(
+            name="sentinel_market_evolve_scoreboard",
+            command=[
+                sys.executable,
+                "scripts/export_market_evolve_scoreboard.py",
+                "--cycle-id",
+                cycle_id,
+                "--db",
+                str(live_root / "desk-live-canary.db"),
+                "--output-dir",
+                str(root / "market-evolve"),
+            ],
+            purpose="Persist the evaluator-guided learning scoreboard for this sentinel tick.",
+            expected_artifacts={
+                "scoreboard": str(root / "market-evolve" / "market_evolve_scoreboard.json"),
+            },
+        ),
+        CadenceCommand(
             name="sentinel_agent_graph_export",
             command=[
                 sys.executable,
@@ -378,6 +395,10 @@ def _full_pipeline_commands(
 ) -> list[CadenceCommand]:
     scouts = int(scout_count or 1000)
     cost_cap = live_cost_cap_usd if live_cost_cap_usd is not None else 5.0
+    scoreboard_db = (
+        root / "live_canary" / "desk-live-canary.db"
+        if allow_live_spend else root / "deterministic_100" / "desk-100-scout.db"
+    )
     launch_cmd = [
         sys.executable,
         "scripts/run_scout_system_launch_gate.py",
@@ -426,6 +447,23 @@ def _full_pipeline_commands(
             expected_artifacts={
                 "launch_report": str(root / "launch-gate" / "launch_gate_report.json"),
                 "learning_report": str(root / "live_canary" / "prompt_outputs" / "live_scout_learning_report.json"),
+            },
+        ),
+        CadenceCommand(
+            name="full_market_evolve_scoreboard",
+            command=[
+                sys.executable,
+                "scripts/export_market_evolve_scoreboard.py",
+                "--cycle-id",
+                cycle_id,
+                "--db",
+                str(scoreboard_db),
+                "--output-dir",
+                str(root / "market-evolve"),
+            ],
+            purpose="Freeze the evolution scoreboard before composing the daily brief.",
+            expected_artifacts={
+                "scoreboard": str(root / "market-evolve" / "market_evolve_scoreboard.json"),
             },
         ),
         CadenceCommand(

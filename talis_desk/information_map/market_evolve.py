@@ -857,6 +857,213 @@ def build_market_evolve_lineage(
     }
 
 
+def build_market_evolve_scoreboard(
+    *,
+    cycle_id: str = "",
+    limit: int = 64,
+    persist: bool = True,
+    conn: Optional[sqlite3.Connection] = None,
+) -> dict[str, Any]:
+    """Build and optionally persist the operator/cortex read model.
+
+    Lineage is the graph. The scoreboard is the decision surface: what is
+    learning, what is blocked, what can be promoted, and what the next cadence
+    run should do before any wider spend.
+    """
+    db = conn or get_desk_store().conn
+    _ensure_market_evolve_tables(db)
+    generated_at = _now()
+    lineage = build_market_evolve_lineage(limit=limit, conn=db)
+    nodes = list(lineage.get("nodes") or [])
+    edges = list(lineage.get("edges") or [])
+    active = [n for n in nodes if n.get("status") == "active"]
+    candidates = [n for n in nodes if n.get("status") == "candidate"]
+    rejected = [n for n in nodes if n.get("status") == "rejected"]
+    experiments = load_market_evolve_experiments(status="", limit=limit * 2, conn=db)
+    recent_results = load_market_evolve_experiment_results(limit=limit * 4, conn=db)
+    cycle_results = (
+        load_market_evolve_experiment_results(cycle_id=cycle_id, limit=limit * 4, conn=db)
+        if cycle_id else []
+    )
+    result_window = cycle_results or recent_results
+    open_experiments = [
+        e for e in experiments
+        if str(e.get("status") or "") in {"planned", "running", "insufficient_sample"}
+    ]
+    applications = (
+        load_market_evolve_policy_applications(cycle_id=cycle_id, limit=limit * 4, conn=db)
+        if cycle_id else []
+    )
+    hard_gate_summary = _scoreboard_hard_gate_summary(result_window)
+    decision_counts = _count_values(str(r.get("decision") or "unknown") for r in result_window)
+    experiment_status_counts = _count_values(str(e.get("status") or "unknown") for e in experiments)
+    program_status_counts = _count_values(str(n.get("status") or "unknown") for n in nodes)
+    promotion_candidates = _scoreboard_rows([
+        n for n in nodes
+        if str(n.get("latest_decision") or "") == "promote_candidate"
+        or "promoted_by_market_evolve_experiment" in _string_list(n.get("quality_flags"))
+    ])
+    continuation_candidates = _scoreboard_rows([
+        n for n in nodes
+        if str(n.get("latest_decision") or "") == "continue_candidate"
+    ])
+    blocked_candidates = _scoreboard_rows([
+        n for n in [*candidates, *rejected]
+        if str(n.get("latest_decision") or "") == "reject_candidate"
+        or int((n.get("proof_gate_summary") or {}).get("triggered") or 0) > 0
+        or str(n.get("mutation_status") or "") == "rejected"
+        or n.get("status") == "rejected"
+    ])
+    frontier = _scoreboard_rows(list(lineage.get("frontier") or []), include_frontier=True)
+    status = _scoreboard_status(
+        active=active,
+        candidates=candidates,
+        open_experiments=open_experiments,
+        promotion_candidates=promotion_candidates,
+        continuation_candidates=continuation_candidates,
+        blocked_candidates=blocked_candidates,
+        result_window=result_window,
+    )
+    summary = _scoreboard_summary(
+        status=status,
+        active_count=len(active),
+        candidate_count=len(candidates),
+        open_experiment_count=len(open_experiments),
+        promotion_count=len(promotion_candidates),
+        blocked_count=len(blocked_candidates),
+    )
+    scoreboard = {
+        "schema_version": "market_evolve_scoreboard_v1",
+        "id": _market_evolve_scoreboard_id(cycle_id=cycle_id, generated_at=generated_at),
+        "cycle_id": cycle_id,
+        "generated_at": generated_at,
+        "status": status,
+        "summary": summary,
+        "counts": {
+            "programs": len(nodes),
+            "active_programs": len(active),
+            "candidate_programs": len(candidates),
+            "rejected_programs": len(rejected),
+            "mutations": int(lineage.get("mutation_count") or len(edges)),
+            "experiments": len(experiments),
+            "open_experiments": len(open_experiments),
+            "cycle_policy_applications": len(applications),
+            "result_window": len(result_window),
+        },
+        "program_status_counts": program_status_counts,
+        "experiment_status_counts": experiment_status_counts,
+        "decision_counts": decision_counts,
+        "active_programs": _scoreboard_rows(active),
+        "candidate_programs": _scoreboard_rows(candidates),
+        "promotion_candidates": promotion_candidates,
+        "continuation_candidates": continuation_candidates,
+        "blocked_candidates": blocked_candidates,
+        "hard_experiment_gate_summary": hard_gate_summary,
+        "evolution_memory": _scoreboard_evolution_memory(
+            result_window=result_window,
+            recent_results=recent_results,
+            open_experiment_count=len(open_experiments),
+            mutation_count=int(lineage.get("mutation_count") or len(edges)),
+        ),
+        "frontier": frontier,
+        "next_actions": _scoreboard_next_actions(
+            status=status,
+            frontier=frontier,
+            open_experiments=open_experiments,
+            applications=applications,
+            cycle_id=cycle_id,
+            result_window=result_window,
+        ),
+        "cadence_readiness": _scoreboard_cadence_readiness(
+            status=status,
+            hard_gate_summary=hard_gate_summary,
+            recent_results=recent_results,
+        ),
+        "lineage_ref": {
+            "schema_version": lineage.get("schema_version"),
+            "program_count": lineage.get("program_count"),
+            "mutation_count": lineage.get("mutation_count"),
+            "experiment_count": lineage.get("experiment_count"),
+            "active_program_ids": lineage.get("active_program_ids") or [],
+            "candidate_program_ids": lineage.get("candidate_program_ids") or [],
+        },
+        "quality_flags": sorted(set([
+            "market_evolve_scoreboard",
+            "durable_evolution_memory",
+            *([] if not cycle_id or cycle_results else ["cycle_window_empty"]),
+        ])),
+    }
+    if persist:
+        persist_market_evolve_scoreboard(scoreboard, conn=db)
+    return scoreboard
+
+
+def persist_market_evolve_scoreboard(
+    scoreboard: dict[str, Any],
+    *,
+    conn: Optional[sqlite3.Connection] = None,
+) -> str:
+    db = conn or get_desk_store().conn
+    _ensure_market_evolve_tables(db)
+    now = _now()
+    row_id = str(scoreboard.get("id") or _market_evolve_scoreboard_id(
+        cycle_id=str(scoreboard.get("cycle_id") or ""),
+        generated_at=now,
+    ))
+    db.execute(
+        """
+        INSERT OR REPLACE INTO market_evolve_scoreboards (
+            id, cycle_id, status, summary, scoreboard_json,
+            created_at, valid_from, transaction_from, transaction_to
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)
+        """,
+        (
+            row_id,
+            str(scoreboard.get("cycle_id") or ""),
+            str(scoreboard.get("status") or "unknown"),
+            str(scoreboard.get("summary") or "")[:3000],
+            json.dumps(scoreboard, sort_keys=True),
+            now,
+            now,
+            now,
+        ),
+    )
+    db.commit()
+    return row_id
+
+
+def load_market_evolve_scoreboards(
+    *,
+    cycle_id: str = "",
+    limit: int = 20,
+    conn: Optional[sqlite3.Connection] = None,
+) -> list[dict[str, Any]]:
+    db = conn or get_desk_store().conn
+    _ensure_market_evolve_tables(db)
+    clauses: list[str] = ["transaction_to IS NULL"]
+    params: list[Any] = []
+    if cycle_id:
+        clauses.append("cycle_id = ?")
+        params.append(cycle_id)
+    params.append(int(limit))
+    rows = db.execute(
+        f"""
+        SELECT *
+        FROM market_evolve_scoreboards
+        WHERE {' AND '.join(clauses)}
+        ORDER BY created_at DESC
+        LIMIT ?
+        """,
+        tuple(params),
+    ).fetchall()
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        payload = _json_load(row["scoreboard_json"], {})
+        if isinstance(payload, dict):
+            out.append(payload)
+    return out
+
+
 def evaluate_market_evolve_program(
     *,
     program: MarketEvolveProgram,
@@ -4260,6 +4467,29 @@ def _ensure_market_evolve_tables(conn: sqlite3.Connection) -> None:
         "CREATE INDEX IF NOT EXISTS idx_market_evolve_exp_result_experiment "
         "ON market_evolve_experiment_results(experiment_id, created_at DESC)"
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS market_evolve_scoreboards (
+            id TEXT PRIMARY KEY,
+            cycle_id TEXT,
+            status TEXT NOT NULL,
+            summary TEXT,
+            scoreboard_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL,
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_market_evolve_scoreboards_cycle "
+        "ON market_evolve_scoreboards(cycle_id, created_at DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_market_evolve_scoreboards_status "
+        "ON market_evolve_scoreboards(status, created_at DESC)"
+    )
 
 
 def _ensure_column(conn: sqlite3.Connection, table: str, column: str, ddl: str) -> None:
@@ -4370,6 +4600,236 @@ def _diversity_signature(*, mutation_kind: str, changed_paths: list[str]) -> str
     })
     raw = "|".join([mutation_kind, *families])
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
+
+
+def _market_evolve_scoreboard_id(*, cycle_id: str, generated_at: str) -> str:
+    raw = f"{cycle_id or 'latest'}|{generated_at}"
+    return "mscore_" + hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+
+def _count_values(values: Any) -> dict[str, int]:
+    out: dict[str, int] = {}
+    for value in values:
+        key = str(value or "unknown")
+        out[key] = out.get(key, 0) + 1
+    return dict(sorted(out.items()))
+
+
+def _scoreboard_rows(rows: list[dict[str, Any]], *, include_frontier: bool = False) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for row in rows[:16]:
+        gate_summary = row.get("proof_gate_summary") if isinstance(row.get("proof_gate_summary"), dict) else {}
+        compact = {
+            "program_id": row.get("program_id"),
+            "name": row.get("name"),
+            "status": row.get("status"),
+            "generation": row.get("generation"),
+            "score": row.get("score"),
+            "mutation_kind": row.get("mutation_kind"),
+            "mutation_status": row.get("mutation_status"),
+            "latest_experiment_id": row.get("latest_experiment_id"),
+            "latest_experiment_status": row.get("latest_experiment_status"),
+            "latest_decision": row.get("latest_decision"),
+            "latest_score_delta": row.get("latest_score_delta"),
+            "hard_gate_triggered_count": int(gate_summary.get("triggered") or 0),
+            "hard_gate_not_observed_count": int(gate_summary.get("not_observed") or 0),
+            "changed_paths": list(row.get("changed_paths") or [])[:8],
+            "kill_signal": row.get("kill_signal"),
+            "next_action": row.get("next_action"),
+        }
+        if include_frontier:
+            compact.update({
+                "frontier_priority_score": row.get("frontier_priority_score"),
+                "diversity_signature": row.get("diversity_signature"),
+            })
+        out.append(compact)
+    return out
+
+
+def _scoreboard_hard_gate_summary(results: list[dict[str, Any]]) -> dict[str, Any]:
+    gate_rows = [
+        gate
+        for result in results
+        for gate in (result.get("falsification_gate_results") or [])
+        if isinstance(gate, dict)
+    ]
+    triggered = [g for g in gate_rows if g.get("triggered")]
+    not_observed = [g for g in gate_rows if g.get("status") == "not_observed"]
+    passed = [g for g in gate_rows if g.get("status") == "passed"]
+    return {
+        "evaluated": len(gate_rows),
+        "passed": len(passed),
+        "triggered": len(triggered),
+        "not_observed": len(not_observed),
+        "triggered_metrics": sorted({
+            str(g.get("metric"))
+            for g in triggered
+            if str(g.get("metric") or "").strip()
+        }),
+        "not_observed_metrics": sorted({
+            str(g.get("metric"))
+            for g in not_observed
+            if str(g.get("metric") or "").strip()
+        }),
+    }
+
+
+def _scoreboard_status(
+    *,
+    active: list[dict[str, Any]],
+    candidates: list[dict[str, Any]],
+    open_experiments: list[dict[str, Any]],
+    promotion_candidates: list[dict[str, Any]],
+    continuation_candidates: list[dict[str, Any]],
+    blocked_candidates: list[dict[str, Any]],
+    result_window: list[dict[str, Any]],
+) -> str:
+    if not active and not candidates:
+        return "not_started"
+    if promotion_candidates:
+        return "evolving_promoted_policy"
+    if continuation_candidates:
+        return "learning_continue_candidate"
+    if open_experiments:
+        return "experiment_running"
+    if blocked_candidates and not result_window:
+        return "repair_needed_no_recent_evidence"
+    if blocked_candidates:
+        return "repair_needed"
+    if candidates:
+        return "candidate_waiting_for_experiment"
+    if active:
+        return "baseline_active"
+    return "unknown"
+
+
+def _scoreboard_summary(
+    *,
+    status: str,
+    active_count: int,
+    candidate_count: int,
+    open_experiment_count: int,
+    promotion_count: int,
+    blocked_count: int,
+) -> str:
+    return (
+        f"MarketEvolve status={status}: {active_count} active program(s), "
+        f"{candidate_count} candidate(s), {open_experiment_count} open hard "
+        f"experiment(s), {promotion_count} promotion candidate(s), "
+        f"{blocked_count} blocked/rejected candidate(s)."
+    )
+
+
+def _scoreboard_evolution_memory(
+    *,
+    result_window: list[dict[str, Any]],
+    recent_results: list[dict[str, Any]],
+    open_experiment_count: int,
+    mutation_count: int,
+) -> dict[str, Any]:
+    deltas = [float(r.get("score_delta") or 0.0) for r in result_window]
+    recent_deltas = [float(r.get("score_delta") or 0.0) for r in recent_results]
+    promoted = [r for r in recent_results if str(r.get("decision") or "") == "promote_candidate"]
+    rejected = [r for r in recent_results if str(r.get("decision") or "") == "reject_candidate"]
+    continued = [r for r in recent_results if str(r.get("decision") or "") == "continue_candidate"]
+    return {
+        "evolves": bool(mutation_count or recent_results or open_experiment_count),
+        "mutation_count": mutation_count,
+        "open_experiment_count": open_experiment_count,
+        "accepted_policy_delta_count": len(promoted),
+        "continued_policy_delta_count": len(continued),
+        "rejected_policy_delta_count": len(rejected),
+        "best_score_delta_window": round(max(deltas) if deltas else 0.0, 4),
+        "best_score_delta_recent": round(max(recent_deltas) if recent_deltas else 0.0, 4),
+        "latest_result_ids": [
+            str(r.get("id"))
+            for r in recent_results[:8]
+            if str(r.get("id") or "").strip()
+        ],
+    }
+
+
+def _scoreboard_next_actions(
+    *,
+    status: str,
+    frontier: list[dict[str, Any]],
+    open_experiments: list[dict[str, Any]],
+    applications: list[dict[str, Any]],
+    cycle_id: str,
+    result_window: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    actions: list[dict[str, Any]] = []
+    if status == "not_started":
+        actions.append({
+            "action": "seed_default_market_evolve_program",
+            "why": "No active research policy exists yet.",
+        })
+    if open_experiments and cycle_id and not applications:
+        actions.append({
+            "action": "apply_policy_to_paired_scout_slices",
+            "why": "Open hard experiments need matched control/candidate scout evidence.",
+        })
+    if open_experiments and not result_window:
+        actions.append({
+            "action": "run_scouts_before_deciding_experiment",
+            "why": "The experiment exists, but this window has no measured result yet.",
+        })
+    for row in frontier[:4]:
+        action = str(row.get("next_action") or "")
+        if action:
+            actions.append({
+                "action": action,
+                "program_id": row.get("program_id"),
+                "priority": row.get("frontier_priority_score"),
+                "why": "Highest-priority point on the MarketEvolve frontier.",
+            })
+    if status.startswith("repair_needed"):
+        actions.append({
+            "action": "mine_failed_candidate_for_counterfactual_mutation",
+            "why": "A candidate failed a hard gate or was rejected; preserve the learning signal.",
+        })
+    if not actions:
+        actions.append({
+            "action": "run_next_sentinel_tick",
+            "why": "Maintain cheap information-vs-price memory until the next full pass.",
+        })
+    deduped: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for action in actions:
+        key = (str(action.get("action") or ""), str(action.get("program_id") or ""))
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(action)
+    return deduped[:8]
+
+
+def _scoreboard_cadence_readiness(
+    *,
+    status: str,
+    hard_gate_summary: dict[str, Any],
+    recent_results: list[dict[str, Any]],
+) -> dict[str, Any]:
+    promoted_cycles = sorted({
+        str(r.get("cycle_id"))
+        for r in recent_results
+        if str(r.get("decision") or "") == "promote_candidate"
+        and str(r.get("cycle_id") or "").strip()
+    })
+    triggered = int(hard_gate_summary.get("triggered") or 0)
+    eligible_for_shadow_review = len(promoted_cycles) >= 2 and triggered == 0
+    return {
+        "always_on_sentinel_allowed": status not in {"not_started"},
+        "full_pipeline_plan_allowed": True,
+        "scheduled_production_allowed": False,
+        "eligible_for_shadow_schedule_review": eligible_for_shadow_review,
+        "blocking_reason": (
+            "repeat_1000_scout_shadow_pass_required"
+            if not eligible_for_shadow_review
+            else "human_schedule_review_required"
+        ),
+        "promoted_result_cycles": promoted_cycles[:8],
+    }
 
 
 def _market_evolve_frontier(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -5039,17 +5499,20 @@ __all__ = [
     "choose_market_evolve_prompt_variant",
     "collect_market_evolve_metrics",
     "build_market_evolve_lineage",
+    "build_market_evolve_scoreboard",
     "evaluate_market_evolve_program",
     "evaluate_market_evolve_experiments",
     "load_active_market_evolve_program",
     "load_market_evolve_experiment_results",
     "load_market_evolve_experiments",
     "load_market_evolve_policy_applications",
+    "load_market_evolve_scoreboards",
     "load_market_evolve_programs",
     "prepare_market_evolve_experiment_seed_pairs",
     "persist_market_evolve_evaluation",
     "persist_market_evolve_mutation",
     "persist_market_evolve_program",
+    "persist_market_evolve_scoreboard",
     "propose_market_evolve_mutation",
     "propose_market_evolve_mutations",
     "run_market_evolve_step",

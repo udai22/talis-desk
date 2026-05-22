@@ -37,6 +37,7 @@ RAW_ARTIFACTS = [
     "live_scout_transcript.json",
     "live_scout_canary_transcript_progress.json",
     "market_evolve_hard_experiment.json",
+    "market_evolve_scoreboard.json",
     "tool_creation_contract_repair.json",
 ]
 
@@ -93,6 +94,10 @@ def build_agent_graph_state(
     learning_report = _read_json(raw_dir / "live_scout_learning_report.json", {}) or _read_json(prompt_dir / "live_scout_learning_report.json", {})
     repair_report = _read_json(raw_dir / "tool_creation_contract_repair.json", {}) or _read_json(prompt_dir / "tool_creation_contract_repair.json", {})
     launch_report = _read_json(root / "launch-gate" / "launch_gate_report.json", {}) or _read_json(root / "scout_system_launch_gate_report.json", {})
+    market_evolve_scoreboard = (
+        _read_json(raw_dir / "market_evolve_scoreboard.json", {})
+        or _read_json(root / "market-evolve" / "market_evolve_scoreboard.json", {})
+    )
 
     agents = _agent_rows(
         outputs=outputs[:max_agents] if isinstance(outputs, list) else [],
@@ -114,6 +119,7 @@ def build_agent_graph_state(
         tournament_report=tournament_report,
         learning_report=learning_report,
         repair_report=repair_report,
+        market_evolve_scoreboard=market_evolve_scoreboard,
         canary_report=canary_report,
     )
     reports = _report_links(root=root, raw_dir=raw_dir, artifact_href_prefix=artifact_href_prefix)
@@ -127,6 +133,7 @@ def build_agent_graph_state(
         tournament_report=tournament_report,
         learning_report=learning_report,
         repair_report=repair_report,
+        market_evolve_scoreboard=market_evolve_scoreboard,
         launch_report=launch_report,
         slice_preview=slice_preview,
     )
@@ -143,7 +150,7 @@ def build_agent_graph_state(
         "nodes": nodes,
         "edges": edges,
         "reports": reports,
-        "timeline": _timeline(summary, canary_report, tournament_report, learning_report, repair_report),
+        "timeline": _timeline(summary, canary_report, tournament_report, learning_report, repair_report, market_evolve_scoreboard),
     }
 
 
@@ -169,6 +176,8 @@ def export_agent_graph_viewer(
             src = raw_dir / name
             if not src.exists():
                 src = prompt_dir / name
+            if not src.exists() and name == "market_evolve_scoreboard.json":
+                src = root / "market-evolve" / name
             if src.exists():
                 shutil.copy2(src, raw_out / name)
                 copied.append(name)
@@ -200,6 +209,10 @@ def artifact_path(name: str, run_dir: str | Path | None = None) -> Path | None:
     if root is None:
         return None
     for base in (_raw_dir(root), _prompt_dir(root), root / "launch-gate", root / "tournament", root):
+        if name == "market_evolve_scoreboard.json":
+            candidate = root / "market-evolve" / name
+            if candidate.exists() and candidate.is_file():
+                return candidate
         candidate = base / name
         if candidate.exists() and candidate.is_file():
             return candidate
@@ -322,6 +335,7 @@ def _graph_from_agents(
     tournament_report: dict[str, Any],
     learning_report: dict[str, Any],
     repair_report: dict[str, Any],
+    market_evolve_scoreboard: dict[str, Any],
     canary_report: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     nodes: dict[str, dict[str, Any]] = {}
@@ -403,11 +417,34 @@ def _graph_from_agents(
         ("Tournament", tournament_report),
         ("Learning policy", learning_report),
         ("Tool repair", repair_report),
+        ("MarketEvolve scoreboard", market_evolve_scoreboard),
     ):
         if report:
             rid = "report:" + name.lower().replace(" ", "_")
             node(rid, "report", name, status=report.get("status") or (report.get("promotion_decision") or {}).get("decision"))
             edge("run", rid, "summarized_by")
+    if market_evolve_scoreboard:
+        scoreboard_id = "evolve:scoreboard"
+        node(
+            scoreboard_id,
+            "evolution",
+            "MarketEvolve",
+            status=market_evolve_scoreboard.get("status"),
+            score=(market_evolve_scoreboard.get("evolution_memory") or {}).get("best_score_delta_recent"),
+        )
+        edge("run", scoreboard_id, "learns_through")
+        for row in (market_evolve_scoreboard.get("frontier") or [])[:8]:
+            pid = str(row.get("program_id") or "")
+            if not pid:
+                continue
+            node(
+                f"policy:{pid}",
+                "policy",
+                str(row.get("name") or pid),
+                status=row.get("status"),
+                score=row.get("frontier_priority_score"),
+            )
+            edge(scoreboard_id, f"policy:{pid}", "prioritizes")
 
     return list(nodes.values()), edges[:2500]
 
@@ -423,6 +460,7 @@ def _summary(
     tournament_report: dict[str, Any],
     learning_report: dict[str, Any],
     repair_report: dict[str, Any],
+    market_evolve_scoreboard: dict[str, Any],
     launch_report: dict[str, Any],
     slice_preview: dict[str, Any],
 ) -> dict[str, Any]:
@@ -442,6 +480,7 @@ def _summary(
     cycle_id = canary_report.get("cycle_id") or launch_live.get("cycle_id") or ""
     next_policy = learning_report.get("next_ramp_policy") if isinstance(learning_report.get("next_ramp_policy"), dict) else {}
     allowed_next_step = decision.get("allowed_next_step") or next_policy.get("allowed_next_step") or ""
+    evolve_memory = market_evolve_scoreboard.get("evolution_memory") if isinstance(market_evolve_scoreboard.get("evolution_memory"), dict) else {}
     return {
         "run_name": root.name,
         "cycle_id": cycle_id,
@@ -493,14 +532,26 @@ def _summary(
         ),
         "situational_awareness_agents": situational_agents,
         "max_situational_score": max((float(a.get("score") or 0) for a in situational_agents), default=0.0),
+        "market_evolve_status": market_evolve_scoreboard.get("status"),
+        "market_evolve_summary": market_evolve_scoreboard.get("summary"),
+        "market_evolve_best_delta": evolve_memory.get("best_score_delta_recent"),
+        "market_evolve_next_actions": market_evolve_scoreboard.get("next_actions") or [],
         "promotion_reason": promotion.get("reason") or decision.get("reason") or "",
         "coverage": (canary_report.get("metrics") or {}).get("coverage") if isinstance(canary_report.get("metrics"), dict) else {},
     }
 
 
-def _timeline(summary: dict[str, Any], canary: dict[str, Any], tournament: dict[str, Any], learning: dict[str, Any], repair: dict[str, Any]) -> list[dict[str, Any]]:
+def _timeline(
+    summary: dict[str, Any],
+    canary: dict[str, Any],
+    tournament: dict[str, Any],
+    learning: dict[str, Any],
+    repair: dict[str, Any],
+    market_evolve_scoreboard: dict[str, Any],
+) -> list[dict[str, Any]]:
     promotion = tournament.get("promotion_decision") if isinstance(tournament.get("promotion_decision"), dict) else {}
     success_rate = _safe_float(summary.get("success_rate"), 0.0)
+    evolve_status = str(market_evolve_scoreboard.get("status") or "pending")
     return [
         {"id": "cadence", "label": "Cadence", "status": "pass", "detail": "2 full runs/day + always-on Flash sentinel"},
         {"id": "slice", "label": "Slice", "status": "pass", "detail": f"{summary.get('agents_requested', 0)} cells routed"},
@@ -509,6 +560,7 @@ def _timeline(summary: dict[str, Any], canary: dict[str, Any], tournament: dict[
         {"id": "pressure", "label": "Pressure", "status": "pass" if summary.get("upward_pressure_count", 0) else "watch", "detail": f"{summary.get('upward_pressure_count', 0)} upward candidates"},
         {"id": "graph", "label": "Graph", "status": "pass" if summary.get("nodes", 0) else "watch", "detail": f"{summary.get('nodes', 0)} nodes"},
         {"id": "cortex", "label": "Cortex", "status": "pass" if summary.get("situational_awareness_agents") else "watch", "detail": f"{len(summary.get('situational_awareness_agents') or [])} overseers"},
+        {"id": "evolve", "label": "Evolve", "status": "pass" if evolve_status.startswith("learning") or "promoted" in evolve_status else "watch", "detail": evolve_status},
         {"id": "repair", "label": "Repair", "status": repair.get("status") or "pending", "detail": f"{repair.get('repairs_created', 0)} repairs"},
         {"id": "tournament", "label": "Tournament", "status": "pass" if promotion.get("ready_for_live_1000") else "watch", "detail": promotion.get("decision") or "pending"},
         {"id": "next", "label": "Next", "status": "locked", "detail": summary.get("allowed_next_step") or "human gate"},
@@ -536,10 +588,14 @@ def _report_links(*, root: Path, raw_dir: Path, artifact_href_prefix: str) -> li
         ("live_scout_ramp_policy_rehearsal.json", "Policy rehearsal", "No-spend proof that policy changed seeds"),
         ("tool_creation_contract_repair.json", "Tool repair", "Native tool-proposal quality gate"),
         ("market_evolve_hard_experiment.json", "MarketEvolve", "Control/candidate evolution proof"),
+        ("market_evolve_scoreboard.json", "MarketEvolve scoreboard", "Learning status, frontier, hard gates, next actions"),
     ]
     out: list[dict[str, Any]] = []
     for filename, title, desc in names:
-        if (raw_dir / filename).exists() or (_prompt_dir(root) / filename).exists():
+        exists = (raw_dir / filename).exists() or (_prompt_dir(root) / filename).exists()
+        if filename == "market_evolve_scoreboard.json":
+            exists = exists or (root / "market-evolve" / filename).exists()
+        if exists:
             out.append({"filename": filename, "title": title, "description": desc, "href": artifact_href_prefix + filename})
     if (root / "launch-gate" / "launch_gate_report.json").exists() or (root / "scout_system_launch_gate_report.json").exists():
         out.insert(0, {"filename": "launch_gate_report.json", "title": "Launch gate", "description": "Operator decision and next command", "href": "../launch-gate/launch_gate_report.json" if artifact_href_prefix == "raw/" else artifact_href_prefix + "launch_gate_report.json"})

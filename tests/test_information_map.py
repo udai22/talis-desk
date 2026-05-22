@@ -26,6 +26,7 @@ from talis_desk.information_map import (
     alpha_geometry_seed_directives,
     build_alpha_geometry_cortex_review,
     build_market_evolve_lineage,
+    build_market_evolve_scoreboard,
     collect_market_evolve_metrics,
     compute_alpha_geometry,
     evaluate_market_evolve_experiments,
@@ -38,6 +39,7 @@ from talis_desk.information_map import (
     load_market_evolve_experiments,
     load_market_evolve_policy_applications,
     load_market_evolve_programs,
+    load_market_evolve_scoreboards,
     prepare_market_evolve_experiment_seed_pairs,
     plan_alpha_geometry_actions,
     post_evolution_control_work_orders,
@@ -113,7 +115,7 @@ from talis_desk.swarm.seed_generator import (
 def test_schema_v24_information_map_tables(tmp_path):
     store = DeskStore(db_path=tmp_path / "desk.db")
     conn = store.conn
-    assert get_schema_version(conn) >= 24
+    assert get_schema_version(conn) >= 25
     tables = {
         r[0]
         for r in conn.execute(
@@ -141,6 +143,7 @@ def test_schema_v24_information_map_tables(tmp_path):
     assert "market_evolve_policy_applications" in tables
     assert "market_evolve_experiments" in tables
     assert "market_evolve_experiment_results" in tables
+    assert "market_evolve_scoreboards" in tables
     app_cols = {
         r[1]
         for r in conn.execute("PRAGMA table_info(market_evolve_policy_applications)").fetchall()

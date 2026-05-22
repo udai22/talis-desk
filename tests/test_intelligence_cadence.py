@@ -12,7 +12,11 @@ def test_sentinel_plan_is_always_on_flash_without_live_spend_by_default(tmp_path
     assert plan.mode == "sentinel_tick"
     assert plan.allow_live_spend is False
     assert plan.cadence_policy["always_on_flash"]["mode"] == "continuous_sentinel"
-    assert [cmd.name for cmd in plan.commands] == ["sentinel_live_canary", "sentinel_agent_graph_export"]
+    assert [cmd.name for cmd in plan.commands] == [
+        "sentinel_live_canary",
+        "sentinel_market_evolve_scoreboard",
+        "sentinel_agent_graph_export",
+    ]
 
     live_cmd = plan.commands[0].command
     assert "scripts/run_live_scout_canary.py" in live_cmd
@@ -20,6 +24,8 @@ def test_sentinel_plan_is_always_on_flash_without_live_spend_by_default(tmp_path
     assert _arg_after(live_cmd, "--n-scouts") == "24"
     assert _arg_after(live_cmd, "--cost-cap-usd") == "0.26"
     assert _arg_after(live_cmd, "--max-tool-iterations") == "1"
+    scoreboard_cmd = plan.commands[1].command
+    assert _arg_after(scoreboard_cmd, "--db").endswith("live_canary/desk-live-canary.db")
     assert any(gate["id"] == "no_direct_trade_publication" for gate in plan.gates)
 
 
@@ -51,10 +57,17 @@ def test_full_pipeline_plan_wires_launch_gate_and_daily_brief(tmp_path: Path) ->
     )
 
     assert plan.mode == "full_pipeline"
-    assert [cmd.name for cmd in plan.commands] == ["full_launch_gate", "daily_brief_composition"]
+    assert [cmd.name for cmd in plan.commands] == [
+        "full_launch_gate",
+        "full_market_evolve_scoreboard",
+        "daily_brief_composition",
+    ]
     launch_cmd = plan.commands[0].command
-    brief_cmd = plan.commands[1].command
+    scoreboard_cmd = plan.commands[1].command
+    brief_cmd = plan.commands[2].command
     assert "scripts/run_scout_system_launch_gate.py" in launch_cmd
+    assert "scripts/export_market_evolve_scoreboard.py" in scoreboard_cmd
+    assert _arg_after(scoreboard_cmd, "--db").endswith("deterministic_100/desk-100-scout.db")
     assert _arg_after(launch_cmd, "--live-scouts") == "1000"
     assert _arg_after(launch_cmd, "--live-cost-cap-usd") == "5.00"
     assert _arg_after(launch_cmd, "--ramp-policy") == "/tmp/policy.json"
@@ -72,6 +85,7 @@ def test_write_cadence_plan_persists_executable_commands(tmp_path: Path) -> None
     assert payload["schema_version"] == "talis_intelligence_cadence_run_plan_v1"
     assert payload["mode"] == "sentinel_tick"
     assert "scripts/run_live_scout_canary.py" in payload["commands"][0]["shell"]
+    assert "scripts/export_market_evolve_scoreboard.py" in payload["commands"][1]["shell"]
     assert payload["cadence_policy"]["daily_brief_contract"]["brief_reads"]
 
 

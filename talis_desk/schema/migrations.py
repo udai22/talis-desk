@@ -33,7 +33,7 @@ from typing import Callable
 
 
 #: Current schema version. Bump when adding a Migration below.
-SCHEMA_VERSION = 24
+SCHEMA_VERSION = 25
 
 
 # ============================================================================
@@ -870,6 +870,11 @@ _MIGRATIONS: list[Migration] = [
         version=24,
         name="market_evolve_experiment_results",
         forward=lambda c: _m24_market_evolve_experiment_results(c),
+    ),
+    Migration(
+        version=25,
+        name="market_evolve_scoreboards",
+        forward=lambda c: _m25_market_evolve_scoreboards(c),
     ),
 ]
 
@@ -1837,6 +1842,33 @@ def _m24_market_evolve_experiment_results(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_market_evolve_exp_result_experiment "
         "ON market_evolve_experiment_results(experiment_id, created_at DESC)"
+    )
+
+
+def _m25_market_evolve_scoreboards(conn: sqlite3.Connection) -> None:
+    """v25: durable read model for MarketEvolve learning state."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS market_evolve_scoreboards (
+            id TEXT PRIMARY KEY,
+            cycle_id TEXT,
+            status TEXT NOT NULL,
+            summary TEXT,
+            scoreboard_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL,
+            valid_from TEXT NOT NULL,
+            transaction_from TEXT NOT NULL,
+            transaction_to TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_market_evolve_scoreboards_cycle "
+        "ON market_evolve_scoreboards(cycle_id, created_at DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_market_evolve_scoreboards_status "
+        "ON market_evolve_scoreboards(status, created_at DESC)"
     )
 
 
