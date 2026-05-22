@@ -5,7 +5,7 @@
     "allowed_next_step": "tool_creation_quality_repair_100",
     "exit_ok": false,
     "human_authorization_required": false,
-    "next_command": "PYTHONPATH=. python scripts/run_scout_system_launch_gate.py --allow-live-spend --live-scouts 100 --live-cost-cap-usd 1.00 --live-concurrency 4 --max-tool-iterations 1 --ramp-policy /Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_ramp_policy.json",
+    "next_command": "PYTHONPATH=. python scripts/run_scout_system_launch_gate.py --allow-live-spend --live-scouts 100 --live-cost-cap-usd 1.00 --live-concurrency 4 --max-tool-iterations 1 --repair-tool-proposal-contracts --tool-proposal-repair-limit 500 --ramp-policy /Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_ramp_policy.json",
     "reason": "The live tournament blocked promotion. Repair the failed gates before increasing scout spend.",
     "status": "blocked_by_tournament"
   },
@@ -693,7 +693,7 @@
           ],
           "scheduled_production_allowed": false
         },
-        "recommended_command": "PYTHONPATH=. python scripts/run_scout_system_launch_gate.py --allow-live-spend --live-scouts 100 --live-cost-cap-usd 1.00 --live-concurrency 4 --max-tool-iterations 1 --ramp-policy /Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_ramp_policy.json",
+        "recommended_command": "PYTHONPATH=. python scripts/run_scout_system_launch_gate.py --allow-live-spend --live-scouts 100 --live-cost-cap-usd 1.00 --live-concurrency 4 --max-tool-iterations 1 --repair-tool-proposal-contracts --tool-proposal-repair-limit 500 --ramp-policy /Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_ramp_policy.json",
         "requires_explicit_spend_authorization": true,
         "watch_before_promoting": [
           "invented_tools",
@@ -1249,7 +1249,7 @@
       },
       "source_live_report": "/tmp/talis-live100-20260522/live_canary/prompt_outputs/live_scout_canary_report.json",
       "source_tournament_report": "/tmp/talis-live100-20260522/tournament/live_scout_tournament_report.json",
-      "summary": "The live 100-scout run produced useful scout strings, but the tournament now blocks scale because the agent-created tool proposals did not yet carry evaluator-grade graph edges, expected information value, and fixture plans. A no-spend repair replay converts the current backlog into gradeable child proposals; the next paid step is a fresh 100-scout repair run, not a 1,000-scout ramp.",
+      "summary": "The live 100-scout run produced useful scout strings, but the tournament now blocks scale because the agent-created tool proposals did not yet carry evaluator-grade graph edges, expected information value, and fixture plans. The repair loop is now wired into the native live canary path; the next paid step is a fresh 100-scout repair run with --repair-tool-proposal-contracts, not a 1,000-scout ramp.",
       "top_geometry_actions": [
         {
           "action": "replicate_with_independent_scouts",
