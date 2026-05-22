@@ -921,6 +921,51 @@ def test_prompt_exposes_evidence_expanded_tool_subset():
     assert "tic://source/hl/l4_micro" in user_prompt
 
 
+def test_prompt_exposes_missing_proof_gate_metric_contract():
+    seed = SeedCell(
+        seed_id="seed_proof_metric_prompt",
+        entity="HYPE",
+        horizon="intraday",
+        lens="on_chain",
+        bias_mode="frontier",
+        theme="validator_unstake",
+        payload={
+            "control_decision": "collect_missing_proof_gate_metrics",
+            "control_allowed_next_step": "proof_gate_metric_sentinel",
+            "control_collects_missing_falsification_gate_metrics": True,
+            "control_proof_metrics": [
+                "candidate_fragile_verify_rate",
+                "candidate_avg_realized_edge_score",
+            ],
+            "proof_gate_metric_hints": [
+                {
+                    "metric": "candidate_fragile_verify_rate",
+                    "hint": "refresh_alpha_geometry_cell_metrics",
+                },
+                {
+                    "metric": "candidate_avg_realized_edge_score",
+                    "hint": "attach_before_after_price_or_outcome_observation",
+                },
+            ],
+            "tool_candidates": [
+                "tic://tool/talis_native/plan_alpha_geometry_actions@v1",
+                "tic://tool/builtin/query_timeseries@v1",
+            ],
+        },
+    )
+
+    prompt = _build_user_prompt(seed, tool_evidence=[])
+
+    assert "alpha_geometry_route_contract:" in prompt
+    assert "collect_missing_proof_gate_metrics" in prompt
+    assert "candidate_fragile_verify_rate" in prompt
+    assert "candidate_avg_realized_edge_score" in prompt
+    assert "refresh_alpha_geometry_cell_metrics" in prompt
+    assert "observe or request evidence for proof metrics" in prompt
+    assert "plan_alpha_geometry_actions@v1" in prompt
+    assert "query_timeseries@v1" in prompt
+
+
 def test_scout_infers_source_and_web_args_for_full_data_estate():
     hype_seed = SeedCell(
         seed_id="seed_source_args",
@@ -1873,6 +1918,60 @@ def test_route_contract_alignment_scores_edge_and_gate():
     assert alignment.passed
     assert alignment.score >= 0.60
     assert alignment.addressed_edges == ["thin_cell -> independent_replication"]
+    assert "route_contract_all_edges_addressed" in alignment.flags
+    assert "route_contract_success_gate_addressed" in alignment.flags
+
+
+def test_route_contract_alignment_scores_missing_proof_metric_contract():
+    seed = SeedCell(
+        seed_id="seed_proof_metric_alignment",
+        entity="HYPE",
+        horizon="intraday",
+        lens="on_chain",
+        bias_mode="frontier",
+        theme="validator_unstake",
+        payload={
+            "control_collects_missing_falsification_gate_metrics": True,
+            "control_proof_metrics": [
+                "candidate_fragile_verify_rate",
+                "candidate_avg_realized_edge_score",
+            ],
+        },
+    )
+    info = InformationString(
+        title="Proof metrics observed",
+        thesis=(
+            "The candidate fragile verify rate is low and candidate average "
+            "realized edge score is now observable from price outcomes."
+        ),
+        mechanism="The scout refreshes alpha geometry fragility and before-after price evidence.",
+        expected_outcome="The matched experiment can judge the missing proof metrics.",
+        kill_signal="Fragile verify rate rises or realized edge disappears.",
+        conviction=0.82,
+        novelty_score=0.70,
+        crowdedness=0.25,
+        entities_chain=["HYPE", "candidate fragile verify rate", "candidate avg realized edge score"],
+        depth_layers=[
+            {"layer": 1, "claim": "candidate_fragile_verify_rate observed"},
+            {"layer": 2, "claim": "candidate_avg_realized_edge_score observed"},
+        ],
+    )
+
+    alignment = _evaluate_route_contract_alignment(
+        seed=seed,
+        parsed={
+            "hypothesis": "The missing proof metrics are now observable.",
+            "rationale_brief": "Observed proof metrics can settle the experiment.",
+        },
+        information_strings=[info],
+        tool_requests=[],
+    )
+
+    assert alignment.passed
+    assert alignment.addressed_edges == [
+        "candidate_fragile_verify_rate",
+        "candidate_avg_realized_edge_score",
+    ]
     assert "route_contract_all_edges_addressed" in alignment.flags
     assert "route_contract_success_gate_addressed" in alignment.flags
 

@@ -374,16 +374,31 @@ def _build_user_prompt(
 
 def _alpha_geometry_route_contract_block(seed: SeedCell) -> str:
     payload = seed.payload or {}
+    proof_metrics = [
+        str(metric)
+        for metric in _as_list(payload.get("control_proof_metrics"))
+        if str(metric).strip()
+    ]
     is_shape_route = (
         str(payload.get("source") or "") in {"alpha_geometry_route", "market_map_governor", "frontier_llm_governor"}
         or bool(payload.get("alpha_geometry_route_directive"))
         or bool(payload.get("alpha_geometry_action"))
         or bool(payload.get("market_map_alpha_geometry_context"))
+        or bool(payload.get("control_collects_missing_falsification_gate_metrics"))
+        or bool(proof_metrics)
     )
     if not is_shape_route:
         return ""
+    missing_edges = payload.get("alpha_geometry_missing_edges") or payload.get("expected_edges") or []
+    if not missing_edges and proof_metrics:
+        missing_edges = proof_metrics
+    success_gate = payload.get("alpha_geometry_success_gate")
+    if not success_gate and proof_metrics:
+        success_gate = "observe or request evidence for proof metrics: " + ", ".join(proof_metrics[:6])
     contract = {
         "source": payload.get("source"),
+        "control_decision": payload.get("control_decision"),
+        "control_allowed_next_step": payload.get("control_allowed_next_step"),
         "source_cycle_id": payload.get("alpha_geometry_source_cycle_id"),
         "cell_key": payload.get("alpha_geometry_cell_key"),
         "route_task_id": payload.get("alpha_geometry_route_task_id"),
@@ -392,8 +407,10 @@ def _alpha_geometry_route_contract_block(seed: SeedCell) -> str:
         "owner": payload.get("alpha_geometry_action_owner"),
         "priority": payload.get("alpha_geometry_action_priority"),
         "reason": payload.get("alpha_geometry_action_reason") or payload.get("why_this_seed_exists"),
-        "missing_edges": payload.get("alpha_geometry_missing_edges") or payload.get("expected_edges") or [],
-        "success_gate": payload.get("alpha_geometry_success_gate"),
+        "missing_edges": missing_edges,
+        "success_gate": success_gate,
+        "proof_metrics": proof_metrics,
+        "proof_metric_hints": payload.get("proof_gate_metric_hints") or [],
         "suggested_next_tools": payload.get("alpha_geometry_suggested_next_tools") or payload.get("suggested_tools") or [],
         "global_shape": payload.get("alpha_geometry_global_shape"),
     }
@@ -443,16 +460,31 @@ def _alpha_geometry_route_contract_block(seed: SeedCell) -> str:
 
 def _route_contract_for_seed(seed: SeedCell) -> dict[str, Any]:
     payload = seed.payload or {}
+    proof_metrics = [
+        str(metric)
+        for metric in _as_list(payload.get("control_proof_metrics"))
+        if str(metric).strip()
+    ]
     is_shape_route = (
         str(payload.get("source") or "") in {"alpha_geometry_route", "market_map_governor", "frontier_llm_governor"}
         or bool(payload.get("alpha_geometry_route_directive"))
         or bool(payload.get("alpha_geometry_action"))
         or bool(payload.get("market_map_alpha_geometry_context"))
+        or bool(payload.get("control_collects_missing_falsification_gate_metrics"))
+        or bool(proof_metrics)
     )
     if not is_shape_route:
         return {}
+    missing_edges = payload.get("alpha_geometry_missing_edges") or payload.get("expected_edges") or []
+    if not missing_edges and proof_metrics:
+        missing_edges = proof_metrics
+    success_gate = payload.get("alpha_geometry_success_gate")
+    if not success_gate and proof_metrics:
+        success_gate = "observe or request evidence for proof metrics: " + ", ".join(proof_metrics[:6])
     return {
         "source": payload.get("source"),
+        "control_decision": payload.get("control_decision"),
+        "control_allowed_next_step": payload.get("control_allowed_next_step"),
         "source_cycle_id": payload.get("alpha_geometry_source_cycle_id"),
         "cell_key": payload.get("alpha_geometry_cell_key"),
         "route_task_id": payload.get("alpha_geometry_route_task_id"),
@@ -461,8 +493,10 @@ def _route_contract_for_seed(seed: SeedCell) -> dict[str, Any]:
         "owner": payload.get("alpha_geometry_action_owner"),
         "priority": payload.get("alpha_geometry_action_priority"),
         "reason": payload.get("alpha_geometry_action_reason") or payload.get("why_this_seed_exists"),
-        "missing_edges": payload.get("alpha_geometry_missing_edges") or payload.get("expected_edges") or [],
-        "success_gate": payload.get("alpha_geometry_success_gate"),
+        "missing_edges": missing_edges,
+        "success_gate": success_gate,
+        "proof_metrics": proof_metrics,
+        "proof_metric_hints": payload.get("proof_gate_metric_hints") or [],
         "suggested_next_tools": payload.get("alpha_geometry_suggested_next_tools") or payload.get("suggested_tools") or [],
         "global_shape": payload.get("alpha_geometry_global_shape"),
     }
