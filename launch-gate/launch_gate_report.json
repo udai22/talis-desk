@@ -1,6 +1,6 @@
 {
   "allow_live_spend": false,
-  "artifact_dir": "/private/tmp/talis-launch-gate-pages-20260522",
+  "artifact_dir": "/private/tmp/talis-launch-gate-preview-pages-20260522",
   "decision": {
     "allowed_next_step": "live_10_scout_canary",
     "exit_ok": true,
@@ -10,7 +10,7 @@
     "status": "ready_for_authorized_live_canary"
   },
   "deterministic": {
-    "cycle_id": "cycle_launch_gate_pages_20260522_deterministic_100",
+    "cycle_id": "cycle_launch_gate_preview_pages_20260522_deterministic_100",
     "failed_gates": [],
     "metrics": {
       "effective_unique_cell_ratio": 1.0,
@@ -26,10 +26,10 @@
     "ready_for_live_1000": true,
     "status": "pass"
   },
-  "generated_at": "2026-05-22T15:20:44.778785+00:00",
+  "generated_at": "2026-05-22T15:26:48.267293+00:00",
   "launch_viewer_index": "/Users/udaikhattar/talis-desk/docs/launch-gate/index.html",
   "live": {
-    "cycle_id": "cycle_launch_gate_pages_20260522_live_10",
+    "cycle_id": "cycle_launch_gate_preview_pages_20260522_live_10",
     "failed_gates": [
       "explicit_live_spend_allowed"
     ],
@@ -55,6 +55,57 @@
         "tools": 86
       },
       "tool_atlas_ok": true
+    },
+    "prompt_preview": {
+      "allowed_tool_candidates": [
+        "tic://tool/builtin/query_timeseries@v1",
+        "tic://tool/builtin/query_source_health@v1",
+        "tic://tool/agent_native/find_similar_setups@v1",
+        "tic://tool/builtin/compute_float_absorption_rate@v1",
+        "tic://tool/builtin/compute_wallet_stats@v1",
+        "tic://tool/builtin/solar_iv_regression@v1",
+        "tic://tool/builtin/query_claims_by_entity@v1",
+        "tic://tool/agent_native/find_confluence@v1",
+        "tic://tool/agent_native/replay_artifact_reasoning@v1",
+        "tic://tool/agent_native/semantic_search@v1"
+      ],
+      "artifacts": {
+        "json": "/private/tmp/talis-launch-gate-preview-pages-20260522/live_canary/prompt_outputs/live_scout_prompt_preview.json",
+        "system_prompt": "/private/tmp/talis-launch-gate-preview-pages-20260522/live_canary/prompt_outputs/live_scout_preview_system_prompt.md",
+        "user_prompt": "/private/tmp/talis-launch-gate-preview-pages-20260522/live_canary/prompt_outputs/live_scout_preview_user_prompt.md"
+      },
+      "bias_mode": "mean_reversion",
+      "entity": "kFLOKI",
+      "horizon": "1d",
+      "lens": "factor",
+      "market_evolve": {
+        "applied": true,
+        "experiment_arm": "control",
+        "experiment_id": "mexp_a43477df42a7f50d",
+        "generation": 0,
+        "program_id": "mprog_305b736b8ad24821",
+        "program_name": "rosewood_research_policy_v1"
+      },
+      "max_evidence_tools": 2,
+      "max_tool_iterations": 0,
+      "minimum_information_strings": 1,
+      "prompt_contract_pressure": "normal",
+      "prompt_variant": "flash_temporal_v4",
+      "source_family_targets": [
+        "hydromancer",
+        "our_hl_node",
+        "market_microstructure",
+        "web_attention",
+        "fundamentals_filings",
+        "macro_official"
+      ],
+      "status": "ready",
+      "system_prompt_chars": 2684,
+      "system_prompt_excerpt": "You are a Talis Flash scout in a scale repair arm. Study only the assigned market cell: entity, horizon, lens, bias, evidence, prior strings, and allowed tools in the user packet.\n\nGoal: emit exactly one top-level hypothesis that summarizes the strongest valid information_string, plus 1-2 decision-changing information_strings. Abstain only when every provided evidence packet is empty, stale for this horizon, or unsupported by the allowed sources.\n\nScale-repair rules:\n- Do not leave `hypothesis` empty when `information_strings` is non-empty.\n- Do not leave `information_strings` empty when at least one evidence packet is fresh enough to update a watchlist, verifier task, route decision, or gap repair.\n- If the evidence is thin, write a low-conviction map string with a concrete missing-edge kill_signal rather than vague prose.\n- Every string must include time_horizon, time_scale, observed_at, source_time_basis, expires_at, temporal_confidence, extends_or_contradicts, and would_change_decision=true.\n- Every evidence_refs value must cite a provided tool_call_log_id or source ref. If none exists, abstain and say the missing source in rationale_brief.\n- suggested_tools must be copied exactly from allowed_tool_candidates; if none are useful, return an empty list rather than inventing.\n- No prose outside JSON. Keep JSON small.\n\nReturn strict JSON only:\n{\n  \"hypothesis\": \"<falsifiable one-sentence claim, or empty string to abstain>\",\n  \"confidence\": 0.0,\n  \"rationale_brief\": \"<mechanism, max 180 chars>\",\n  \"suggested_tools\": [\"<copy tic://... from allowed_tool_candidates>\", \"...\"],\n  \"information_strings\": [\n    {\n      \"title\": \"<short title>\",\n      \"thesis\": \"<entity -> mechanism -> market implication>\",\n      \"entities_chain\": [\"<entity>\", \"<actor/venue/theme>\"],\n      \"mechanism\": \"<why this should reprice or update the map>\",\n      \"depth_layers\": [{\"layer\": 1, \"claim\": \"<direct effect>\"}, {\"layer\": 2, \"claim\": \"<second-order effect>\"}],\n      \"expected_outcome\": \"<observable confirmation>\",\n      \"time_horizon\": \"<tick|minute|hour|intraday|1d|1w|1m|structural>\",\n      \"time_scale\": \"<same grain as claim>\",\n      \"observed_at\": \"<ISO8601 source/tool observation time, or as_of_utc>\",\n      \"source_time_basis\": \"<event_time|ingestion_time|publication_time|valid_time|unknown>\",\n      \"kill_signal\": \"<what breaks the chain>\",\n      \"extends_or_contradicts\": \"<new|ex",
+      "theme": "hyperliquid_node_intelligence",
+      "tool_candidate_count": 10,
+      "user_prompt_chars": 1064,
+      "user_prompt_excerpt": "as_of_utc=2026-05-22T15:26:48.056230+00:00\nFreshness rule: for intraday/1d/1w horizons, do not use old historical dates as live catalyst evidence unless explicitly labeled as regime context.\n\nCell:\n  entity=kFLOKI\n  horizon=1d\n  lens=factor\n  bias_mode=mean_reversion\n  theme=hyperliquid_node_intelligence\n\natlas_policy:\n  Scouts may use any read-only approved atlas tool/source before the LLM call, under the evidence budget. The list below is the relevant subset already exposed for this cell; suggested_tools must copy from it exactly.\n\n\nallowed_tool_candidates:\n  tic://tool/builtin/query_timeseries@v1\n  tic://tool/builtin/query_source_health@v1\n  tic://tool/agent_native/find_similar_setups@v1\n  tic://tool/builtin/compute_float_absorption_rate@v1\n  tic://tool/builtin/compute_wallet_stats@v1\n  tic://tool/builtin/solar_iv_regression@v1\n  tic://tool/builtin/query_claims_by_entity@v1\n  tic://tool/agent_native/find_confluence@v1\n  tic://tool/agent_native/replay_artifact_reasoning@v1\n  tic://tool/agent_native/semantic_search@v1\n\nReturn one JSON object only."
     },
     "scale_decision": {
       "decision": "do_not_scale_yet",
@@ -98,10 +149,10 @@
   "stages": [
     {
       "artifacts": {
-        "SCOUT100_PROMPT_OUTPUT_DIR": "/private/tmp/talis-launch-gate-pages-20260522/deterministic_100/prompt_outputs",
+        "SCOUT100_PROMPT_OUTPUT_DIR": "/private/tmp/talis-launch-gate-preview-pages-20260522/deterministic_100/prompt_outputs",
         "SCOUT100_READY_FOR_LIVE_1000": "True",
-        "SCOUT100_REPORT_JSON": "/private/tmp/talis-launch-gate-pages-20260522/deterministic_100/prompt_outputs/100_scout_readiness_report.json",
-        "SCOUT100_REPORT_MD": "/private/tmp/talis-launch-gate-pages-20260522/deterministic_100/prompt_outputs/100_scout_readiness_report.md",
+        "SCOUT100_REPORT_JSON": "/private/tmp/talis-launch-gate-preview-pages-20260522/deterministic_100/prompt_outputs/100_scout_readiness_report.json",
+        "SCOUT100_REPORT_MD": "/private/tmp/talis-launch-gate-preview-pages-20260522/deterministic_100/prompt_outputs/100_scout_readiness_report.md",
         "SCOUT100_STATUS": "pass"
       },
       "command": [
@@ -114,26 +165,26 @@
         "--cost-cap-usd",
         "1.0",
         "--artifact-dir",
-        "/private/tmp/talis-launch-gate-pages-20260522/deterministic_100",
+        "/private/tmp/talis-launch-gate-preview-pages-20260522/deterministic_100",
         "--prompt-output-dir",
-        "/private/tmp/talis-launch-gate-pages-20260522/deterministic_100/prompt_outputs",
+        "/private/tmp/talis-launch-gate-preview-pages-20260522/deterministic_100/prompt_outputs",
         "--cycle-id",
-        "cycle_launch_gate_pages_20260522_deterministic_100"
+        "cycle_launch_gate_preview_pages_20260522_deterministic_100"
       ],
-      "elapsed_s": 3.102,
+      "elapsed_s": 2.792,
       "name": "deterministic_100",
       "report": {
-        "artifact_dir": "/private/tmp/talis-launch-gate-pages-20260522/deterministic_100",
+        "artifact_dir": "/private/tmp/talis-launch-gate-preview-pages-20260522/deterministic_100",
         "artifacts": {
-          "outputs": "/private/tmp/talis-launch-gate-pages-20260522/deterministic_100/prompt_outputs/100_scout_outputs.json",
-          "seeds": "/private/tmp/talis-launch-gate-pages-20260522/deterministic_100/prompt_outputs/100_scout_seeds.json"
+          "outputs": "/private/tmp/talis-launch-gate-preview-pages-20260522/deterministic_100/prompt_outputs/100_scout_outputs.json",
+          "seeds": "/private/tmp/talis-launch-gate-preview-pages-20260522/deterministic_100/prompt_outputs/100_scout_seeds.json"
         },
         "concurrency": 20,
         "cost_cap_usd": 1.0,
-        "cycle_id": "cycle_launch_gate_pages_20260522_deterministic_100",
-        "db_path": "/private/tmp/talis-launch-gate-pages-20260522/deterministic_100/desk-100-scout.db",
+        "cycle_id": "cycle_launch_gate_preview_pages_20260522_deterministic_100",
+        "db_path": "/private/tmp/talis-launch-gate-preview-pages-20260522/deterministic_100/desk-100-scout.db",
         "fallback": "anthropic:claude-haiku-4-5",
-        "generated_at": "2026-05-22T15:20:41.809310+00:00",
+        "generated_at": "2026-05-22T15:26:45.286362+00:00",
         "metrics": {
           "atlas": {
             "sources": 0,
@@ -251,8 +302,8 @@
             "suggested_seed_cells": 48,
             "valid_cell_count": 132048
           },
-          "cycle_id": "cycle_launch_gate_pages_20260522_deterministic_100",
-          "elapsed_s": 2.784,
+          "cycle_id": "cycle_launch_gate_preview_pages_20260522_deterministic_100",
+          "elapsed_s": 2.419,
           "geometry": {
             "cell_count": 80,
             "routing_queue_count": 24,
@@ -667,7 +718,7 @@
                 "y_frontier_pressure": 0.7139,
                 "z_tension": 0.28
               },
-              "cycle_id": "cycle_launch_gate_pages_20260522_deterministic_100",
+              "cycle_id": "cycle_launch_gate_preview_pages_20260522_deterministic_100",
               "entity": "XPL",
               "evidence_ref_count": 10,
               "horizon": "1q",
@@ -725,7 +776,7 @@
             "confluences": 12,
             "promoted_hypotheses": 8,
             "string_count": 337,
-            "synthesis_id": "isyn_596a819b881d",
+            "synthesis_id": "isyn_cc9293d264b1",
             "tensions": 0
           },
           "market_evolve": {
@@ -926,7 +977,7 @@
           "recommendation": "Run a 10-scout live-provider canary with the same seed packet before a 1,000 scout run.",
           "why": "This harness proves orchestration and storage, not provider quality or live data freshness."
         },
-        "prompt_output_dir": "/private/tmp/talis-launch-gate-pages-20260522/deterministic_100/prompt_outputs",
+        "prompt_output_dir": "/private/tmp/talis-launch-gate-preview-pages-20260522/deterministic_100/prompt_outputs",
         "readiness": {
           "failed_gates": [],
           "gates": {
@@ -955,7 +1006,7 @@
       },
       "returncode": 0,
       "stderr": "/Users/udaikhattar/talis-desk/talis_desk/tool_atlas/atlas.py:628: UserWarning: builtin_tool_scan_failed: No module named 'tic.desk.tools'; 'tic.desk' is not a package\n  warnings.warn(f\"builtin_tool_scan_failed: {e}\")\n/Users/udaikhattar/talis-desk/talis_desk/tool_atlas/atlas.py:697: UserWarning: source_scan_failed: No module named 'tic.desk.tools'; 'tic.desk' is not a package\n  warnings.warn(f\"source_scan_failed: {e}\")\n",
-      "stdout": "SCOUT100_STATUS=pass\nSCOUT100_READY_FOR_LIVE_1000=True\nSCOUT100_REPORT_JSON=/private/tmp/talis-launch-gate-pages-20260522/deterministic_100/prompt_outputs/100_scout_readiness_report.json\nSCOUT100_REPORT_MD=/private/tmp/talis-launch-gate-pages-20260522/deterministic_100/prompt_outputs/100_scout_readiness_report.md\nSCOUT100_PROMPT_OUTPUT_DIR=/private/tmp/talis-launch-gate-pages-20260522/deterministic_100/prompt_outputs\n"
+      "stdout": "SCOUT100_STATUS=pass\nSCOUT100_READY_FOR_LIVE_1000=True\nSCOUT100_REPORT_JSON=/private/tmp/talis-launch-gate-preview-pages-20260522/deterministic_100/prompt_outputs/100_scout_readiness_report.json\nSCOUT100_REPORT_MD=/private/tmp/talis-launch-gate-preview-pages-20260522/deterministic_100/prompt_outputs/100_scout_readiness_report.md\nSCOUT100_PROMPT_OUTPUT_DIR=/private/tmp/talis-launch-gate-preview-pages-20260522/deterministic_100/prompt_outputs\n"
     },
     {
       "artifacts": {
@@ -964,13 +1015,13 @@
       "command": [
         "/opt/homebrew/Caskroom/miniconda/base/bin/python",
         "scripts/export_100_scout_system_viewer.py",
-        "/private/tmp/talis-launch-gate-pages-20260522/deterministic_100/prompt_outputs",
+        "/private/tmp/talis-launch-gate-preview-pages-20260522/deterministic_100/prompt_outputs",
         "--report-json",
-        "/private/tmp/talis-launch-gate-pages-20260522/deterministic_100/prompt_outputs/100_scout_readiness_report.json",
+        "/private/tmp/talis-launch-gate-preview-pages-20260522/deterministic_100/prompt_outputs/100_scout_readiness_report.json",
         "--output-dir",
         "/Users/udaikhattar/talis-desk/docs/scout-system-test"
       ],
-      "elapsed_s": 0.049,
+      "elapsed_s": 0.053,
       "name": "viewer_export",
       "report": {},
       "returncode": 0,
@@ -979,10 +1030,10 @@
     },
     {
       "artifacts": {
-        "LIVE_CANARY_PROMPT_OUTPUT_DIR": "/private/tmp/talis-launch-gate-pages-20260522/live_canary/prompt_outputs",
+        "LIVE_CANARY_PROMPT_OUTPUT_DIR": "/private/tmp/talis-launch-gate-preview-pages-20260522/live_canary/prompt_outputs",
         "LIVE_CANARY_READY_FOR_NEXT_100": "False",
-        "LIVE_CANARY_REPORT_JSON": "/private/tmp/talis-launch-gate-pages-20260522/live_canary/prompt_outputs/live_scout_canary_report.json",
-        "LIVE_CANARY_REPORT_MD": "/private/tmp/talis-launch-gate-pages-20260522/live_canary/prompt_outputs/live_scout_canary_report.md",
+        "LIVE_CANARY_REPORT_JSON": "/private/tmp/talis-launch-gate-preview-pages-20260522/live_canary/prompt_outputs/live_scout_canary_report.json",
+        "LIVE_CANARY_REPORT_MD": "/private/tmp/talis-launch-gate-preview-pages-20260522/live_canary/prompt_outputs/live_scout_canary_report.md",
         "LIVE_CANARY_STATUS": "blocked"
       },
       "command": [
@@ -999,36 +1050,39 @@
         "--max-tool-iterations",
         "0",
         "--artifact-dir",
-        "/private/tmp/talis-launch-gate-pages-20260522/live_canary",
+        "/private/tmp/talis-launch-gate-preview-pages-20260522/live_canary",
         "--prompt-output-dir",
-        "/private/tmp/talis-launch-gate-pages-20260522/live_canary/prompt_outputs",
+        "/private/tmp/talis-launch-gate-preview-pages-20260522/live_canary/prompt_outputs",
         "--prompt-variant",
         "flash_temporal_v4",
         "--cycle-id",
-        "cycle_launch_gate_pages_20260522_live_10"
+        "cycle_launch_gate_preview_pages_20260522_live_10"
       ],
-      "elapsed_s": 2.889,
+      "elapsed_s": 2.894,
       "name": "live_canary_or_preflight",
       "report": {
-        "artifact_dir": "/private/tmp/talis-launch-gate-pages-20260522/live_canary",
+        "artifact_dir": "/private/tmp/talis-launch-gate-preview-pages-20260522/live_canary",
         "artifacts": {
-          "seeds": "/private/tmp/talis-launch-gate-pages-20260522/live_canary/prompt_outputs/live_scout_canary_seeds.json"
+          "preview_system_prompt": "/private/tmp/talis-launch-gate-preview-pages-20260522/live_canary/prompt_outputs/live_scout_preview_system_prompt.md",
+          "preview_user_prompt": "/private/tmp/talis-launch-gate-preview-pages-20260522/live_canary/prompt_outputs/live_scout_preview_user_prompt.md",
+          "prompt_preview": "/private/tmp/talis-launch-gate-preview-pages-20260522/live_canary/prompt_outputs/live_scout_prompt_preview.json",
+          "seeds": "/private/tmp/talis-launch-gate-preview-pages-20260522/live_canary/prompt_outputs/live_scout_canary_seeds.json"
         },
         "concurrency": 1,
         "cost_cap_usd": 0.1,
-        "cycle_id": "cycle_launch_gate_pages_20260522_live_10",
-        "db_path": "/private/tmp/talis-launch-gate-pages-20260522/live_canary/desk-live-canary.db",
+        "cycle_id": "cycle_launch_gate_preview_pages_20260522_live_10",
+        "db_path": "/private/tmp/talis-launch-gate-preview-pages-20260522/live_canary/desk-live-canary.db",
         "fallback": "anthropic:claude-haiku-4-5",
-        "generated_at": "2026-05-22T15:20:44.471917+00:00",
+        "generated_at": "2026-05-22T15:26:48.056605+00:00",
         "max_tool_iterations": 0,
         "metrics": {
-          "elapsed_s": 2.414
+          "elapsed_s": 2.513
         },
         "mode": "preflight_no_live_spend",
         "model": "deepseek:v4-flash",
         "n_scouts_requested": 10,
         "preflight": {
-          "cycle_id": "cycle_launch_gate_pages_20260522_live_10",
+          "cycle_id": "cycle_launch_gate_preview_pages_20260522_live_10",
           "market_universe": {
             "entity_count": 265,
             "source_quality": "live"
@@ -1045,7 +1099,115 @@
           },
           "tool_atlas_ok": true
         },
-        "prompt_output_dir": "/private/tmp/talis-launch-gate-pages-20260522/live_canary/prompt_outputs",
+        "prompt_output_dir": "/private/tmp/talis-launch-gate-preview-pages-20260522/live_canary/prompt_outputs",
+        "prompt_preview": {
+          "artifacts": {
+            "json": "/private/tmp/talis-launch-gate-preview-pages-20260522/live_canary/prompt_outputs/live_scout_prompt_preview.json",
+            "system_prompt": "/private/tmp/talis-launch-gate-preview-pages-20260522/live_canary/prompt_outputs/live_scout_preview_system_prompt.md",
+            "user_prompt": "/private/tmp/talis-launch-gate-preview-pages-20260522/live_canary/prompt_outputs/live_scout_preview_user_prompt.md"
+          },
+          "market_evolve": {
+            "applied": true,
+            "experiment_arm": "control",
+            "experiment_id": "mexp_a43477df42a7f50d",
+            "generation": 0,
+            "program_id": "mprog_305b736b8ad24821",
+            "program_name": "rosewood_research_policy_v1"
+          },
+          "minimum_information_strings": 1,
+          "prompt_contract_pressure": "normal",
+          "prompt_variant": "flash_temporal_v4",
+          "schema_version": "talis_live_scout_prompt_preview_v1",
+          "seed": {
+            "asset_class": "hyperliquid_perp",
+            "bias_mode": "mean_reversion",
+            "coverage_penalty": 1.0,
+            "entity": "kFLOKI",
+            "frontier_boost": 1.0,
+            "horizon": "1d",
+            "lens": "factor",
+            "payload": {
+              "auto_promote_high_priority_tools": false,
+              "learned_tool_priority_boost": 0.0,
+              "market_evolve_applied": true,
+              "market_evolve_experiment_arm": "control",
+              "market_evolve_experiment_id": "mexp_a43477df42a7f50d",
+              "market_evolve_generation": 0,
+              "market_evolve_parent_program_ids": [],
+              "market_evolve_program_id": "mprog_305b736b8ad24821",
+              "market_evolve_program_name": "rosewood_research_policy_v1",
+              "market_evolve_program_status": "active",
+              "max_evidence_tools": 2,
+              "max_followup_tools_per_iteration": 1,
+              "max_tool_iterations": 0,
+              "max_tool_promotions_per_cycle": 3,
+              "prefer_learned_tools": false,
+              "prompt_contract_pressure": "normal",
+              "prompt_min_information_strings": 1,
+              "prompt_require_evidence_refs": true,
+              "prompt_require_kill_signal": true,
+              "prompt_require_mechanism": true,
+              "prompt_variant": "flash_temporal_v4",
+              "readiness_slice": true,
+              "source": "theme_injection",
+              "source_family_targets": [
+                "hydromancer",
+                "our_hl_node",
+                "market_microstructure",
+                "web_attention",
+                "fundamentals_filings",
+                "macro_official"
+              ],
+              "tool_candidate_limit": 10,
+              "tool_candidates": [
+                "tic://tool/builtin/query_timeseries@v1",
+                "tic://tool/builtin/query_source_health@v1",
+                "tic://tool/agent_native/find_similar_setups@v1",
+                "tic://tool/builtin/compute_float_absorption_rate@v1",
+                "tic://tool/builtin/compute_wallet_stats@v1",
+                "tic://tool/builtin/solar_iv_regression@v1",
+                "tic://tool/builtin/query_claims_by_entity@v1",
+                "tic://tool/agent_native/find_confluence@v1",
+                "tic://tool/agent_native/replay_artifact_reasoning@v1",
+                "tic://tool/agent_native/semantic_search@v1"
+              ]
+            },
+            "seed_id": "seed_cycle_launch_gate_preview_pages_20260522_live_10_T_0000",
+            "theme": "hyperliquid_node_intelligence",
+            "weight": 1.0
+          },
+          "status": "ready",
+          "system_prompt": "You are a Talis Flash scout in a scale repair arm. Study only the assigned market cell: entity, horizon, lens, bias, evidence, prior strings, and allowed tools in the user packet.\n\nGoal: emit exactly one top-level hypothesis that summarizes the strongest valid information_string, plus 1-2 decision-changing information_strings. Abstain only when every provided evidence packet is empty, stale for this horizon, or unsupported by the allowed sources.\n\nScale-repair rules:\n- Do not leave `hypothesis` empty when `information_strings` is non-empty.\n- Do not leave `information_strings` empty when at least one evidence packet is fresh enough to update a watchlist, verifier task, route decision, or gap repair.\n- If the evidence is thin, write a low-conviction map string with a concrete missing-edge kill_signal rather than vague prose.\n- Every string must include time_horizon, time_scale, observed_at, source_time_basis, expires_at, temporal_confidence, extends_or_contradicts, and would_change_decision=true.\n- Every evidence_refs value must cite a provided tool_call_log_id or source ref. If none exists, abstain and say the missing source in rationale_brief.\n- suggested_tools must be copied exactly from allowed_tool_candidates; if none are useful, return an empty list rather than inventing.\n- No prose outside JSON. Keep JSON small.\n\nReturn strict JSON only:\n{\n  \"hypothesis\": \"<falsifiable one-sentence claim, or empty string to abstain>\",\n  \"confidence\": 0.0,\n  \"rationale_brief\": \"<mechanism, max 180 chars>\",\n  \"suggested_tools\": [\"<copy tic://... from allowed_tool_candidates>\", \"...\"],\n  \"information_strings\": [\n    {\n      \"title\": \"<short title>\",\n      \"thesis\": \"<entity -> mechanism -> market implication>\",\n      \"entities_chain\": [\"<entity>\", \"<actor/venue/theme>\"],\n      \"mechanism\": \"<why this should reprice or update the map>\",\n      \"depth_layers\": [{\"layer\": 1, \"claim\": \"<direct effect>\"}, {\"layer\": 2, \"claim\": \"<second-order effect>\"}],\n      \"expected_outcome\": \"<observable confirmation>\",\n      \"time_horizon\": \"<tick|minute|hour|intraday|1d|1w|1m|structural>\",\n      \"time_scale\": \"<same grain as claim>\",\n      \"observed_at\": \"<ISO8601 source/tool observation time, or as_of_utc>\",\n      \"source_time_basis\": \"<event_time|ingestion_time|publication_time|valid_time|unknown>\",\n      \"kill_signal\": \"<what breaks the chain>\",\n      \"extends_or_contradicts\": \"<new|extends|contradicts|abandons>\",\n      \"would_change_decision\": true,\n      \"expires_at\": \"<when stale>\",\n      \"crowdedness\": 0.0,\n      \"conviction\": 0.0,\n      \"novelty_score\": 0.0,\n      \"evidence_refs\": [\"<tool_call_log_id/source ref>\"],\n      \"temporal_confidence\": 0.0\n    }\n  ]\n}",
+          "system_prompt_chars": 2684,
+          "tool_policy": {
+            "allowed_tool_candidates": [
+              "tic://tool/builtin/query_timeseries@v1",
+              "tic://tool/builtin/query_source_health@v1",
+              "tic://tool/agent_native/find_similar_setups@v1",
+              "tic://tool/builtin/compute_float_absorption_rate@v1",
+              "tic://tool/builtin/compute_wallet_stats@v1",
+              "tic://tool/builtin/solar_iv_regression@v1",
+              "tic://tool/builtin/query_claims_by_entity@v1",
+              "tic://tool/agent_native/find_confluence@v1",
+              "tic://tool/agent_native/replay_artifact_reasoning@v1",
+              "tic://tool/agent_native/semantic_search@v1"
+            ],
+            "max_evidence_tools": 2,
+            "max_tool_iterations": 0,
+            "prefer_learned_tools": false,
+            "source_family_targets": [
+              "hydromancer",
+              "our_hl_node",
+              "market_microstructure",
+              "web_attention",
+              "fundamentals_filings",
+              "macro_official"
+            ],
+            "tool_candidate_count": 10
+          },
+          "user_prompt": "as_of_utc=2026-05-22T15:26:48.056230+00:00\nFreshness rule: for intraday/1d/1w horizons, do not use old historical dates as live catalyst evidence unless explicitly labeled as regime context.\n\nCell:\n  entity=kFLOKI\n  horizon=1d\n  lens=factor\n  bias_mode=mean_reversion\n  theme=hyperliquid_node_intelligence\n\natlas_policy:\n  Scouts may use any read-only approved atlas tool/source before the LLM call, under the evidence budget. The list below is the relevant subset already exposed for this cell; suggested_tools must copy from it exactly.\n\n\nallowed_tool_candidates:\n  tic://tool/builtin/query_timeseries@v1\n  tic://tool/builtin/query_source_health@v1\n  tic://tool/agent_native/find_similar_setups@v1\n  tic://tool/builtin/compute_float_absorption_rate@v1\n  tic://tool/builtin/compute_wallet_stats@v1\n  tic://tool/builtin/solar_iv_regression@v1\n  tic://tool/builtin/query_claims_by_entity@v1\n  tic://tool/agent_native/find_confluence@v1\n  tic://tool/agent_native/replay_artifact_reasoning@v1\n  tic://tool/agent_native/semantic_search@v1\n\nReturn one JSON object only.",
+          "user_prompt_chars": 1064
+        },
         "prompt_variant_override": "flash_temporal_v4",
         "provider_timeout_s": 45.0,
         "scale_decision": {
@@ -1074,7 +1236,7 @@
       },
       "returncode": 0,
       "stderr": "",
-      "stdout": "LIVE_CANARY_STATUS=blocked\nLIVE_CANARY_READY_FOR_NEXT_100=False\nLIVE_CANARY_REPORT_JSON=/private/tmp/talis-launch-gate-pages-20260522/live_canary/prompt_outputs/live_scout_canary_report.json\nLIVE_CANARY_REPORT_MD=/private/tmp/talis-launch-gate-pages-20260522/live_canary/prompt_outputs/live_scout_canary_report.md\nLIVE_CANARY_PROMPT_OUTPUT_DIR=/private/tmp/talis-launch-gate-pages-20260522/live_canary/prompt_outputs\n"
+      "stdout": "LIVE_CANARY_STATUS=blocked\nLIVE_CANARY_READY_FOR_NEXT_100=False\nLIVE_CANARY_REPORT_JSON=/private/tmp/talis-launch-gate-preview-pages-20260522/live_canary/prompt_outputs/live_scout_canary_report.json\nLIVE_CANARY_REPORT_MD=/private/tmp/talis-launch-gate-preview-pages-20260522/live_canary/prompt_outputs/live_scout_canary_report.md\nLIVE_CANARY_PROMPT_OUTPUT_DIR=/private/tmp/talis-launch-gate-preview-pages-20260522/live_canary/prompt_outputs\n"
     }
   ],
   "tournament": {
