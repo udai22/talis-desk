@@ -1,0 +1,1088 @@
+{
+  "allow_live_spend": false,
+  "artifact_dir": "/private/tmp/talis-launch-gate-pages-20260522",
+  "decision": {
+    "allowed_next_step": "live_10_scout_canary",
+    "exit_ok": true,
+    "human_authorization_required": true,
+    "next_command": "PYTHONPATH=. python scripts/run_scout_system_launch_gate.py --allow-live-spend --live-scouts 10 --live-cost-cap-usd 0.10 --live-concurrency 1",
+    "reason": "The deterministic layer and live preflight are clean. The next step requires explicit approval to spend on a tiny live canary.",
+    "status": "ready_for_authorized_live_canary"
+  },
+  "deterministic": {
+    "cycle_id": "cycle_launch_gate_pages_20260522_deterministic_100",
+    "failed_gates": [],
+    "metrics": {
+      "effective_unique_cell_ratio": 1.0,
+      "geometry_cells": 80,
+      "market_evolve_decision": "reject_candidate",
+      "market_evolve_pairs": 20,
+      "routing_tasks": 24,
+      "scouts_completed": 100,
+      "strings": 337,
+      "strings_per_scout": 3.37,
+      "success_rate": 1.0
+    },
+    "ready_for_live_1000": true,
+    "status": "pass"
+  },
+  "generated_at": "2026-05-22T15:20:44.778785+00:00",
+  "launch_viewer_index": "/Users/udaikhattar/talis-desk/docs/launch-gate/index.html",
+  "live": {
+    "cycle_id": "cycle_launch_gate_pages_20260522_live_10",
+    "failed_gates": [
+      "explicit_live_spend_allowed"
+    ],
+    "metrics": {
+      "estimated_cost_usd": 0,
+      "scouts_completed": 0,
+      "strings": 0,
+      "strings_per_scout": 0,
+      "success_rate": 0
+    },
+    "mode": "preflight_no_live_spend",
+    "preflight": {
+      "market_universe": {
+        "entity_count": 265,
+        "source_quality": "live"
+      },
+      "market_universe_ok": true,
+      "provider_import_ok": true,
+      "tic_root_ok": true,
+      "tool_atlas": {
+        "skills": 0,
+        "sources": 89,
+        "tools": 86
+      },
+      "tool_atlas_ok": true
+    },
+    "scale_decision": {
+      "decision": "do_not_scale_yet",
+      "next_step": "Run this same script with --allow-live-spend under a tiny cost cap, then inspect the live canary gates."
+    },
+    "status": "blocked"
+  },
+  "proof_ladder": [
+    {
+      "id": "deterministic_100_scout_system",
+      "passed": true,
+      "summary": "100 scouts traverse seed generation, scout harness, storage, synthesis, geometry, self-healing, and MarketEvolve without provider spend."
+    },
+    {
+      "id": "live_provider_preflight",
+      "passed": true,
+      "summary": "Provider import, tool atlas, and market universe are present before spending."
+    },
+    {
+      "id": "explicit_spend_gate",
+      "passed": false,
+      "summary": "No paid model calls happen unless --allow-live-spend is present."
+    },
+    {
+      "id": "live_canary_quality",
+      "passed": false,
+      "summary": "Live scouts must pass provider, evidence, string-yield, duplicate, synthesis, geometry, and self-healing gates."
+    },
+    {
+      "id": "tournament_promotion",
+      "passed": false,
+      "summary": "The tournament is the only authority for 100/1,000-scout spend promotion."
+    },
+    {
+      "id": "repeatability_before_schedule",
+      "passed": false,
+      "summary": "Scheduled shadow production requires repeat 1,000-scout evidence across independent runs."
+    }
+  ],
+  "schema_version": "talis_scout_system_launch_gate_v1",
+  "stages": [
+    {
+      "artifacts": {
+        "SCOUT100_PROMPT_OUTPUT_DIR": "/private/tmp/talis-launch-gate-pages-20260522/deterministic_100/prompt_outputs",
+        "SCOUT100_READY_FOR_LIVE_1000": "True",
+        "SCOUT100_REPORT_JSON": "/private/tmp/talis-launch-gate-pages-20260522/deterministic_100/prompt_outputs/100_scout_readiness_report.json",
+        "SCOUT100_REPORT_MD": "/private/tmp/talis-launch-gate-pages-20260522/deterministic_100/prompt_outputs/100_scout_readiness_report.md",
+        "SCOUT100_STATUS": "pass"
+      },
+      "command": [
+        "/opt/homebrew/Caskroom/miniconda/base/bin/python",
+        "scripts/run_100_scout_readiness_slice.py",
+        "--n-scouts",
+        "100",
+        "--concurrency",
+        "20",
+        "--cost-cap-usd",
+        "1.0",
+        "--artifact-dir",
+        "/private/tmp/talis-launch-gate-pages-20260522/deterministic_100",
+        "--prompt-output-dir",
+        "/private/tmp/talis-launch-gate-pages-20260522/deterministic_100/prompt_outputs",
+        "--cycle-id",
+        "cycle_launch_gate_pages_20260522_deterministic_100"
+      ],
+      "elapsed_s": 3.102,
+      "name": "deterministic_100",
+      "report": {
+        "artifact_dir": "/private/tmp/talis-launch-gate-pages-20260522/deterministic_100",
+        "artifacts": {
+          "outputs": "/private/tmp/talis-launch-gate-pages-20260522/deterministic_100/prompt_outputs/100_scout_outputs.json",
+          "seeds": "/private/tmp/talis-launch-gate-pages-20260522/deterministic_100/prompt_outputs/100_scout_seeds.json"
+        },
+        "concurrency": 20,
+        "cost_cap_usd": 1.0,
+        "cycle_id": "cycle_launch_gate_pages_20260522_deterministic_100",
+        "db_path": "/private/tmp/talis-launch-gate-pages-20260522/deterministic_100/desk-100-scout.db",
+        "fallback": "anthropic:claude-haiku-4-5",
+        "generated_at": "2026-05-22T15:20:41.809310+00:00",
+        "metrics": {
+          "atlas": {
+            "sources": 0,
+            "tools": 2
+          },
+          "coverage": {
+            "budget_lanes": [
+              {
+                "entity_focus": "hyperliquid_perp",
+                "example_gap_ids": [
+                  "gap_3980fac730",
+                  "gap_915592cec9",
+                  "gap_f1cf4bd395",
+                  "gap_3534dfbd01",
+                  "gap_b495014e76"
+                ],
+                "horizon_focus": "intraday",
+                "lane_id": "lane_143ce61e25",
+                "lens_focus": "on_chain",
+                "reason": "Top unresolved hyperliquid_perp gaps concentrate in intraday/on_chain.",
+                "scout_count": 18
+              },
+              {
+                "entity_focus": "hyperliquid_perp",
+                "example_gap_ids": [
+                  "gap_e2bfe0ac9b",
+                  "gap_4e41e88fae",
+                  "gap_45619a9745",
+                  "gap_52e54280c3",
+                  "gap_e496a1fe5f"
+                ],
+                "horizon_focus": "intraday",
+                "lane_id": "lane_a16f39009c",
+                "lens_focus": "microstructure",
+                "reason": "Top unresolved hyperliquid_perp gaps concentrate in intraday/microstructure.",
+                "scout_count": 18
+              },
+              {
+                "entity_focus": "hyperliquid_perp",
+                "example_gap_ids": [
+                  "gap_b8da20d634",
+                  "gap_ae76d58a0c",
+                  "gap_c59ec4e89c",
+                  "gap_e55512e0ab",
+                  "gap_6fc8b400e2"
+                ],
+                "horizon_focus": "intraday",
+                "lane_id": "lane_6d50897adc",
+                "lens_focus": "smart_money",
+                "reason": "Top unresolved hyperliquid_perp gaps concentrate in intraday/smart_money.",
+                "scout_count": 18
+              },
+              {
+                "entity_focus": "hyperliquid_perp",
+                "example_gap_ids": [
+                  "gap_dcecd135ed",
+                  "gap_5de2aaeb12",
+                  "gap_4b44a1c9a9",
+                  "gap_88e5499359",
+                  "gap_1fcd6a63b4"
+                ],
+                "horizon_focus": "1d",
+                "lane_id": "lane_f6d9a54b95",
+                "lens_focus": "on_chain",
+                "reason": "Top unresolved hyperliquid_perp gaps concentrate in 1d/on_chain.",
+                "scout_count": 18
+              },
+              {
+                "entity_focus": "hyperliquid_perp",
+                "example_gap_ids": [
+                  "gap_4c6266947d",
+                  "gap_262cdb51f0",
+                  "gap_6e2db6e75b",
+                  "gap_925b5f8dda"
+                ],
+                "horizon_focus": "intraday",
+                "lane_id": "lane_26acf00604",
+                "lens_focus": "anomaly",
+                "reason": "Top unresolved hyperliquid_perp gaps concentrate in intraday/anomaly.",
+                "scout_count": 9
+              },
+              {
+                "entity_focus": "hyperliquid_perp",
+                "example_gap_ids": [
+                  "gap_3d30175c30",
+                  "gap_482289b8c4",
+                  "gap_bbad3003d9",
+                  "gap_0a006adf94"
+                ],
+                "horizon_focus": "1d",
+                "lane_id": "lane_8d6e4ae69c",
+                "lens_focus": "microstructure",
+                "reason": "Top unresolved hyperliquid_perp gaps concentrate in 1d/microstructure.",
+                "scout_count": 9
+              },
+              {
+                "entity_focus": "hyperliquid_perp",
+                "example_gap_ids": [
+                  "gap_f2c3cc3348",
+                  "gap_fbdc026247",
+                  "gap_c63858b2bd",
+                  "gap_9f9136e39f"
+                ],
+                "horizon_focus": "1d",
+                "lane_id": "lane_5c90d2ab44",
+                "lens_focus": "smart_money",
+                "reason": "Top unresolved hyperliquid_perp gaps concentrate in 1d/smart_money.",
+                "scout_count": 10
+              }
+            ],
+            "coverage_ratio": 0.000606,
+            "covered_count": 80,
+            "missing_count": 131968,
+            "ranked_gaps": 64,
+            "suggested_seed_cells": 48,
+            "valid_cell_count": 132048
+          },
+          "cycle_id": "cycle_launch_gate_pages_20260522_deterministic_100",
+          "elapsed_s": 2.784,
+          "geometry": {
+            "cell_count": 80,
+            "routing_queue_count": 24,
+            "top_actions": [
+              {
+                "action": "send_to_verifier_council",
+                "cell_key": "XPL|1q|polymarket|",
+                "coordinates": {
+                  "color_fragility": 0.0,
+                  "size_support_mass": 0.7002,
+                  "x_source_independence": 1.0,
+                  "y_frontier_pressure": 0.7139,
+                  "z_tension": 0.28
+                },
+                "entity": "XPL",
+                "horizon": "1q",
+                "lens": "polymarket",
+                "metrics": {
+                  "avg_attention": 0.6776,
+                  "avg_conviction": 0.5835,
+                  "avg_crowdedness": 0.2975,
+                  "avg_novelty": 0.7155,
+                  "contradiction_density": 0.0,
+                  "evidence_coverage": 1.0,
+                  "fragility": 0.0,
+                  "frontier_pressure": 0.7139,
+                  "geometry_weight_fragility_penalty": 0.18,
+                  "geometry_weight_frontier_pressure": 0.38,
+                  "geometry_weight_source_independence": 0.0,
+                  "geometry_weight_support_mass": 0.14,
+                  "geometry_weight_tension": 0.24,
+                  "geometry_weight_verifier_readiness": 0.24,
+                  "novelty_pressure": 0.6283,
+                  "routing_threshold_repair_fragility_min": 0.55,
+                  "routing_threshold_tension_min": 0.45,
+                  "routing_threshold_tension_readiness_min": 0.45,
+                  "routing_threshold_verify_allow_fragility_max": 1.0,
+                  "routing_threshold_verify_readiness_min": 0.55,
+                  "routing_threshold_verify_source_independence_min": 0.0,
+                  "routing_threshold_verify_trade_scream_min": 0.62,
+                  "routing_threshold_widen_scouts_novelty_min": 0.35,
+                  "routing_threshold_widen_sources_frontier_min": 0.5,
+                  "routing_threshold_widen_sources_source_max": 0.45,
+                  "scout_independence": 0.5,
+                  "source_entropy": 1.0,
+                  "source_independence": 1.0,
+                  "support_mass": 0.7002,
+                  "tension": 0.28,
+                  "trade_scream_score": 0.6381,
+                  "verifier_readiness": 0.8401
+                },
+                "missing_edges": [
+                  "claim -> verifier_decision",
+                  "frontier_cell -> next_receptive_field"
+                ],
+                "owner": "verifier",
+                "priority_score": 0.5527,
+                "quality_flags": [
+                  "frontier_trade_candidate"
+                ],
+                "reason": "The geometry is both high-signal and verifier-ready.",
+                "route_directive": "verify_now",
+                "route_task_id": "shape_task_a5f778dcd766",
+                "success_gate": "2_of_3 verifier majority with independent source receipts",
+                "suggested_next_tools": [
+                  "tic://tool/builtin/query_source_health@v1",
+                  "tic://tool/builtin/query_timeseries@v1"
+                ],
+                "theme": ""
+              },
+              {
+                "action": "send_to_verifier_council",
+                "cell_key": "DYDX|1w|sentiment|calendar_catalyst",
+                "coordinates": {
+                  "color_fragility": 0.0,
+                  "size_support_mass": 0.6888,
+                  "x_source_independence": 1.0,
+                  "y_frontier_pressure": 0.7059,
+                  "z_tension": 0.28
+                },
+                "entity": "DYDX",
+                "horizon": "1w",
+                "lens": "sentiment",
+                "metrics": {
+                  "avg_attention": 0.666,
+                  "avg_conviction": 0.5663,
+                  "avg_crowdedness": 0.3025,
+                  "avg_novelty": 0.705,
+                  "contradiction_density": 0.0,
+                  "evidence_coverage": 1.0,
+                  "fragility": 0.0,
+                  "frontier_pressure": 0.7059,
+                  "geometry_weight_fragility_penalty": 0.18,
+                  "geometry_weight_frontier_pressure": 0.38,
+                  "geometry_weight_source_independence": 0.0,
+                  "geometry_weight_support_mass": 0.14,
+                  "geometry_weight_tension": 0.24,
+                  "geometry_weight_verifier_readiness": 0.24,
+                  "novelty_pressure": 0.6147,
+                  "routing_threshold_repair_fragility_min": 0.55,
+                  "routing_threshold_tension_min": 0.45,
+                  "routing_threshold_tension_readiness_min": 0.45,
+                  "routing_threshold_verify_allow_fragility_max": 1.0,
+                  "routing_threshold_verify_readiness_min": 0.55,
+                  "routing_threshold_verify_source_independence_min": 0.0,
+                  "routing_threshold_verify_trade_scream_min": 0.62,
+                  "routing_threshold_widen_scouts_novelty_min": 0.35,
+                  "routing_threshold_widen_sources_frontier_min": 0.5,
+                  "routing_threshold_widen_sources_source_max": 0.45,
+                  "scout_independence": 0.5,
+                  "source_entropy": 1.0,
+                  "source_independence": 1.0,
+                  "support_mass": 0.6888,
+                  "tension": 0.28,
+                  "trade_scream_score": 0.6327,
+                  "verifier_readiness": 0.8366
+                },
+                "missing_edges": [
+                  "claim -> verifier_decision",
+                  "frontier_cell -> next_receptive_field"
+                ],
+                "owner": "verifier",
+                "priority_score": 0.5487,
+                "quality_flags": [
+                  "frontier_trade_candidate"
+                ],
+                "reason": "The geometry is both high-signal and verifier-ready.",
+                "route_directive": "verify_now",
+                "route_task_id": "shape_task_9ebaad0ceee4",
+                "success_gate": "2_of_3 verifier majority with independent source receipts",
+                "suggested_next_tools": [
+                  "tic://tool/builtin/query_source_health@v1",
+                  "tic://tool/builtin/query_timeseries@v1"
+                ],
+                "theme": "calendar_catalyst"
+              },
+              {
+                "action": "replicate_with_independent_scouts",
+                "cell_key": "GRIFFAIN|1m|sentiment|",
+                "coordinates": {
+                  "color_fragility": 0.0,
+                  "size_support_mass": 0.6899,
+                  "x_source_independence": 1.0,
+                  "y_frontier_pressure": 0.6825,
+                  "z_tension": 0.28
+                },
+                "entity": "GRIFFAIN",
+                "horizon": "1m",
+                "lens": "sentiment",
+                "metrics": {
+                  "avg_attention": 0.6697,
+                  "avg_conviction": 0.561,
+                  "avg_crowdedness": 0.2825,
+                  "avg_novelty": 0.7155,
+                  "contradiction_density": 0.0,
+                  "evidence_coverage": 1.0,
+                  "fragility": 0.0,
+                  "frontier_pressure": 0.6825,
+                  "geometry_weight_fragility_penalty": 0.18,
+                  "geometry_weight_frontier_pressure": 0.38,
+                  "geometry_weight_source_independence": 0.0,
+                  "geometry_weight_support_mass": 0.14,
+                  "geometry_weight_tension": 0.24,
+                  "geometry_weight_verifier_readiness": 0.24,
+                  "novelty_pressure": 0.6417,
+                  "routing_threshold_repair_fragility_min": 0.55,
+                  "routing_threshold_tension_min": 0.45,
+                  "routing_threshold_tension_readiness_min": 0.45,
+                  "routing_threshold_verify_allow_fragility_max": 1.0,
+                  "routing_threshold_verify_readiness_min": 0.55,
+                  "routing_threshold_verify_source_independence_min": 0.0,
+                  "routing_threshold_verify_trade_scream_min": 0.62,
+                  "routing_threshold_widen_scouts_novelty_min": 0.35,
+                  "routing_threshold_widen_sources_frontier_min": 0.5,
+                  "routing_threshold_widen_sources_source_max": 0.45,
+                  "scout_independence": 0.25,
+                  "source_entropy": 1.0,
+                  "source_independence": 1.0,
+                  "support_mass": 0.6899,
+                  "tension": 0.28,
+                  "trade_scream_score": 0.6156,
+                  "verifier_readiness": 0.802
+                },
+                "missing_edges": [
+                  "frontier_cell -> next_receptive_field",
+                  "single_scout_cell -> independent_replication"
+                ],
+                "owner": "seed_router",
+                "priority_score": 0.5318,
+                "quality_flags": [
+                  "multi_string_single_scout_cell",
+                  "single_scout_cell"
+                ],
+                "reason": "The cell is novel but still needs independent scout replication.",
+                "route_directive": "widen_scouts",
+                "route_task_id": "shape_task_1cd6ecd483be",
+                "success_gate": "second scout confirms, contradicts, or kills the string",
+                "suggested_next_tools": [
+                  "tic://tool/builtin/query_events_recent@v1",
+                  "tic://tool/builtin/query_timeseries@v1"
+                ],
+                "theme": ""
+              },
+              {
+                "action": "replicate_with_independent_scouts",
+                "cell_key": "ARB|1d|polymarket|",
+                "coordinates": {
+                  "color_fragility": 0.0,
+                  "size_support_mass": 0.6918,
+                  "x_source_independence": 1.0,
+                  "y_frontier_pressure": 0.6734,
+                  "z_tension": 0.28
+                },
+                "entity": "ARB",
+                "horizon": "1d",
+                "lens": "polymarket",
+                "metrics": {
+                  "avg_attention": 0.6689,
+                  "avg_conviction": 0.5713,
+                  "avg_crowdedness": 0.2975,
+                  "avg_novelty": 0.705,
+                  "contradiction_density": 0.0,
+                  "evidence_coverage": 1.0,
+                  "fragility": 0.0,
+                  "frontier_pressure": 0.6734,
+                  "geometry_weight_fragility_penalty": 0.18,
+                  "geometry_weight_frontier_pressure": 0.38,
+                  "geometry_weight_source_independence": 0.0,
+                  "geometry_weight_support_mass": 0.14,
+                  "geometry_weight_tension": 0.24,
+                  "geometry_weight_verifier_readiness": 0.24,
+                  "novelty_pressure": 0.6191,
+                  "routing_threshold_repair_fragility_min": 0.55,
+                  "routing_threshold_tension_min": 0.45,
+                  "routing_threshold_tension_readiness_min": 0.45,
+                  "routing_threshold_verify_allow_fragility_max": 1.0,
+                  "routing_threshold_verify_readiness_min": 0.55,
+                  "routing_threshold_verify_source_independence_min": 0.0,
+                  "routing_threshold_verify_trade_scream_min": 0.62,
+                  "routing_threshold_widen_scouts_novelty_min": 0.35,
+                  "routing_threshold_widen_sources_frontier_min": 0.5,
+                  "routing_threshold_widen_sources_source_max": 0.45,
+                  "scout_independence": 0.25,
+                  "source_entropy": 1.0,
+                  "source_independence": 1.0,
+                  "support_mass": 0.6918,
+                  "tension": 0.28,
+                  "trade_scream_score": 0.6126,
+                  "verifier_readiness": 0.8026
+                },
+                "missing_edges": [
+                  "frontier_cell -> next_receptive_field",
+                  "single_scout_cell -> independent_replication"
+                ],
+                "owner": "seed_router",
+                "priority_score": 0.5292,
+                "quality_flags": [
+                  "multi_string_single_scout_cell",
+                  "single_scout_cell"
+                ],
+                "reason": "The cell is novel but still needs independent scout replication.",
+                "route_directive": "widen_scouts",
+                "route_task_id": "shape_task_99ac0b62888e",
+                "success_gate": "second scout confirms, contradicts, or kills the string",
+                "suggested_next_tools": [
+                  "tic://tool/builtin/query_events_recent@v1",
+                  "tic://tool/builtin/query_timeseries@v1"
+                ],
+                "theme": ""
+              },
+              {
+                "action": "replicate_with_independent_scouts",
+                "cell_key": "NEAR|1m|sentiment|",
+                "coordinates": {
+                  "color_fragility": 0.0,
+                  "size_support_mass": 0.661,
+                  "x_source_independence": 1.0,
+                  "y_frontier_pressure": 0.6489,
+                  "z_tension": 0.2749
+                },
+                "entity": "NEAR",
+                "horizon": "1m",
+                "lens": "sentiment",
+                "metrics": {
+                  "avg_attention": 0.6356,
+                  "avg_conviction": 0.5287,
+                  "avg_crowdedness": 0.3025,
+                  "avg_novelty": 0.66,
+                  "contradiction_density": 0.0,
+                  "evidence_coverage": 1.0,
+                  "fragility": 0.0,
+                  "frontier_pressure": 0.6489,
+                  "geometry_weight_fragility_penalty": 0.18,
+                  "geometry_weight_frontier_pressure": 0.38,
+                  "geometry_weight_source_independence": 0.0,
+                  "geometry_weight_support_mass": 0.14,
+                  "geometry_weight_tension": 0.24,
+                  "geometry_weight_verifier_readiness": 0.24,
+                  "novelty_pressure": 0.5754,
+                  "routing_threshold_repair_fragility_min": 0.55,
+                  "routing_threshold_tension_min": 0.45,
+                  "routing_threshold_tension_readiness_min": 0.45,
+                  "routing_threshold_verify_allow_fragility_max": 1.0,
+                  "routing_threshold_verify_readiness_min": 0.55,
+                  "routing_threshold_verify_source_independence_min": 0.0,
+                  "routing_threshold_verify_trade_scream_min": 0.62,
+                  "routing_threshold_widen_scouts_novelty_min": 0.35,
+                  "routing_threshold_widen_sources_frontier_min": 0.5,
+                  "routing_threshold_widen_sources_source_max": 0.45,
+                  "scout_independence": 0.25,
+                  "source_entropy": 1.0,
+                  "source_independence": 1.0,
+                  "support_mass": 0.661,
+                  "tension": 0.2749,
+                  "trade_scream_score": 0.5955,
+                  "verifier_readiness": 0.7933
+                },
+                "missing_edges": [
+                  "frontier_cell -> next_receptive_field",
+                  "single_scout_cell -> independent_replication"
+                ],
+                "owner": "seed_router",
+                "priority_score": 0.5164,
+                "quality_flags": [
+                  "multi_string_single_scout_cell",
+                  "single_scout_cell"
+                ],
+                "reason": "The cell is novel but still needs independent scout replication.",
+                "route_directive": "widen_scouts",
+                "route_task_id": "shape_task_063200409e84",
+                "success_gate": "second scout confirms, contradicts, or kills the string",
+                "suggested_next_tools": [
+                  "tic://tool/builtin/query_events_recent@v1",
+                  "tic://tool/builtin/query_timeseries@v1"
+                ],
+                "theme": ""
+              },
+              {
+                "action": "replicate_with_independent_scouts",
+                "cell_key": "CRM|1d|polymarket|",
+                "coordinates": {
+                  "color_fragility": 0.0,
+                  "size_support_mass": 0.6782,
+                  "x_source_independence": 1.0,
+                  "y_frontier_pressure": 0.6219,
+                  "z_tension": 0.28
+                },
+                "entity": "CRM",
+                "horizon": "1d",
+                "lens": "polymarket",
+                "metrics": {
+                  "avg_attention": 0.6488,
+                  "avg_conviction": 0.5663,
+                  "avg_crowdedness": 0.4375,
+                  "avg_novelty": 0.7155,
+                  "contradiction_density": 0.0,
+                  "evidence_coverage": 1.0,
+                  "fragility": 0.0,
+                  "frontier_pressure": 0.6219,
+                  "geometry_weight_fragility_penalty": 0.18,
+                  "geometry_weight_frontier_pressure": 0.38,
+                  "geometry_weight_source_independence": 0.0,
+                  "geometry_weight_support_mass": 0.14,
+                  "geometry_weight_tension": 0.24,
+                  "geometry_weight_verifier_readiness": 0.24,
+                  "novelty_pressure": 0.5031,
+                  "routing_threshold_repair_fragility_min": 0.55,
+                  "routing_threshold_tension_min": 0.45,
+                  "routing_threshold_tension_readiness_min": 0.45,
+                  "routing_threshold_verify_allow_fragility_max": 1.0,
+                  "routing_threshold_verify_readiness_min": 0.55,
+                  "routing_threshold_verify_source_independence_min": 0.0,
+                  "routing_threshold_verify_trade_scream_min": 0.62,
+                  "routing_threshold_widen_scouts_novelty_min": 0.35,
+                  "routing_threshold_widen_sources_frontier_min": 0.5,
+                  "routing_threshold_widen_sources_source_max": 0.45,
+                  "scout_independence": 0.25,
+                  "source_entropy": 1.0,
+                  "source_independence": 1.0,
+                  "support_mass": 0.6782,
+                  "tension": 0.28,
+                  "trade_scream_score": 0.5901,
+                  "verifier_readiness": 0.7985
+                },
+                "missing_edges": [
+                  "frontier_cell -> next_receptive_field",
+                  "single_scout_cell -> independent_replication"
+                ],
+                "owner": "seed_router",
+                "priority_score": 0.5115,
+                "quality_flags": [
+                  "multi_string_single_scout_cell",
+                  "single_scout_cell"
+                ],
+                "reason": "The cell is novel but still needs independent scout replication.",
+                "route_directive": "widen_scouts",
+                "route_task_id": "shape_task_9c2143c3e8e4",
+                "success_gate": "second scout confirms, contradicts, or kills the string",
+                "suggested_next_tools": [
+                  "tic://tool/builtin/query_events_recent@v1",
+                  "tic://tool/builtin/query_timeseries@v1"
+                ],
+                "theme": ""
+              }
+            ],
+            "top_cell": {
+              "cell_key": "XPL|1q|polymarket|",
+              "coordinates": {
+                "color_fragility": 0.0,
+                "size_support_mass": 0.7002,
+                "x_source_independence": 1.0,
+                "y_frontier_pressure": 0.7139,
+                "z_tension": 0.28
+              },
+              "cycle_id": "cycle_launch_gate_pages_20260522_deterministic_100",
+              "entity": "XPL",
+              "evidence_ref_count": 10,
+              "horizon": "1q",
+              "lens": "polymarket",
+              "metrics": {
+                "avg_attention": 0.6776,
+                "avg_conviction": 0.5835,
+                "avg_crowdedness": 0.2975,
+                "avg_novelty": 0.7155,
+                "contradiction_density": 0.0,
+                "evidence_coverage": 1.0,
+                "fragility": 0.0,
+                "frontier_pressure": 0.7139,
+                "geometry_weight_fragility_penalty": 0.18,
+                "geometry_weight_frontier_pressure": 0.38,
+                "geometry_weight_source_independence": 0.0,
+                "geometry_weight_support_mass": 0.14,
+                "geometry_weight_tension": 0.24,
+                "geometry_weight_verifier_readiness": 0.24,
+                "novelty_pressure": 0.6283,
+                "routing_threshold_repair_fragility_min": 0.55,
+                "routing_threshold_tension_min": 0.45,
+                "routing_threshold_tension_readiness_min": 0.45,
+                "routing_threshold_verify_allow_fragility_max": 1.0,
+                "routing_threshold_verify_readiness_min": 0.55,
+                "routing_threshold_verify_source_independence_min": 0.0,
+                "routing_threshold_verify_trade_scream_min": 0.62,
+                "routing_threshold_widen_scouts_novelty_min": 0.35,
+                "routing_threshold_widen_sources_frontier_min": 0.5,
+                "routing_threshold_widen_sources_source_max": 0.45,
+                "scout_independence": 0.5,
+                "source_entropy": 1.0,
+                "source_independence": 1.0,
+                "support_mass": 0.7002,
+                "tension": 0.28,
+                "trade_scream_score": 0.6381,
+                "verifier_readiness": 0.8401
+              },
+              "quality_flags": [
+                "frontier_trade_candidate"
+              ],
+              "route_directive": "verify_now",
+              "scout_count": 2,
+              "source_families": [
+                "event_store",
+                "web",
+                "web_attention"
+              ],
+              "string_count": 8,
+              "theme": ""
+            }
+          },
+          "information_map": {
+            "cells_with_strings": 80,
+            "confluences": 12,
+            "promoted_hypotheses": 8,
+            "string_count": 337,
+            "synthesis_id": "isyn_596a819b881d",
+            "tensions": 0
+          },
+          "market_evolve": {
+            "arm_counts": {
+              "candidate": 50,
+              "control": 50
+            },
+            "child_program_count": 0,
+            "experiment_plan_count": 2,
+            "experiment_result_count": 1,
+            "final_passed": true,
+            "final_score": 0.5777,
+            "frontier_count": 3,
+            "latest_experiment_decision": "reject_candidate",
+            "lineage_edges": 2,
+            "lineage_nodes": 3,
+            "mutation_count": 0,
+            "paired_seed_slices": 20,
+            "planning_experiment_count": 2,
+            "policy_application_count": 100
+          },
+          "model_shim": {
+            "calls": 143,
+            "iteration_calls": 43
+          },
+          "scouts": {
+            "avg_evidence_packets_per_scout": 2.77,
+            "avg_information_strings_per_scout": 3.37,
+            "completed": 100,
+            "duplicate_hypothesis_rate": 0.2,
+            "error_samples": [],
+            "errored": 0,
+            "evidence_ok_rate": 1.0,
+            "max_information_strings": 4,
+            "min_information_strings": 3,
+            "prompt_variants": {
+              "adversarial_alpha_v1": 14,
+              "depth_ladder_v1": 28,
+              "mycelial_network_v1": 35,
+              "source_first_v1": 10,
+              "temporal_pyramid_v1": 13
+            },
+            "success_rate": 1.0,
+            "tool_iteration_scouts": 43,
+            "top_quality_flags": {
+              "adversarial_review:allow": 166,
+              "adversarial_review:downgrade": 171,
+              "data_substrate_map_string_emitted": 100,
+              "node_intelligence_not_promoted": 22,
+              "prompt_quality:0.90": 100,
+              "prompt_variant:adversarial_alpha_v1": 14,
+              "prompt_variant:depth_ladder_v1": 28,
+              "prompt_variant:mycelial_network_v1": 35,
+              "prompt_variant:source_first_v1": 10,
+              "prompt_variant:temporal_pyramid_v1": 13,
+              "scout_tool_iteration:1": 43
+            },
+            "total_cost_usd_estimate": 0.06864
+          },
+          "seeds": {
+            "asset_classes": {
+              "equity": 10,
+              "hyperliquid_perp": 89,
+              "index_macro": 1
+            },
+            "bias_modes": {
+              "consensus_confirm": 19,
+              "contrarian": 18,
+              "frontier": 17,
+              "mean_reversion": 15,
+              "momentum": 16,
+              "tail_risk": 15
+            },
+            "count": 100,
+            "effective_unique_cell_count": 100,
+            "effective_unique_cell_ratio": 1.0,
+            "entities": {
+              "0G": 1,
+              "AAPL": 2,
+              "AAVE": 1,
+              "ACE": 1,
+              "ADA": 1,
+              "AERO": 1,
+              "AI": 1,
+              "ALGO": 1,
+              "ALT": 1,
+              "AMZN": 2,
+              "APE": 1,
+              "ARB": 1,
+              "AVGO": 1,
+              "AXS": 1,
+              "BABY": 2,
+              "BANANA": 2,
+              "BCH": 2,
+              "BOME": 1,
+              "BRETT": 1,
+              "CC": 1,
+              "CELO": 2,
+              "CHIP": 2,
+              "CRM": 1,
+              "DOGE": 1,
+              "DXY": 1,
+              "DYDX": 2,
+              "ETHFI": 3,
+              "GALA": 1,
+              "GMX": 1,
+              "GRASS": 1,
+              "GRIFFAIN": 3,
+              "HEMI": 1,
+              "HYPER": 1,
+              "IO": 1,
+              "JPM": 1,
+              "JTO": 1,
+              "LINEA": 1,
+              "LTC": 1,
+              "MANTA": 2,
+              "ME": 1,
+              "MERL": 1,
+              "MEW": 1,
+              "MINA": 2,
+              "MON": 1,
+              "NEAR": 1,
+              "NEO": 1,
+              "OGN": 1,
+              "ONDO": 1,
+              "PENDLE": 1,
+              "PEOPLE": 2,
+              "PLTR": 1,
+              "POLYX": 1,
+              "PYTH": 1,
+              "RDNT": 1,
+              "RUNE": 1,
+              "SEI": 1,
+              "SKY": 1,
+              "SMCI": 1,
+              "SPX": 1,
+              "SUPER": 2,
+              "TNSR": 2,
+              "TRUMP": 1,
+              "TURBO": 1,
+              "V": 1,
+              "VVV": 1,
+              "WIF": 2,
+              "WLFI": 1,
+              "XAI": 2,
+              "XMR": 1,
+              "XPL": 2,
+              "XRP": 1,
+              "ZEN": 1,
+              "ZEREBRO": 3,
+              "ZETA": 1,
+              "kDOGS": 1,
+              "kFLOKI": 2,
+              "kPEPE": 1
+            },
+            "horizons": {
+              "1d": 20,
+              "1m": 17,
+              "1q": 20,
+              "1w": 18,
+              "intraday": 13,
+              "structural": 12
+            },
+            "lenses": {
+              "anomaly": 7,
+              "catalyst": 7,
+              "factor": 7,
+              "filing": 3,
+              "macro": 4,
+              "microstructure": 5,
+              "money_velocity": 6,
+              "on_chain": 9,
+              "options_flow": 7,
+              "polymarket": 7,
+              "rotation": 9,
+              "sentiment": 6,
+              "smart_money": 8,
+              "structural": 7,
+              "vol_surface": 8
+            },
+            "theme_count": 8,
+            "unique_cell_count": 80,
+            "unique_cell_ratio": 0.8
+          },
+          "self_healing": {
+            "completed_tasks": 6,
+            "failed_tasks": 0,
+            "posted_tasks": 6,
+            "promotion_reports": 0,
+            "tool_proposals": 4,
+            "work_orders": 6
+          }
+        },
+        "mode": "offline_deterministic_model_and_tool_shim",
+        "model": "deepseek:v4-flash",
+        "n_scouts_requested": 100,
+        "next_live_gate": {
+          "recommendation": "Run a 10-scout live-provider canary with the same seed packet before a 1,000 scout run.",
+          "why": "This harness proves orchestration and storage, not provider quality or live data freshness."
+        },
+        "prompt_output_dir": "/private/tmp/talis-launch-gate-pages-20260522/deterministic_100/prompt_outputs",
+        "readiness": {
+          "failed_gates": [],
+          "gates": {
+            "avg_strings_ge_1_5": true,
+            "duplicate_hypothesis_rate_le_0_20": true,
+            "evidence_ok_rate_ge_0_95": true,
+            "geometry_cells_created": true,
+            "market_evolve_control_candidate_arms": true,
+            "market_evolve_hard_experiment_planned": true,
+            "market_evolve_policy_applied": true,
+            "market_evolve_result_or_low_sample_boundary": true,
+            "no_self_healing_failures": true,
+            "routing_queue_created": true,
+            "scout_success_rate_ge_0_95": true,
+            "seed_count_100": true,
+            "self_healing_completed": true,
+            "synthesis_promoted": true,
+            "unique_or_experiment_cell_ratio_ge_0_92": true
+          },
+          "interpretation": "The orchestration layer is ready for a live canary and then a 1,000-scout run.",
+          "ready_for_live_1000": true,
+          "status": "pass"
+        },
+        "schema_version": "talis_100_scout_readiness_v1",
+        "seed_rng": 20260522
+      },
+      "returncode": 0,
+      "stderr": "/Users/udaikhattar/talis-desk/talis_desk/tool_atlas/atlas.py:628: UserWarning: builtin_tool_scan_failed: No module named 'tic.desk.tools'; 'tic.desk' is not a package\n  warnings.warn(f\"builtin_tool_scan_failed: {e}\")\n/Users/udaikhattar/talis-desk/talis_desk/tool_atlas/atlas.py:697: UserWarning: source_scan_failed: No module named 'tic.desk.tools'; 'tic.desk' is not a package\n  warnings.warn(f\"source_scan_failed: {e}\")\n",
+      "stdout": "SCOUT100_STATUS=pass\nSCOUT100_READY_FOR_LIVE_1000=True\nSCOUT100_REPORT_JSON=/private/tmp/talis-launch-gate-pages-20260522/deterministic_100/prompt_outputs/100_scout_readiness_report.json\nSCOUT100_REPORT_MD=/private/tmp/talis-launch-gate-pages-20260522/deterministic_100/prompt_outputs/100_scout_readiness_report.md\nSCOUT100_PROMPT_OUTPUT_DIR=/private/tmp/talis-launch-gate-pages-20260522/deterministic_100/prompt_outputs\n"
+    },
+    {
+      "artifacts": {
+        "SCOUT_SYSTEM_VIEWER_INDEX": "/Users/udaikhattar/talis-desk/docs/scout-system-test/index.html"
+      },
+      "command": [
+        "/opt/homebrew/Caskroom/miniconda/base/bin/python",
+        "scripts/export_100_scout_system_viewer.py",
+        "/private/tmp/talis-launch-gate-pages-20260522/deterministic_100/prompt_outputs",
+        "--report-json",
+        "/private/tmp/talis-launch-gate-pages-20260522/deterministic_100/prompt_outputs/100_scout_readiness_report.json",
+        "--output-dir",
+        "/Users/udaikhattar/talis-desk/docs/scout-system-test"
+      ],
+      "elapsed_s": 0.049,
+      "name": "viewer_export",
+      "report": {},
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "SCOUT_SYSTEM_VIEWER_INDEX=/Users/udaikhattar/talis-desk/docs/scout-system-test/index.html\n"
+    },
+    {
+      "artifacts": {
+        "LIVE_CANARY_PROMPT_OUTPUT_DIR": "/private/tmp/talis-launch-gate-pages-20260522/live_canary/prompt_outputs",
+        "LIVE_CANARY_READY_FOR_NEXT_100": "False",
+        "LIVE_CANARY_REPORT_JSON": "/private/tmp/talis-launch-gate-pages-20260522/live_canary/prompt_outputs/live_scout_canary_report.json",
+        "LIVE_CANARY_REPORT_MD": "/private/tmp/talis-launch-gate-pages-20260522/live_canary/prompt_outputs/live_scout_canary_report.md",
+        "LIVE_CANARY_STATUS": "blocked"
+      },
+      "command": [
+        "/opt/homebrew/Caskroom/miniconda/base/bin/python",
+        "scripts/run_live_scout_canary.py",
+        "--n-scouts",
+        "10",
+        "--concurrency",
+        "1",
+        "--cost-cap-usd",
+        "0.1",
+        "--provider-timeout-s",
+        "45.0",
+        "--max-tool-iterations",
+        "0",
+        "--artifact-dir",
+        "/private/tmp/talis-launch-gate-pages-20260522/live_canary",
+        "--prompt-output-dir",
+        "/private/tmp/talis-launch-gate-pages-20260522/live_canary/prompt_outputs",
+        "--prompt-variant",
+        "flash_temporal_v4",
+        "--cycle-id",
+        "cycle_launch_gate_pages_20260522_live_10"
+      ],
+      "elapsed_s": 2.889,
+      "name": "live_canary_or_preflight",
+      "report": {
+        "artifact_dir": "/private/tmp/talis-launch-gate-pages-20260522/live_canary",
+        "artifacts": {
+          "seeds": "/private/tmp/talis-launch-gate-pages-20260522/live_canary/prompt_outputs/live_scout_canary_seeds.json"
+        },
+        "concurrency": 1,
+        "cost_cap_usd": 0.1,
+        "cycle_id": "cycle_launch_gate_pages_20260522_live_10",
+        "db_path": "/private/tmp/talis-launch-gate-pages-20260522/live_canary/desk-live-canary.db",
+        "fallback": "anthropic:claude-haiku-4-5",
+        "generated_at": "2026-05-22T15:20:44.471917+00:00",
+        "max_tool_iterations": 0,
+        "metrics": {
+          "elapsed_s": 2.414
+        },
+        "mode": "preflight_no_live_spend",
+        "model": "deepseek:v4-flash",
+        "n_scouts_requested": 10,
+        "preflight": {
+          "cycle_id": "cycle_launch_gate_pages_20260522_live_10",
+          "market_universe": {
+            "entity_count": 265,
+            "source_quality": "live"
+          },
+          "market_universe_ok": true,
+          "provider_import": "tic.desk.models.chat",
+          "provider_import_ok": true,
+          "tic_root": "/Users/udaikhattar/talis-desk/talis_tic",
+          "tic_root_ok": true,
+          "tool_atlas": {
+            "skills": 0,
+            "sources": 89,
+            "tools": 86
+          },
+          "tool_atlas_ok": true
+        },
+        "prompt_output_dir": "/private/tmp/talis-launch-gate-pages-20260522/live_canary/prompt_outputs",
+        "prompt_variant_override": "flash_temporal_v4",
+        "provider_timeout_s": 45.0,
+        "scale_decision": {
+          "decision": "do_not_scale_yet",
+          "next_step": "Run this same script with --allow-live-spend under a tiny cost cap, then inspect the live canary gates."
+        },
+        "schema_version": "talis_live_scout_canary_v1",
+        "seed_rng": 20260522,
+        "verdict": {
+          "failed_gates": [
+            "explicit_live_spend_allowed"
+          ],
+          "gates": {
+            "explicit_live_spend_allowed": false,
+            "market_universe_ok": true,
+            "provider_import_ok": true,
+            "tic_root_ok": true,
+            "tool_atlas_ok": true
+          },
+          "interpretation": "No live model calls were made. This is an anti-waste preflight artifact.",
+          "ready_for_direct_live_1000": false,
+          "ready_for_next_live_100": false,
+          "reason": "explicit_live_spend_flag_missing",
+          "status": "blocked"
+        }
+      },
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "LIVE_CANARY_STATUS=blocked\nLIVE_CANARY_READY_FOR_NEXT_100=False\nLIVE_CANARY_REPORT_JSON=/private/tmp/talis-launch-gate-pages-20260522/live_canary/prompt_outputs/live_scout_canary_report.json\nLIVE_CANARY_REPORT_MD=/private/tmp/talis-launch-gate-pages-20260522/live_canary/prompt_outputs/live_scout_canary_report.md\nLIVE_CANARY_PROMPT_OUTPUT_DIR=/private/tmp/talis-launch-gate-pages-20260522/live_canary/prompt_outputs\n"
+    }
+  ],
+  "tournament": {
+    "decision": null,
+    "ready_for_live_100": false,
+    "ready_for_live_1000": false,
+    "ready_for_scheduled_production": false,
+    "reason": ""
+  },
+  "viewer_index": "/Users/udaikhattar/talis-desk/docs/scout-system-test/index.html"
+}

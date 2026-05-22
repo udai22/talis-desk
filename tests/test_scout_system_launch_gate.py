@@ -1,6 +1,7 @@
 from scripts.run_scout_system_launch_gate import (
     StageResult,
     build_launch_gate_report,
+    render_launch_gate_html,
     render_launch_gate_markdown,
     _parse_stdout_paths,
 )
@@ -43,6 +44,12 @@ def test_launch_gate_preflight_blocks_before_live_spend_but_allows_authorized_ca
     markdown = render_launch_gate_markdown(report)
     assert "ready_for_authorized_live_canary" in markdown
     assert "live_provider_preflight" in markdown
+
+    html = render_launch_gate_html(report)
+    assert "Ready, but the spend gate is locked." in html
+    assert "337" in html
+    assert "86" in html
+    assert "launch_gate_report.json" in html
 
 
 def test_launch_gate_uses_tournament_as_only_1000_promotion_authority():

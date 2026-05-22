@@ -15,6 +15,7 @@ only after the preflight report says the system is ready for the next paid gate.
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import os
 import re
@@ -60,6 +61,11 @@ def main() -> int:
         Path(args.viewer_output_dir).expanduser().resolve()
         if args.viewer_output_dir
         else artifact_dir / "scout-system-test"
+    )
+    launch_viewer_dir = (
+        Path(args.launch_viewer_output_dir).expanduser().resolve()
+        if args.launch_viewer_output_dir
+        else artifact_dir / "launch-gate"
     )
 
     stages: list[StageResult] = []
@@ -158,14 +164,22 @@ def main() -> int:
         allow_live_spend=args.allow_live_spend,
         next_live_scouts=args.next_live_scouts,
     )
+    report["launch_viewer_index"] = str(launch_viewer_dir / "index.html")
     report_path = artifact_dir / "scout_system_launch_gate_report.json"
     md_path = artifact_dir / "scout_system_launch_gate_report.md"
     _write_json(report_path, report)
     _write_text(md_path, render_launch_gate_markdown(report))
+    export_launch_gate_viewer(
+        report,
+        output_dir=launch_viewer_dir,
+        report_json=report_path,
+        report_md=md_path,
+    )
     print(f"SCOUT_SYSTEM_LAUNCH_DECISION={report['decision']['status']}")
     print(f"SCOUT_SYSTEM_LAUNCH_ALLOWED_NEXT={report['decision']['allowed_next_step']}")
     print(f"SCOUT_SYSTEM_LAUNCH_REPORT_JSON={report_path}")
     print(f"SCOUT_SYSTEM_LAUNCH_REPORT_MD={md_path}")
+    print(f"SCOUT_SYSTEM_LAUNCH_VIEWER_INDEX={launch_viewer_dir / 'index.html'}")
     if report.get("viewer_index"):
         print(f"SCOUT_SYSTEM_VIEWER_INDEX={report['viewer_index']}")
     return 0 if report["decision"]["exit_ok"] else 1
@@ -227,6 +241,7 @@ def build_launch_gate_report(
         "artifact_dir": artifact_dir,
         "viewer_index": viewer_index,
         "allow_live_spend": allow_live_spend,
+        "launch_viewer_index": "",
         "decision": decision,
         "proof_ladder": proof_ladder,
         "deterministic": {
@@ -309,7 +324,241 @@ def render_launch_gate_markdown(report: dict[str, Any]) -> str:
     ])
     if report.get("viewer_index"):
         lines.extend(["", f"Viewer: `{report.get('viewer_index')}`"])
+    if report.get("launch_viewer_index"):
+        lines.extend(["", f"Launch cockpit: `{report.get('launch_viewer_index')}`"])
     return "\n".join(lines) + "\n"
+
+
+def export_launch_gate_viewer(
+    report: dict[str, Any],
+    *,
+    output_dir: Path,
+    report_json: Path,
+    report_md: Path,
+) -> Path:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    _write_text(output_dir / ".nojekyll", "")
+    _write_json(output_dir / "launch_gate_report.json", report)
+    _write_text(output_dir / "launch_gate_report.md", render_launch_gate_markdown(report))
+    _write_text(output_dir / "index.html", render_launch_gate_html(report))
+    return output_dir / "index.html"
+
+
+def render_launch_gate_html(report: dict[str, Any]) -> str:
+    decision = report.get("decision") if isinstance(report.get("decision"), dict) else {}
+    deterministic = report.get("deterministic") if isinstance(report.get("deterministic"), dict) else {}
+    live = report.get("live") if isinstance(report.get("live"), dict) else {}
+    tournament = report.get("tournament") if isinstance(report.get("tournament"), dict) else {}
+    det_metrics = deterministic.get("metrics") if isinstance(deterministic.get("metrics"), dict) else {}
+    live_preflight = live.get("preflight") if isinstance(live.get("preflight"), dict) else {}
+    tool_atlas = live_preflight.get("tool_atlas") if isinstance(live_preflight.get("tool_atlas"), dict) else {}
+    universe = live_preflight.get("market_universe") if isinstance(live_preflight.get("market_universe"), dict) else {}
+    status = str(decision.get("status") or "unknown")
+    hero = _launch_hero_copy(status)
+    proof_rows = "".join(_proof_card(step) for step in report.get("proof_ladder") or [])
+    stage_rows = "".join(_stage_card(stage) for stage in report.get("stages") or [])
+    next_command = str(decision.get("next_command") or "")
+    scout_viewer = str(report.get("viewer_index") or "")
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="data:," />
+  <title>Talis Scout Launch Gate</title>
+  <style>
+    :root {{
+      color-scheme: dark;
+      --bg: #07080a;
+      --ink: #f7f8f4;
+      --muted: rgba(247,248,244,.68);
+      --line: rgba(255,255,255,.13);
+      --panel: rgba(255,255,255,.074);
+      --green: #72f0ac;
+      --cyan: #7bdcff;
+      --amber: #f6ca71;
+      --red: #ff8b9a;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      background:
+        radial-gradient(circle at 82% 0%, rgba(123,220,255,.16), transparent 30%),
+        linear-gradient(180deg, #101719 0%, var(--bg) 58%);
+      color: var(--ink);
+      font: 15px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", sans-serif;
+      letter-spacing: 0;
+      overflow-x: hidden;
+    }}
+    main {{ width: min(1180px, 100%); margin: 0 auto; padding: 22px 16px 48px; }}
+    .hero {{ min-height: 76vh; display: grid; align-content: center; gap: 24px; }}
+    .eyebrow {{ color: var(--green); text-transform: uppercase; font-size: 12px; font-weight: 800; letter-spacing: .08em; }}
+    h1 {{ font-size: clamp(50px, 10vw, 112px); line-height: .9; margin: 10px 0 14px; max-width: 940px; }}
+    h2 {{ font-size: clamp(32px, 6vw, 62px); line-height: .96; margin: 0 0 10px; }}
+    h3 {{ font-size: 21px; line-height: 1.06; margin: 0 0 9px; }}
+    p {{ margin: 0; color: var(--muted); font-size: 18px; max-width: 790px; }}
+    section {{ margin-top: 34px; }}
+    .grid {{ display: grid; gap: 10px; }}
+    .hero-grid {{ grid-template-columns: repeat(4, minmax(0, 1fr)); }}
+    .metrics {{ grid-template-columns: repeat(6, minmax(0, 1fr)); }}
+    .two {{ grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }}
+    .proof {{ grid-template-columns: repeat(6, minmax(210px, 1fr)); overflow-x: auto; padding-bottom: 12px; scroll-snap-type: x mandatory; }}
+    .card, .metric, .panel, .stage {{
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      backdrop-filter: blur(18px);
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }}
+    .card, .panel, .stage {{ padding: 16px; }}
+    .metric {{ min-height: 95px; padding: 13px; }}
+    .metric span, .card span, .stage span {{ display: block; color: var(--muted); font-size: 12px; font-weight: 760; text-transform: uppercase; }}
+    .metric strong {{ display: block; margin-top: 8px; font-size: 28px; line-height: 1; }}
+    .proof .card {{ scroll-snap-align: start; min-height: 218px; }}
+    .pass {{ color: var(--green); }}
+    .blocked {{ color: var(--amber); }}
+    .fail {{ color: var(--red); }}
+    .command {{ position: relative; }}
+    pre {{ white-space: pre-wrap; overflow-wrap: anywhere; color: #dce8e6; background: rgba(0,0,0,.3); border: 1px solid var(--line); border-radius: 8px; padding: 13px; margin: 12px 0 0; }}
+    a {{ color: var(--cyan); text-decoration: none; }}
+    .list {{ list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }}
+    .list li {{ display: flex; justify-content: space-between; gap: 14px; border-top: 1px solid var(--line); padding-top: 9px; color: var(--muted); }}
+    .list b {{ color: var(--ink); text-align: right; }}
+    @media (max-width: 860px) {{
+      main {{ padding: 18px 12px 40px; }}
+      .hero {{ min-height: 84vh; }}
+      .hero-grid, .metrics, .two {{ grid-template-columns: 1fr; }}
+      .proof {{ display: flex; }}
+      .proof .card {{ flex: 0 0 84%; }}
+      p {{ font-size: 17px; }}
+    }}
+  </style>
+</head>
+<body>
+<main>
+  <section class="hero">
+    <div>
+      <div class="eyebrow">Scout system launch gate / {html.escape(status.replace('_', ' '))}</div>
+      <h1>{html.escape(hero["title"])}</h1>
+      <p>{html.escape(hero["body"])}</p>
+    </div>
+    <div class="grid hero-grid">
+      <div class="card"><span>Decision</span><h3 class="{_status_class(status)}">{html.escape(status.replace('_', ' '))}</h3><p>{html.escape(str(decision.get("reason") or ""))}</p></div>
+      <div class="card"><span>Spend posture</span><h3>{'Locked' if decision.get('human_authorization_required') else 'Automatic'}</h3><p>Paid calls remain behind the explicit live-spend flag.</p></div>
+      <div class="card"><span>Allowed next</span><h3>{html.escape(str(decision.get("allowed_next_step") or "none").replace('_', ' '))}</h3><p>The gate never jumps straight to production.</p></div>
+      <div class="card"><span>Schedule</span><h3>{'Blocked' if not tournament.get('ready_for_scheduled_production') else 'Candidate'}</h3><p>Scheduled shadow requires repeat 1,000-scout proof.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Proof Ladder</h2>
+    <p>This is the control system. Each rung must become true in order: offline mechanics, live preflight, explicit spend, live quality, tournament promotion, then repeatability.</p>
+    <div class="grid proof">{proof_rows}</div>
+  </section>
+
+  <section>
+    <h2>Current Evidence</h2>
+    <div class="grid metrics">
+      <div class="metric"><span>Det scouts</span><strong>{html.escape(str(det_metrics.get("scouts_completed") or 0))}</strong></div>
+      <div class="metric"><span>Strings</span><strong>{html.escape(str(det_metrics.get("strings") or 0))}</strong></div>
+      <div class="metric"><span>Geometry cells</span><strong>{html.escape(str(det_metrics.get("geometry_cells") or 0))}</strong></div>
+      <div class="metric"><span>MarketEvolve pairs</span><strong>{html.escape(str(det_metrics.get("market_evolve_pairs") or 0))}</strong></div>
+      <div class="metric"><span>Tools</span><strong>{html.escape(str(tool_atlas.get("tools") or 0))}</strong></div>
+      <div class="metric"><span>Market entities</span><strong>{html.escape(str(universe.get("entity_count") or 0))}</strong></div>
+    </div>
+  </section>
+
+  <section class="grid two">
+    <div class="panel">
+      <h2>What Is Proven</h2>
+      <ul class="list">
+        <li><span>Deterministic system readiness</span><b>{html.escape(str(deterministic.get("status") or "unknown"))}</b></li>
+        <li><span>Effective unique cell ratio</span><b>{html.escape(str(det_metrics.get("effective_unique_cell_ratio") or 0))}</b></li>
+        <li><span>MarketEvolve decision</span><b>{html.escape(str(det_metrics.get("market_evolve_decision") or "none").replace('_', ' '))}</b></li>
+        <li><span>Live provider import</span><b>{html.escape(str(live_preflight.get("provider_import_ok")))}</b></li>
+        <li><span>Tool/source atlas</span><b>{html.escape(str(tool_atlas.get("tools") or 0))} / {html.escape(str(tool_atlas.get("sources") or 0))}</b></li>
+      </ul>
+    </div>
+    <div class="panel command">
+      <h2>Next Command</h2>
+      <p>This is the exact next move. It spends only if a human deliberately runs it with the live-spend flag.</p>
+      <pre>{html.escape(next_command)}</pre>
+      <ul class="list">
+        <li><span>Launch report</span><b><a href="launch_gate_report.json">open</a></b></li>
+        <li><span>Launch markdown</span><b><a href="launch_gate_report.md">open</a></b></li>
+        <li><span>100-scout viewer</span><b>{_viewer_link(scout_viewer)}</b></li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <h2>Run Stages</h2>
+    <div class="grid hero-grid">{stage_rows}</div>
+  </section>
+</main>
+</body>
+</html>
+"""
+
+
+def _launch_hero_copy(status: str) -> dict[str, str]:
+    if status == "ready_for_authorized_live_canary":
+        return {
+            "title": "Ready, but the spend gate is locked.",
+            "body": "Talis proved the first layer offline and verified that the live provider, tool atlas, and market universe are reachable. The next step is a deliberately authorized 10-scout live canary, not a blind scale-up.",
+        }
+    if status.startswith("ready_for_live_1000"):
+        return {
+            "title": "The tournament opened the 1,000-scout ramp.",
+            "body": "A live distribution earned the next spend gate. Scheduled production is still blocked until repeatability proves itself across independent 1,000-scout runs.",
+        }
+    if status.startswith("blocked"):
+        return {
+            "title": "The gate is doing its job.",
+            "body": "Something important is not proven yet. The system is stopping before scale, preserving capital and attention until the failed rung is repaired.",
+        }
+    return {
+        "title": "Scout launch evidence, assembled.",
+        "body": "This cockpit shows what the first layer has proven, what remains locked, and which command is allowed next.",
+    }
+
+
+def _proof_card(step: dict[str, Any]) -> str:
+    passed = bool(step.get("passed"))
+    klass = "pass" if passed else "blocked"
+    label = "passed" if passed else "blocked"
+    return (
+        f'<div class="card"><span>{html.escape(label)}</span>'
+        f'<h3 class="{klass}">{html.escape(str(step.get("id") or "").replace("_", " "))}</h3>'
+        f'<p>{html.escape(str(step.get("summary") or ""))}</p></div>'
+    )
+
+
+def _stage_card(stage: dict[str, Any]) -> str:
+    ok = int(stage.get("returncode") or 0) == 0
+    name = str(stage.get("name") or "stage").replace("_", " ")
+    return (
+        f'<div class="stage"><span>{"ok" if ok else "failed"}</span>'
+        f'<h3 class="{"pass" if ok else "fail"}">{html.escape(name)}</h3>'
+        f'<p>{html.escape(str(stage.get("elapsed_s") or 0))}s</p></div>'
+    )
+
+
+def _status_class(status: str) -> str:
+    if status.startswith("ready"):
+        return "pass"
+    if status.startswith("blocked"):
+        return "blocked"
+    return ""
+
+
+def _viewer_link(path: str) -> str:
+    if not path:
+        return "none"
+    if "scout-system-test" in path:
+        return '<a href="../scout-system-test/">open</a>'
+    return f'<a href="{html.escape(path)}">open</a>'
 
 
 def _launch_decision(
@@ -556,6 +805,7 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--artifact-dir", default="")
     parser.add_argument("--viewer-output-dir", default="")
+    parser.add_argument("--launch-viewer-output-dir", default="")
     parser.add_argument("--cycle-prefix", default="")
     parser.add_argument("--deterministic-scouts", type=int, default=100)
     parser.add_argument("--deterministic-concurrency", type=int, default=20)
