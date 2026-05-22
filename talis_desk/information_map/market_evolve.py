@@ -61,6 +61,7 @@ DEFAULT_MARKET_EVOLVE_GENOME: dict[str, Any] = {
         "coverage_gap_budget_share": 0.10,
         "frontier_exploitation_budget_share": 0.04,
         "coverage_exploration_budget_share": 0.04,
+        "price_feedback_exploitation_budget_share": 0.02,
         "use_frontier_llm_governor": True,
         "frontier_llm_governor_model": "anthropic:claude-opus-4-7",
         "frontier_llm_governor_seed_share": 0.25,
@@ -74,6 +75,8 @@ DEFAULT_MARKET_EVOLVE_GENOME: dict[str, Any] = {
         "auto_promote_high_priority_tools": False,
         "prefer_learned_tools": False,
         "learned_tool_priority_boost": 0.0,
+        "prefer_price_anchor_tools": False,
+        "require_disconfirming_price_check": False,
         "source_family_targets": [
             "hydromancer",
             "our_hl_node",
@@ -447,6 +450,7 @@ def apply_market_evolve_policy_to_seeds(
                 experiment_arm = ""
         tool_policy = dict((assigned_program.genome or {}).get("tool_request_policy") or {})
         prompt_policy = dict((assigned_program.genome or {}).get("prompt_policy") or {})
+        routing_policy = dict((assigned_program.genome or {}).get("routing_thresholds") or {})
         tool_limit = _int_between(
             tool_policy.get("max_tool_candidates_per_seed"),
             default=10,
@@ -492,6 +496,13 @@ def apply_market_evolve_policy_to_seeds(
                 hi=12,
             ),
             "auto_promote_high_priority_tools": bool(tool_policy.get("auto_promote_high_priority_tools")),
+            "prefer_price_anchor_tools": bool(tool_policy.get("prefer_price_anchor_tools")),
+            "require_disconfirming_price_check": bool(tool_policy.get("require_disconfirming_price_check")),
+            "price_feedback_exploitation_budget_share": _float(
+                routing_policy.get("price_feedback_exploitation_budget_share"),
+                0.0,
+            ),
+            "prompt_emphasize_price_feedback_refs": bool(prompt_policy.get("emphasize_price_feedback_refs")),
             "prompt_contract_pressure": prompt_policy.get("contract_pressure", "normal"),
             "prompt_min_information_strings": _int_between(
                 prompt_policy.get("min_information_strings"),
@@ -2039,6 +2050,101 @@ def _secondary_metric_mutation_candidates(
                 }
             },
             mutation_source=source("prompt_contract_pressure"),
+        ))
+
+    if (
+        metrics.get("outcome_eval_count", 0.0) >= 1
+        and metrics.get("outcome_observed_rate", 0.0) >= 0.75
+        and metrics.get("outcome_direction_hit_rate", 0.0) >= 0.60
+        and metrics.get("avg_realized_edge_score", 0.0) >= 0.65
+    ):
+        source_targets = _merged_source_family_targets(
+            tool_policy.get("source_family_targets"),
+            ["our_hl_node", "market_microstructure", "web_attention"],
+        )
+        out.append(MarketEvolveMutationCandidate(
+            mutation_kind="exploit_price_feedback_surface",
+            rationale=(
+                "Information strings are maturing into realized directional price movement; "
+                "bias the next scout wave toward price-anchored tools, prior outcome refs, and matched repetition."
+            ),
+            mutation_patch={
+                "prompt_policy": {
+                    "emphasize_price_feedback_refs": True,
+                    "prior_context_topk": min(
+                        10,
+                        int(prompt_policy.get("prior_context_topk") or 6) + 1,
+                    ),
+                },
+                "routing_thresholds": {
+                    "price_feedback_exploitation_budget_share": min(
+                        0.20,
+                        float(thresholds.get("price_feedback_exploitation_budget_share") or 0.02) + 0.04,
+                    ),
+                    "frontier_exploitation_budget_share": min(
+                        0.24,
+                        float(thresholds.get("frontier_exploitation_budget_share") or 0.04) + 0.03,
+                    ),
+                },
+                "tool_request_policy": {
+                    "prefer_price_anchor_tools": True,
+                    "require_expected_edge": True,
+                    "require_eval_plan": True,
+                    "source_family_targets": source_targets,
+                    "max_tool_candidates_per_seed": min(
+                        16,
+                        int(tool_policy.get("max_tool_candidates_per_seed", 10)) + 1,
+                    ),
+                },
+            },
+            mutation_source=source("information_price_loop_positive_edge"),
+        ))
+
+    if (
+        metrics.get("outcome_eval_count", 0.0) >= 5
+        and metrics.get("outcome_observed_rate", 0.0) >= 0.75
+        and metrics.get("outcome_direction_hit_rate", 1.0) <= 0.40
+        and metrics.get("avg_realized_edge_score", 1.0) < 0.50
+    ):
+        out.append(MarketEvolveMutationCandidate(
+            mutation_kind="tighten_price_feedback_contract",
+            rationale=(
+                "Information strings are reaching price evaluation but failing directional skill; "
+                "force scouts to include price anchors, disconfirming checks, and stricter kill signals."
+            ),
+            mutation_patch={
+                "prompt_policy": {
+                    "contract_pressure": "raise",
+                    "emphasize_price_feedback_refs": True,
+                    "require_mechanism": True,
+                    "require_kill_signal": True,
+                    "require_evidence_refs": True,
+                    "fallback_variants": [
+                        "skeptical_operator_v1",
+                        "source_first_v1",
+                        "temporal_pyramid_v1",
+                    ],
+                },
+                "routing_thresholds": {
+                    "price_feedback_min_direction_hit_rate": 0.55,
+                    "price_feedback_min_observed_rate": 0.75,
+                    "frontier_exploitation_budget_share": max(
+                        0.02,
+                        float(thresholds.get("frontier_exploitation_budget_share") or 0.04) - 0.02,
+                    ),
+                },
+                "tool_request_policy": {
+                    "prefer_price_anchor_tools": True,
+                    "require_disconfirming_price_check": True,
+                    "require_expected_edge": True,
+                    "require_eval_plan": True,
+                    "max_new_tool_proposals_per_cycle": max(
+                        4,
+                        int(tool_policy.get("max_new_tool_proposals_per_cycle", 12)) - 2,
+                    ),
+                },
+            },
+            mutation_source=source("information_price_loop_negative_edge"),
         ))
 
     if (
@@ -5035,6 +5141,10 @@ def _mutation_hypothesis(mutation_kind: str, rationale: str) -> str:
         return "If the scout contract is stricter, cheap model calls emit more valid decision-changing strings per dollar."
     if mutation_kind == "exploit_learned_tool_surface":
         return "If proven learned tools are exposed earlier, scouts gather more useful evidence without widening raw call count."
+    if mutation_kind == "exploit_price_feedback_surface":
+        return "If strings that beat price are routed back into prompt context and price-anchor tools, scouts should repeat early repricing discovery rather than merely explain moves after the fact."
+    if mutation_kind == "tighten_price_feedback_contract":
+        return "If failed price-matured strings force disconfirming price checks and stricter causal contracts, the next scout wave should reduce attractive but non-predictive narratives."
     if mutation_kind == "widen_source_families":
         return "If the source surface broadens, map fragility falls and cross-source confirmation improves."
     if mutation_kind == "exploit_market_map_governor":
@@ -5103,6 +5213,18 @@ def _mutation_target_metrics(mutation_kind: str, metrics: dict[str, float]) -> d
             "learned_tool_success_rate",
             "learned_tool_usage_per_scout",
             "tool_activation_rate",
+        ],
+        "exploit_price_feedback_surface": [
+            "outcome_observed_rate",
+            "outcome_direction_hit_rate",
+            "outcome_threshold_hit_rate",
+            "avg_realized_edge_score",
+        ],
+        "tighten_price_feedback_contract": [
+            "outcome_observed_rate",
+            "outcome_direction_hit_rate",
+            "avg_realized_edge_score",
+            "prompt_contract_failure_rate",
         ],
         "raise_tool_promotion_discipline": [
             "tool_activation_rate",
@@ -5273,6 +5395,36 @@ def _mutation_falsification_gates(
             "threshold": float(metrics.get("tool_activation_rate", 0.0)),
             "decision": "reject_candidate",
         })
+    elif mutation_kind == "exploit_price_feedback_surface":
+        gates.extend([
+            {
+                "metric": "candidate_outcome_direction_hit_rate",
+                "operator": "<",
+                "threshold": max(0.60, float(metrics.get("outcome_direction_hit_rate", 0.0))),
+                "decision": "reject_candidate",
+            },
+            {
+                "metric": "candidate_avg_realized_edge_score",
+                "operator": "<=",
+                "threshold": float(metrics.get("avg_realized_edge_score", 0.0)),
+                "decision": "reject_candidate",
+            },
+        ])
+    elif mutation_kind == "tighten_price_feedback_contract":
+        gates.extend([
+            {
+                "metric": "candidate_outcome_direction_hit_rate",
+                "operator": "<=",
+                "threshold": float(metrics.get("outcome_direction_hit_rate", 0.0)),
+                "decision": "reject_candidate",
+            },
+            {
+                "metric": "candidate_prompt_contract_failure_rate",
+                "operator": ">=",
+                "threshold": float(metrics.get("prompt_contract_failure_rate", 1.0)),
+                "decision": "reject_candidate",
+            },
+        ])
     elif "governor" in mutation_kind:
         gates.append({
             "metric": "candidate_governor_gap_repair_rate",
@@ -5301,6 +5453,10 @@ def _mutation_kill_signal(mutation_kind: str) -> str:
         return "Candidate does not raise cortex task completion/shape-observation rates or continues failing worker tasks."
     if mutation_kind == "tighten_prompt_contract":
         return "Candidate does not improve prompt quality/pass rate or reduces valid string yield enough to lose the experiment."
+    if mutation_kind == "exploit_price_feedback_surface":
+        return "Candidate does not preserve or improve price-outcome hit rate and realized edge on matched slices."
+    if mutation_kind == "tighten_price_feedback_contract":
+        return "Candidate still emits price-matured strings with weak directional hit rate or fails to reduce prompt/route contract failures."
     if "tool" in mutation_kind:
         return "Candidate does not improve active/evaluated tool usage or creates more low-EV/tool-failure backlog."
     if "governor" in mutation_kind:
@@ -5517,6 +5673,18 @@ def _string_list(raw: Any) -> list[str]:
     if isinstance(parsed, str) and parsed.strip():
         return [parsed.strip()]
     return []
+
+
+def _merged_source_family_targets(raw: Any, additions: list[str]) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in [*_string_list(raw), *additions]:
+        value = str(item or "").strip()
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        out.append(value)
+    return out[:12]
 
 
 def _w(weights: dict[str, Any], key: str) -> float:
