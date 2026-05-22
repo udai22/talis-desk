@@ -39,6 +39,24 @@ The live run earned `promote_to_1000_scout_ramp` with average prompt quality 0.8
 - `geometry_replication_arm`: Let the map shape choose independent follow-up scouts for high tension/frontier cells. Gate: top geometry cells receive independent scout confirmation, contradiction, or kill signal
 - `market_evolve_policy_arena`: Continue matched control/candidate policy testing instead of hand-picking a prompt by taste. Gate: candidate improves accepted unique high-quality coverage per dollar without worsening low-EV tool rate
 
+## Repair Work Orders
+
+- `lso_json_unparseable_scout_harness` owner=scout_harness priority=P0: json_unparseable_rate == 0 across the next ramp or every parse miss has scout_json_retry_success.
+- `lso_invented_tools_tool_harness` owner=tool_harness priority=P0: invented_tool_persist_rate == 0; proposed missing tools appear only in tool_requests/tool_proposals.
+- `lso_empty_hypothesis_prompt_policy` owner=prompt_policy priority=P1: empty_hypothesis_with_strings_rate == 0 and low_prompt_quality_rate <= 0.05.
+- `lso_missing_information_strings_prompt_policy` owner=prompt_policy priority=P1: missing_information_strings_rate <= 0.01 for scouts with usable evidence or allowed repair tools.
+- `lso_missing_evidence_refs_source_router` owner=source_router priority=P1: missing_evidence_refs_rate <= 0.01 and tool_request_followup_rate rises on missing-edge cells.
+- `lso_stale_date_directionality_source_router` owner=source_router priority=P1: stale_directionality_flag_rate <= 0.01 and stale evidence produces repair_source/gap strings.
+- `lso_adversarial_quarantine_adversarial_reviewer` owner=adversarial_reviewer priority=P1: quarantine_to_repair_route_rate >= 0.95 and quarantined strings are excluded from promoted trade hypotheses.
+- `lso_node_not_promoted_node_intelligence` owner=node_intelligence priority=P2: node_promoted_string_rate improves while adversarial_quarantine_rate does not rise.
+- `lso_geometry_replication` owner=seed_router priority=P1: Each top cell receives confirmation, contradiction, or kill signal from an independent scout/source family.
+- `lso_market_evolve_arena` owner=market_evolve priority=P1: Candidate arm wins hard gates or is rejected with falsification evidence.
+
+## Pre-1000 Gate
+
+- ready_for_authorized_1000: `True`
+- must_watch: `accepted_unique_high_quality_coverage_per_dollar_delta, empty_hypothesis_with_strings_rate, invented_tool_persist_rate, json_unparseable_rate, missing_evidence_refs_rate, missing_information_strings_rate, quarantine_to_repair_route_rate, stale_directionality_flag_rate, top_geometry_confirmation_rate`
+
 ## Next Run
 
 - allowed_next_step: `live_1000_scout_ramp`

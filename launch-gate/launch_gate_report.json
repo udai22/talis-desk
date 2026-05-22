@@ -521,7 +521,7 @@
           "severity": "red"
         }
       ],
-      "generated_at": "2026-05-22T16:05:11.659892+00:00",
+      "generated_at": "2026-05-22T16:13:16.494111+00:00",
       "market_evolve": {
         "arm_counts": {
           "candidate": 50,
@@ -535,6 +535,37 @@
       "next_run": {
         "allowed_next_step": "live_1000_scout_ramp",
         "operator_note": "The 1,000 ramp is allowed by tournament evidence, but scheduled production remains blocked until two independent 1,000-scout shadow runs pass repeatability gates.",
+        "pre_1000_gate": {
+          "blocking_before_1000": [],
+          "interpretation": "The 1,000 ramp may run only as an explicitly authorized experiment. The listed repair metrics must be watched; passing the ramp does not schedule production.",
+          "must_watch_metrics": [
+            "accepted_unique_high_quality_coverage_per_dollar_delta",
+            "empty_hypothesis_with_strings_rate",
+            "invented_tool_persist_rate",
+            "json_unparseable_rate",
+            "missing_evidence_refs_rate",
+            "missing_information_strings_rate",
+            "quarantine_to_repair_route_rate",
+            "stale_directionality_flag_rate",
+            "top_geometry_confirmation_rate"
+          ],
+          "ramp_success_requirements": [
+            "provider_error_rate <= 0.02",
+            "success_rate >= 0.90",
+            "duplicate_hypothesis_rate <= 0.20",
+            "low_prompt_quality_rate <= 0.05",
+            "json_unparseable_rate == 0 or scout_json_retry_success covers every miss",
+            "invented_tool_persist_rate == 0",
+            "top_geometry_confirmation_rate improves on frontier/tension cells",
+            "scheduled production remains blocked until two independent 1,000-scout shadow runs pass repeatability gates"
+          ],
+          "ready_for_authorized_1000": true,
+          "red_failure_modes_from_prior_ramp": [
+            "invented_tools",
+            "json_unparseable"
+          ],
+          "scheduled_production_allowed": false
+        },
         "recommended_command": "PYTHONPATH=. python scripts/run_scout_system_launch_gate.py --allow-live-spend --live-scouts 1000 --live-cost-cap-usd 5.00 --live-concurrency 8 --max-tool-iterations 1",
         "requires_explicit_spend_authorization": true,
         "watch_before_promoting": [
@@ -542,6 +573,523 @@
           "json_unparseable"
         ]
       },
+      "pre_1000_gate": {
+        "blocking_before_1000": [],
+        "interpretation": "The 1,000 ramp may run only as an explicitly authorized experiment. The listed repair metrics must be watched; passing the ramp does not schedule production.",
+        "must_watch_metrics": [
+          "accepted_unique_high_quality_coverage_per_dollar_delta",
+          "empty_hypothesis_with_strings_rate",
+          "invented_tool_persist_rate",
+          "json_unparseable_rate",
+          "missing_evidence_refs_rate",
+          "missing_information_strings_rate",
+          "quarantine_to_repair_route_rate",
+          "stale_directionality_flag_rate",
+          "top_geometry_confirmation_rate"
+        ],
+        "ramp_success_requirements": [
+          "provider_error_rate <= 0.02",
+          "success_rate >= 0.90",
+          "duplicate_hypothesis_rate <= 0.20",
+          "low_prompt_quality_rate <= 0.05",
+          "json_unparseable_rate == 0 or scout_json_retry_success covers every miss",
+          "invented_tool_persist_rate == 0",
+          "top_geometry_confirmation_rate improves on frontier/tension cells",
+          "scheduled production remains blocked until two independent 1,000-scout shadow runs pass repeatability gates"
+        ],
+        "ready_for_authorized_1000": true,
+        "red_failure_modes_from_prior_ramp": [
+          "invented_tools",
+          "json_unparseable"
+        ],
+        "scheduled_production_allowed": false
+      },
+      "repair_work_orders": [
+        {
+          "action": "Run fallback JSON repair before dropping non-calendar scouts; preserve raw transcript and flag repair success/failure.",
+          "examples": [
+            {
+              "entity": "RUNE",
+              "horizon": "structural",
+              "lens": "options_flow",
+              "prompt_quality": null,
+              "seed_id": "seed_cycle_live100_20260522_live_100_S_0020",
+              "weak_flags": [
+                "empty_hypothesis_text",
+                "scout_json_unparseable"
+              ]
+            }
+          ],
+          "metric": "json_unparseable_rate",
+          "owner": "scout_harness",
+          "priority": "P0",
+          "severity": "red",
+          "source_learning_report_field": "failure_modes.json_unparseable",
+          "status": "open_watch_next_ramp",
+          "success_gate": "json_unparseable_rate == 0 across the next ramp or every parse miss has scout_json_retry_success.",
+          "target_surface": "talis_desk/swarm/scout_runner.py::json_repair",
+          "trigger_count": 1,
+          "trigger_failure_mode": "json_unparseable",
+          "work_order_id": "lso_json_unparseable_scout_harness"
+        },
+        {
+          "action": "Filter suggested_tools against allowed_tool_candidates and keep invented tool desire only as an analysis_tool_proposal.",
+          "examples": [
+            {
+              "entity": "ATOM",
+              "horizon": "1w",
+              "lens": "vol_surface",
+              "prompt_quality": 0.9,
+              "seed_id": "seed_cycle_live100_20260522_live_100_S_0041",
+              "weak_flags": [
+                "prompt_invented_tool"
+              ]
+            },
+            {
+              "entity": "RENDER",
+              "horizon": "1m",
+              "lens": "vol_surface",
+              "prompt_quality": 0.9,
+              "seed_id": "seed_cycle_live100_20260522_live_100_S_0053",
+              "weak_flags": [
+                "prompt_invented_tool"
+              ]
+            }
+          ],
+          "metric": "invented_tool_persist_rate",
+          "owner": "tool_harness",
+          "priority": "P0",
+          "severity": "red",
+          "source_learning_report_field": "failure_modes.invented_tools",
+          "status": "open_watch_next_ramp",
+          "success_gate": "invented_tool_persist_rate == 0; proposed missing tools appear only in tool_requests/tool_proposals.",
+          "target_surface": "talis_desk/swarm/scout_runner.py::suggested_tools",
+          "trigger_count": 2,
+          "trigger_failure_mode": "invented_tools",
+          "work_order_id": "lso_invented_tools_tool_harness"
+        },
+        {
+          "action": "Force hypothesis to summarize the best valid string; if no valid string exists, emit a gap string or abstain with explicit missing edge.",
+          "examples": [
+            {
+              "entity": "kFLOKI",
+              "horizon": "1d",
+              "lens": "factor",
+              "prompt_quality": 0.25,
+              "seed_id": "seed_cycle_live100_20260522_live_100_T_0000__mexp_pair_8b7c3a1c1615_candidate",
+              "weak_flags": [
+                "empty_hypothesis_text",
+                "prompt_missing_hypothesis",
+                "prompt_missing_information_strings",
+                "scout_empty_hypothesis"
+              ]
+            },
+            {
+              "entity": "NFLX",
+              "horizon": "1w",
+              "lens": "factor",
+              "prompt_quality": 0.25,
+              "seed_id": "seed_cycle_live100_20260522_live_100_S_0018",
+              "weak_flags": [
+                "empty_hypothesis_text",
+                "prompt_missing_hypothesis",
+                "prompt_missing_information_strings",
+                "scout_empty_hypothesis"
+              ]
+            },
+            {
+              "entity": "COIN",
+              "horizon": "1m",
+              "lens": "structural",
+              "prompt_quality": 0.25,
+              "seed_id": "seed_cycle_live100_20260522_live_100_S_0046",
+              "weak_flags": [
+                "empty_hypothesis_text",
+                "prompt_missing_hypothesis",
+                "prompt_missing_information_strings",
+                "scout_empty_hypothesis"
+              ]
+            },
+            {
+              "entity": "kFLOKI",
+              "horizon": "1d",
+              "lens": "factor",
+              "prompt_quality": 0.6,
+              "seed_id": "seed_cycle_live100_20260522_live_100_T_0000__mexp_pair_8b7c3a1c1615_control",
+              "weak_flags": [
+                "empty_hypothesis_text",
+                "prompt_missing_hypothesis",
+                "prompt_string_obvious_and_crowded",
+                "scout_empty_hypothesis"
+              ]
+            },
+            {
+              "entity": "WIF",
+              "horizon": "1q",
+              "lens": "catalyst",
+              "prompt_quality": 0.65,
+              "seed_id": "seed_cycle_live100_20260522_live_100_T_0001__mexp_pair_be54f2b49127_control",
+              "weak_flags": [
+                "empty_hypothesis_text",
+                "prompt_missing_hypothesis",
+                "scout_empty_hypothesis"
+              ]
+            }
+          ],
+          "metric": "empty_hypothesis_with_strings_rate",
+          "owner": "prompt_policy",
+          "priority": "P1",
+          "severity": "yellow",
+          "source_learning_report_field": "failure_modes.empty_hypothesis",
+          "status": "open_watch_next_ramp",
+          "success_gate": "empty_hypothesis_with_strings_rate == 0 and low_prompt_quality_rate <= 0.05.",
+          "target_surface": "flash_temporal_v4 hypothesis/string consistency",
+          "trigger_count": 19,
+          "trigger_failure_mode": "empty_hypothesis",
+          "work_order_id": "lso_empty_hypothesis_prompt_policy"
+        },
+        {
+          "action": "Convert thin/stale evidence into low-conviction source-gap strings with kill signals instead of empty packets.",
+          "examples": [
+            {
+              "entity": "kFLOKI",
+              "horizon": "1d",
+              "lens": "factor",
+              "prompt_quality": 0.25,
+              "seed_id": "seed_cycle_live100_20260522_live_100_T_0000__mexp_pair_8b7c3a1c1615_candidate",
+              "weak_flags": [
+                "empty_hypothesis_text",
+                "prompt_missing_hypothesis",
+                "prompt_missing_information_strings",
+                "scout_empty_hypothesis"
+              ]
+            },
+            {
+              "entity": "NFLX",
+              "horizon": "1w",
+              "lens": "factor",
+              "prompt_quality": 0.25,
+              "seed_id": "seed_cycle_live100_20260522_live_100_S_0018",
+              "weak_flags": [
+                "empty_hypothesis_text",
+                "prompt_missing_hypothesis",
+                "prompt_missing_information_strings",
+                "scout_empty_hypothesis"
+              ]
+            },
+            {
+              "entity": "COIN",
+              "horizon": "1m",
+              "lens": "structural",
+              "prompt_quality": 0.25,
+              "seed_id": "seed_cycle_live100_20260522_live_100_S_0046",
+              "weak_flags": [
+                "empty_hypothesis_text",
+                "prompt_missing_hypothesis",
+                "prompt_missing_information_strings",
+                "scout_empty_hypothesis"
+              ]
+            }
+          ],
+          "metric": "missing_information_strings_rate",
+          "owner": "prompt_policy",
+          "priority": "P1",
+          "severity": "yellow",
+          "source_learning_report_field": "failure_modes.missing_information_strings",
+          "status": "open_watch_next_ramp",
+          "success_gate": "missing_information_strings_rate <= 0.01 for scouts with usable evidence or allowed repair tools.",
+          "target_surface": "flash_temporal_v4 gap-string contract",
+          "trigger_count": 3,
+          "trigger_failure_mode": "missing_information_strings",
+          "work_order_id": "lso_missing_information_strings_prompt_policy"
+        },
+        {
+          "action": "Reject or route strings that cannot cite provided tool_call_log_id/source refs; ask for a follow-up tool when the edge is missing.",
+          "examples": [
+            {
+              "entity": "WLD",
+              "horizon": "intraday",
+              "lens": "money_velocity",
+              "prompt_quality": 0.74,
+              "seed_id": "seed_cycle_live100_20260522_live_100_S_0001__mexp_pair_7464f91e637c_control",
+              "weak_flags": [
+                "adversarial_review:quarantine",
+                "prompt_string_missing_evidence_refs"
+              ]
+            },
+            {
+              "entity": "PEOPLE",
+              "horizon": "1w",
+              "lens": "polymarket",
+              "prompt_quality": 0.74,
+              "seed_id": "seed_cycle_live100_20260522_live_100_S_0005",
+              "weak_flags": [
+                "adversarial_review:quarantine",
+                "prompt_string_missing_evidence_refs"
+              ]
+            },
+            {
+              "entity": "SUPER",
+              "horizon": "1q",
+              "lens": "polymarket",
+              "prompt_quality": 0.74,
+              "seed_id": "seed_cycle_live100_20260522_live_100_S_0060",
+              "weak_flags": [
+                "adversarial_review:quarantine",
+                "prompt_string_missing_evidence_refs"
+              ]
+            },
+            {
+              "entity": "TNSR",
+              "horizon": "intraday",
+              "lens": "macro",
+              "prompt_quality": 0.75,
+              "seed_id": "seed_cycle_live100_20260522_live_100_S_0016",
+              "weak_flags": [
+                "adversarial_review:quarantine",
+                "prompt_string_missing_evidence_refs"
+              ]
+            }
+          ],
+          "metric": "missing_evidence_refs_rate",
+          "owner": "source_router",
+          "priority": "P1",
+          "severity": "yellow",
+          "source_learning_report_field": "failure_modes.missing_evidence_refs",
+          "status": "open_watch_next_ramp",
+          "success_gate": "missing_evidence_refs_rate <= 0.01 and tool_request_followup_rate rises on missing-edge cells.",
+          "target_surface": "information_strings.evidence_refs",
+          "trigger_count": 4,
+          "trigger_failure_mode": "missing_evidence_refs",
+          "work_order_id": "lso_missing_evidence_refs_source_router"
+        },
+        {
+          "action": "Treat stale observations as source-health gaps unless a fresh ref bridges the time horizon.",
+          "examples": [
+            {
+              "entity": "VINE",
+              "horizon": "1d",
+              "lens": "sentiment",
+              "prompt_quality": 0.74,
+              "seed_id": "seed_cycle_live100_20260522_live_100_S_0035",
+              "weak_flags": [
+                "prompt_string_rubric_failed",
+                "prompt_string_stale_date_reference"
+              ]
+            },
+            {
+              "entity": "ETHFI",
+              "horizon": "intraday",
+              "lens": "on_chain",
+              "prompt_quality": 0.9,
+              "seed_id": "seed_cycle_live100_20260522_live_100_T_0002__mexp_pair_55c3b108a00b_candidate",
+              "weak_flags": [
+                "prompt_string_stale_date_reference"
+              ]
+            }
+          ],
+          "metric": "stale_directionality_flag_rate",
+          "owner": "source_router",
+          "priority": "P1",
+          "severity": "yellow",
+          "source_learning_report_field": "failure_modes.stale_date_directionality",
+          "status": "open_watch_next_ramp",
+          "success_gate": "stale_directionality_flag_rate <= 0.01 and stale evidence produces repair_source/gap strings.",
+          "target_surface": "freshness and temporal contract",
+          "trigger_count": 2,
+          "trigger_failure_mode": "stale_date_directionality",
+          "work_order_id": "lso_stale_date_directionality_source_router"
+        },
+        {
+          "action": "Route quarantined strings to source repair or independent replication before verifier spend.",
+          "examples": [
+            {
+              "entity": "WLD",
+              "horizon": "intraday",
+              "lens": "money_velocity",
+              "prompt_quality": 0.74,
+              "seed_id": "seed_cycle_live100_20260522_live_100_S_0001__mexp_pair_7464f91e637c_control",
+              "weak_flags": [
+                "adversarial_review:quarantine",
+                "prompt_string_missing_evidence_refs"
+              ]
+            },
+            {
+              "entity": "PEOPLE",
+              "horizon": "1w",
+              "lens": "polymarket",
+              "prompt_quality": 0.74,
+              "seed_id": "seed_cycle_live100_20260522_live_100_S_0005",
+              "weak_flags": [
+                "adversarial_review:quarantine",
+                "prompt_string_missing_evidence_refs"
+              ]
+            },
+            {
+              "entity": "SUPER",
+              "horizon": "1q",
+              "lens": "polymarket",
+              "prompt_quality": 0.74,
+              "seed_id": "seed_cycle_live100_20260522_live_100_S_0060",
+              "weak_flags": [
+                "adversarial_review:quarantine",
+                "prompt_string_missing_evidence_refs"
+              ]
+            },
+            {
+              "entity": "TNSR",
+              "horizon": "intraday",
+              "lens": "macro",
+              "prompt_quality": 0.75,
+              "seed_id": "seed_cycle_live100_20260522_live_100_S_0016",
+              "weak_flags": [
+                "adversarial_review:quarantine",
+                "prompt_string_missing_evidence_refs"
+              ]
+            }
+          ],
+          "metric": "quarantine_to_repair_route_rate",
+          "owner": "adversarial_reviewer",
+          "priority": "P1",
+          "severity": "yellow",
+          "source_learning_report_field": "failure_modes.adversarial_quarantine",
+          "status": "open_watch_next_ramp",
+          "success_gate": "quarantine_to_repair_route_rate >= 0.95 and quarantined strings are excluded from promoted trade hypotheses.",
+          "target_surface": "review_information_string route outcome",
+          "trigger_count": 4,
+          "trigger_failure_mode": "adversarial_quarantine",
+          "work_order_id": "lso_adversarial_quarantine_adversarial_reviewer"
+        },
+        {
+          "action": "Upgrade node intelligence from sidecar context to actor/source-backed graph edges when wallet quality, reject behavior, or builder flow is source-backed.",
+          "examples": [
+            {
+              "entity": "kFLOKI",
+              "horizon": "1d",
+              "lens": "factor",
+              "prompt_quality": 0.25,
+              "seed_id": "seed_cycle_live100_20260522_live_100_T_0000__mexp_pair_8b7c3a1c1615_candidate",
+              "weak_flags": [
+                "empty_hypothesis_text",
+                "prompt_missing_hypothesis",
+                "prompt_missing_information_strings",
+                "scout_empty_hypothesis"
+              ]
+            },
+            {
+              "entity": "kFLOKI",
+              "horizon": "1d",
+              "lens": "factor",
+              "prompt_quality": 0.6,
+              "seed_id": "seed_cycle_live100_20260522_live_100_T_0000__mexp_pair_8b7c3a1c1615_control",
+              "weak_flags": [
+                "empty_hypothesis_text",
+                "prompt_missing_hypothesis",
+                "prompt_string_obvious_and_crowded",
+                "scout_empty_hypothesis"
+              ]
+            },
+            {
+              "entity": "WLD",
+              "horizon": "intraday",
+              "lens": "money_velocity",
+              "prompt_quality": 0.74,
+              "seed_id": "seed_cycle_live100_20260522_live_100_S_0001__mexp_pair_7464f91e637c_control",
+              "weak_flags": [
+                "adversarial_review:quarantine",
+                "prompt_string_missing_evidence_refs"
+              ]
+            },
+            {
+              "entity": "ETHFI",
+              "horizon": "intraday",
+              "lens": "on_chain",
+              "prompt_quality": 0.9,
+              "seed_id": "seed_cycle_live100_20260522_live_100_T_0002__mexp_pair_55c3b108a00b_candidate",
+              "weak_flags": [
+                "prompt_string_stale_date_reference"
+              ]
+            },
+            {
+              "entity": "ATOM",
+              "horizon": "1w",
+              "lens": "vol_surface",
+              "prompt_quality": 0.9,
+              "seed_id": "seed_cycle_live100_20260522_live_100_S_0041",
+              "weak_flags": [
+                "prompt_invented_tool"
+              ]
+            }
+          ],
+          "metric": "node_promoted_string_rate",
+          "owner": "node_intelligence",
+          "priority": "P2",
+          "severity": "yellow",
+          "source_learning_report_field": "failure_modes.node_not_promoted",
+          "status": "open_watch_next_ramp",
+          "success_gate": "node_promoted_string_rate improves while adversarial_quarantine_rate does not rise.",
+          "target_surface": "Hydromancer/HL-node promotion contract",
+          "trigger_count": 52,
+          "trigger_failure_mode": "node_not_promoted",
+          "work_order_id": "lso_node_not_promoted_node_intelligence"
+        },
+        {
+          "action": "Allocate independent follow-up scouts to top geometry cells before verifier spend.",
+          "examples": [
+            {
+              "cell_key": "NTRN|structural|catalyst|",
+              "route_directive": "widen_scouts",
+              "trade_scream_score": 0.6474
+            },
+            {
+              "cell_key": "TRX|1q|microstructure|",
+              "route_directive": "widen_scouts",
+              "trade_scream_score": 0.6254
+            },
+            {
+              "cell_key": "ILV|intraday|sentiment|",
+              "route_directive": "widen_scouts",
+              "trade_scream_score": 0.6034
+            },
+            {
+              "cell_key": "KAS|1d|macro|",
+              "route_directive": "widen_scouts",
+              "trade_scream_score": 0.5795
+            },
+            {
+              "cell_key": "IMX|intraday|rotation|",
+              "route_directive": "widen_scouts",
+              "trade_scream_score": 0.5653
+            }
+          ],
+          "metric": "top_geometry_confirmation_rate",
+          "owner": "seed_router",
+          "priority": "P1",
+          "severity": "yellow",
+          "source_learning_report_field": "top_geometry_actions",
+          "status": "open_route_next_ramp",
+          "success_gate": "Each top cell receives confirmation, contradiction, or kill signal from an independent scout/source family.",
+          "target_surface": "alpha_geometry.routing_queue",
+          "trigger_count": 6,
+          "trigger_failure_mode": "geometry_frontier_cells",
+          "work_order_id": "lso_geometry_replication"
+        },
+        {
+          "action": "Keep paired control/candidate policy slices in the next ramp and reject mutations that improve quality by spending low-EV tools.",
+          "examples": [],
+          "metric": "accepted_unique_high_quality_coverage_per_dollar_delta",
+          "owner": "market_evolve",
+          "priority": "P1",
+          "severity": "yellow",
+          "source_learning_report_field": "market_evolve",
+          "status": "open_watch_next_ramp",
+          "success_gate": "Candidate arm wins hard gates or is rejected with falsification evidence.",
+          "target_surface": "matched control/candidate seed slices",
+          "trigger_count": 1,
+          "trigger_failure_mode": "policy_mutation_arena",
+          "work_order_id": "lso_market_evolve_arena"
+        }
+      ],
       "schema_version": "talis_live_scout_learning_report_v1",
       "scorecard": {
         "avg_prompt_quality": 0.8622,
