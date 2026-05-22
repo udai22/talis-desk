@@ -41,7 +41,7 @@
 ## Next Command
 
 ```bash
-PYTHONPATH=. python scripts/run_scout_system_launch_gate.py --allow-live-spend --live-scouts 1000 --live-cost-cap-usd 5.00 --live-concurrency 8 --max-tool-iterations 1
+PYTHONPATH=. python scripts/run_scout_system_launch_gate.py --allow-live-spend --live-scouts 1000 --live-cost-cap-usd 5.00 --live-concurrency 8 --max-tool-iterations 1 --ramp-policy /tmp/talis-live100-20260522/live_canary/prompt_outputs/live_scout_ramp_policy.json
 ```
 
 Viewer: `/Users/udaikhattar/talis-desk/docs/scout-system-test/index.html`
