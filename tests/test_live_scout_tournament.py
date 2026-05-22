@@ -42,6 +42,26 @@ def test_live_scout_tournament_promotes_clean_ten_scout_candidate(tmp_path):
     assert not tournament["winner"]["failed_gates"]
 
 
+def test_live_scout_tournament_promotes_clean_hundred_scout_distribution_to_1000(tmp_path):
+    report_path = _write_canary(
+        tmp_path,
+        n_requested=100,
+        success_rate=0.93,
+        transcript_errors=0,
+        duplicate_rate=0.06,
+        completed=93,
+        geometry_cells=100,
+    )
+
+    tournament = evaluate_live_scout_tournament([report_path])
+
+    assert tournament["promotion_decision"]["decision"] == "promote_to_1000_scout_ramp"
+    assert tournament["promotion_decision"]["ready_for_live_1000"] is True
+    assert tournament["winner"]["promotion_eligible"] is True
+    assert "distribution_success_rate_ge_0_90" in tournament["winner"]["gates"]
+    assert tournament["next_experiment_plan"][0]["id"] == "live_1000_ramp"
+
+
 def test_live_scout_tournament_blocks_temporal_contract_regression(tmp_path):
     report_path = _write_canary(
         tmp_path,
@@ -64,11 +84,13 @@ def test_live_scout_tournament_blocks_temporal_contract_regression(tmp_path):
 def _write_canary(
     tmp_path: Path,
     *,
+    n_requested: int = 10,
     success_rate: float,
     transcript_errors: int,
     duplicate_rate: float,
     completed: int,
     structural_flags: int = 0,
+    geometry_cells: int = 6,
 ) -> Path:
     report_path = tmp_path / "live_scout_canary_report.json"
     report = {
@@ -76,7 +98,7 @@ def _write_canary(
         "cycle_id": "cycle_test_live_canary",
         "model": "deepseek:v4-flash",
         "fallback": "anthropic:claude-haiku-4-5",
-        "n_scouts_requested": 10,
+        "n_scouts_requested": n_requested,
         "provider_timeout_s": 45,
         "concurrency": 1,
         "seed_rng": 1,
@@ -85,7 +107,7 @@ def _write_canary(
         "metrics": {
             "scouts": {
                 "completed": completed,
-                "errored": 10 - completed,
+                "errored": n_requested - completed,
                 "success_rate": success_rate,
                 "avg_information_strings_per_scout": 1.2,
                 "evidence_ok_rate": 0.9,
@@ -94,18 +116,18 @@ def _write_canary(
                 "top_quality_flags": {
                     "scout_provider_unavailable": transcript_errors,
                     "prompt_string_missing_temporal_metadata": structural_flags,
-                    "prompt_quality:0.90": 10,
+                "prompt_quality:0.90": n_requested,
                 },
             },
             "information_map": {
-                "string_count": 12,
-                "cells_with_strings": 8,
+                "string_count": max(12, completed),
+                "cells_with_strings": max(8, completed),
                 "confluences": 4,
                 "tensions": 1,
                 "promoted_hypotheses": 4,
             },
             "geometry": {
-                "cell_count": 6,
+                "cell_count": geometry_cells,
                 "routing_queue_count": 4,
             },
             "coverage": {
@@ -120,7 +142,7 @@ def _write_canary(
             },
         },
         "transcript_summary": {
-            "call_count": 10,
+            "call_count": n_requested,
             "errors": ["TimeoutError: "] * transcript_errors,
             "prompt_chars": 60000,
             "response_chars": 12000,
@@ -129,7 +151,7 @@ def _write_canary(
     }
     report_path.write_text(json.dumps(report), encoding="utf-8")
     calls = []
-    for i in range(10):
+    for i in range(n_requested):
         call = {"elapsed_s": 4.0, "model": "deepseek:v4-flash", "text": "{}"}
         if i < transcript_errors:
             call["error"] = "TimeoutError: "
@@ -137,7 +159,7 @@ def _write_canary(
     (tmp_path / "live_scout_transcript.json").write_text(json.dumps({"calls": calls}), encoding="utf-8")
     outputs = [
         {"quality_flags": ["prompt_variant:flash_compact_v2"]}
-        for _ in range(10)
+        for _ in range(n_requested)
     ]
     (tmp_path / "live_scout_canary_outputs.json").write_text(json.dumps(outputs), encoding="utf-8")
     return report_path

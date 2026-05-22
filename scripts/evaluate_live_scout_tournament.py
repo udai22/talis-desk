@@ -29,6 +29,12 @@ DEFAULT_THRESHOLDS = {
     "max_structural_flag_rate": 0.20,
     "min_avg_prompt_quality": 0.70,
     "max_low_prompt_quality_rate": 0.20,
+    "distribution_min_scouts": 100,
+    "distribution_min_success_rate": 0.90,
+    "distribution_max_provider_error_rate": 0.02,
+    "distribution_max_duplicate_rate": 0.20,
+    "distribution_max_structural_flag_rate": 0.10,
+    "distribution_min_geometry_cells": 50,
 }
 
 
@@ -45,6 +51,12 @@ def main() -> int:
         "max_structural_flag_rate": args.max_structural_flag_rate,
         "min_avg_prompt_quality": args.min_avg_prompt_quality,
         "max_low_prompt_quality_rate": args.max_low_prompt_quality_rate,
+        "distribution_min_scouts": args.distribution_min_scouts,
+        "distribution_min_success_rate": args.distribution_min_success_rate,
+        "distribution_max_provider_error_rate": args.distribution_max_provider_error_rate,
+        "distribution_max_duplicate_rate": args.distribution_max_duplicate_rate,
+        "distribution_max_structural_flag_rate": args.distribution_max_structural_flag_rate,
+        "distribution_min_geometry_cells": args.distribution_min_geometry_cells,
     }
     report_paths = [Path(p).expanduser().resolve() for p in args.reports]
     tournament = evaluate_live_scout_tournament(report_paths, thresholds=thresholds)
@@ -78,6 +90,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--max-structural-flag-rate", type=float, default=DEFAULT_THRESHOLDS["max_structural_flag_rate"])
     parser.add_argument("--min-avg-prompt-quality", type=float, default=DEFAULT_THRESHOLDS["min_avg_prompt_quality"])
     parser.add_argument("--max-low-prompt-quality-rate", type=float, default=DEFAULT_THRESHOLDS["max_low_prompt_quality_rate"])
+    parser.add_argument("--distribution-min-scouts", type=int, default=DEFAULT_THRESHOLDS["distribution_min_scouts"])
+    parser.add_argument("--distribution-min-success-rate", type=float, default=DEFAULT_THRESHOLDS["distribution_min_success_rate"])
+    parser.add_argument("--distribution-max-provider-error-rate", type=float, default=DEFAULT_THRESHOLDS["distribution_max_provider_error_rate"])
+    parser.add_argument("--distribution-max-duplicate-rate", type=float, default=DEFAULT_THRESHOLDS["distribution_max_duplicate_rate"])
+    parser.add_argument("--distribution-max-structural-flag-rate", type=float, default=DEFAULT_THRESHOLDS["distribution_max_structural_flag_rate"])
+    parser.add_argument("--distribution-min-geometry-cells", type=int, default=DEFAULT_THRESHOLDS["distribution_min_geometry_cells"])
     return parser.parse_args()
 
 
@@ -93,10 +111,11 @@ def evaluate_live_scout_tournament(
         if path.exists()
     ]
     candidates = [c for c in candidates if c]
-    candidates.sort(key=lambda row: (bool(row["promotion_eligible"]), row["score"]), reverse=True)
-    promoted = [c for c in candidates if c["promotion_eligible"]]
+    candidates.sort(key=lambda row: (_stage_level(row), bool(row["promotion_eligible"]), row["score"]), reverse=True)
+    top_stage = _stage_level(candidates[0]) if candidates else 0
+    promoted = [c for c in candidates if c["promotion_eligible"] and _stage_level(c) == top_stage]
     winner = promoted[0] if promoted else (candidates[0] if candidates else None)
-    decision = _promotion_decision(winner=winner, promoted=promoted)
+    decision = _promotion_decision(winner=winner, promoted=promoted, thresholds=thresholds)
     report = {
         "schema_version": "talis_live_scout_tournament_v1",
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -184,6 +203,15 @@ def evaluate_live_scout_candidate(path: Path, *, thresholds: dict[str, float | i
         "geometry_cells_created": int(geometry.get("cell_count") or 0) > 0,
         "self_healing_no_failures": int(self_healing.get("failed_tasks") or 0) == 0,
     }
+    if n_requested >= int(thresholds["distribution_min_scouts"]):
+        gates.update({
+            "distribution_sample_size_ge_100": n_requested >= int(thresholds["distribution_min_scouts"]),
+            "distribution_success_rate_ge_0_90": success_rate >= float(thresholds["distribution_min_success_rate"]),
+            "distribution_provider_error_rate_le_0_02": provider_error_rate <= float(thresholds["distribution_max_provider_error_rate"]),
+            "distribution_duplicate_rate_le_0_20": duplicate_rate <= float(thresholds["distribution_max_duplicate_rate"]),
+            "distribution_structural_flag_rate_le_0_10": structural_flag_rate <= float(thresholds["distribution_max_structural_flag_rate"]),
+            "distribution_geometry_cells_ge_50": int(geometry.get("cell_count") or 0) >= int(thresholds["distribution_min_geometry_cells"]),
+        })
     failed_gates = [name for name, ok in gates.items() if not ok]
     prompt_variants = _prompt_variants(report, scouts, output_rows)
     candidate = {
@@ -328,7 +356,22 @@ def _score_candidate(candidate: dict[str, Any]) -> float:
     return round(max(0.0, min(1.0, score)), 4)
 
 
-def _promotion_decision(*, winner: dict[str, Any] | None, promoted: list[dict[str, Any]]) -> dict[str, Any]:
+def _stage_level(candidate: dict[str, Any]) -> int:
+    sample = candidate.get("sample") if isinstance(candidate.get("sample"), dict) else {}
+    requested = int(sample.get("requested") or 0)
+    if requested >= DEFAULT_THRESHOLDS["distribution_min_scouts"]:
+        return 2
+    if requested >= DEFAULT_THRESHOLDS["min_scouts"]:
+        return 1
+    return 0
+
+
+def _promotion_decision(
+    *,
+    winner: dict[str, Any] | None,
+    promoted: list[dict[str, Any]],
+    thresholds: dict[str, float | int],
+) -> dict[str, Any]:
     if not winner:
         return {
             "decision": "no_candidates",
@@ -338,6 +381,20 @@ def _promotion_decision(*, winner: dict[str, Any] | None, promoted: list[dict[st
             "reason": "No readable canary reports were provided.",
         }
     if promoted:
+        sample = winner.get("sample") if isinstance(winner.get("sample"), dict) else {}
+        if int(sample.get("requested") or 0) >= int(thresholds["distribution_min_scouts"]):
+            return {
+                "decision": "promote_to_1000_scout_ramp",
+                "promoted_candidate_id": winner["candidate_id"],
+                "ready_for_live_100": True,
+                "ready_for_live_1000": True,
+                "reason": (
+                    "The 100-scout live distribution passed provider reliability, "
+                    "string yield, duplicate, prompt-quality, temporal-structure, "
+                    "geometry, and self-healing gates. A 1,000-scout ramp is allowed "
+                    "under a hard cap; it is still a ramp, not an always-on production schedule."
+                ),
+            }
         return {
             "decision": "promote_to_100_scout_ramp",
             "promoted_candidate_id": winner["candidate_id"],
@@ -382,6 +439,25 @@ def _next_experiment_plan(
             }
         ]
     if winner.get("promotion_eligible"):
+        sample = winner.get("sample") if isinstance(winner.get("sample"), dict) else {}
+        if int(sample.get("requested") or 0) >= int(thresholds["distribution_min_scouts"]):
+            return [
+                {
+                    "id": "live_1000_ramp",
+                    "purpose": "Validate the winning policy at broad market-sensing scale under a hard cap.",
+                    "command": (
+                        "PYTHONPATH=. python scripts/run_live_scout_canary.py --n-scouts 1000 "
+                        "--concurrency 8 --cost-cap-usd 5.00 --provider-timeout-s 45 "
+                        f"--prompt-variant {winner['configuration']['prompt_variants'][0]} "
+                        "--max-tool-iterations 0 --allow-live-spend"
+                    ),
+                    "promotion_rule": (
+                        "Promote to scheduled production only if the 1,000-scout run keeps provider errors <= "
+                        f"{thresholds['distribution_max_provider_error_rate']}, success >= {thresholds['distribution_min_success_rate']}, "
+                        f"duplicate rate <= {thresholds['distribution_max_duplicate_rate']}, and produces usable geometry/coverage deltas."
+                    ),
+                }
+            ]
         return [
             {
                 "id": "live_100_ramp",
@@ -468,13 +544,23 @@ def _system_performance(candidates: list[dict[str, Any]], *, winner: dict[str, A
     best = winner or candidates[0]
     q = best["quality"]
     m = best["map_effect"]
+    sample = best.get("sample") if isinstance(best.get("sample"), dict) else {}
+    requested = int(sample.get("requested") or 0)
     if best.get("promotion_eligible"):
-        summary = (
-            "The live 10-scout distribution is clean enough for a 100-scout ramp: "
-            "provider calls completed, strings were stored, synthesis promoted hypotheses, "
-            "geometry cells were created, and self-healing tasks ran. The remaining blocker "
-            "is distributional stability at 100, not the 10-scout gate."
-        )
+        if requested >= int(DEFAULT_THRESHOLDS["distribution_min_scouts"]):
+            summary = (
+                "The live 100-scout distribution is clean enough for a capped 1,000-scout ramp: "
+                "provider calls completed, strings were stored, synthesis promoted hypotheses, "
+                "geometry cells were created, and self-healing tasks ran. The remaining blocker "
+                "is 1,000-scout stability before any scheduled production posture."
+            )
+        else:
+            summary = (
+                "The live 10-scout distribution is clean enough for a 100-scout ramp: "
+                "provider calls completed, strings were stored, synthesis promoted hypotheses, "
+                "geometry cells were created, and self-healing tasks ran. The remaining blocker "
+                "is distributional stability at 100, not the 10-scout gate."
+            )
     else:
         summary = (
             "The map path is functioning when provider calls complete: strings are stored, "
@@ -493,14 +579,18 @@ def _system_performance(candidates: list[dict[str, Any]], *, winner: dict[str, A
         "best_geometry_cells": m["geometry_cells"],
         "best_coverage_ratio": m["coverage_ratio"],
         "full_run_boundary": (
-            "A 100-scout live ramp is blocked unless one candidate passes all hard gates. "
-            "A 1,000-scout run remains blocked until the 100-scout ramp repeats the same curve."
+            "A 1,000-scout ramp is now allowed under a hard cap, but scheduled production remains blocked until that broader run repeats the same quality curve."
+            if best.get("promotion_eligible") and requested >= int(DEFAULT_THRESHOLDS["distribution_min_scouts"]) else
+            "A 100-scout live ramp is blocked unless one candidate passes all hard gates. A 1,000-scout run remains blocked until the 100-scout ramp repeats the same curve."
         ),
     }
 
 
 def _interpret_candidate(candidate: dict[str, Any]) -> str:
     if candidate["promotion_eligible"]:
+        sample = candidate.get("sample") if isinstance(candidate.get("sample"), dict) else {}
+        if int(sample.get("requested") or 0) >= DEFAULT_THRESHOLDS["distribution_min_scouts"]:
+            return "This 100-scout distribution is clean enough for a capped 1,000-scout ramp, but not scheduled production."
         return "This candidate is clean enough for a 100-scout live ramp, but not for direct 1,000."
     failed = set(candidate.get("failed_gates") or [])
     fragments = []

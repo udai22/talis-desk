@@ -459,16 +459,22 @@ def _live_canary_verdict(
     }
     failed = [name for name, ok in gates.items() if not ok]
     status = "pass" if not failed else "warn" if len(failed) <= 2 else "fail"
-    ready_for_next = status == "pass" and int(n_scouts or 0) >= 10
+    sample_n = int(n_scouts or 0)
+    ready_for_next = status == "pass" and sample_n >= 10
+    ready_for_100 = ready_for_next and sample_n < 100
+    ready_for_1000_tournament = ready_for_next and sample_n >= 100
     return {
         "status": status,
-        "ready_for_next_live_100": ready_for_next,
+        "ready_for_next_live_100": ready_for_100,
+        "ready_for_live_1000_tournament": ready_for_1000_tournament,
         "ready_for_direct_live_1000": False,
         "gates": gates,
         "failed_gates": failed,
         "interpretation": (
             "The live provider canary is clean. Run a 100-scout live ramp next, then promote to 1,000 if the same quality curve holds."
-            if ready_for_next else
+            if ready_for_100 else
+            "The 100-scout live ramp is clean. Run the tournament evaluator before any 1,000-scout spend."
+            if ready_for_1000_tournament else
             "This was a useful live smoke, but not enough to open the next spend gate."
             if status in {"pass", "warn"} and int(n_scouts or 0) < 10 else
             "The live canary found provider/data-quality issues. Fix these before increasing spend."
@@ -532,6 +538,12 @@ def _blocked_report(
 
 
 def _scale_decision(verdict: dict[str, Any], *, n_scouts: int) -> dict[str, Any]:
+    if verdict.get("ready_for_live_1000_tournament"):
+        return {
+            "decision": "evaluate_live_1000_ramp_next",
+            "next_step": "Run the live scout tournament evaluator over the 100-scout report. Promote to 1,000 only if the distribution gates pass.",
+            "why_not_direct_1000": "A 100-scout ramp proves a broader distribution than the 10-scout canary, but the tournament still needs to check provider reliability, redundancy, prompt quality, temporal structure, and geometry before a 1,000-scout run.",
+        }
     if verdict.get("ready_for_next_live_100"):
         return {
             "decision": "run_live_100_ramp_next",
