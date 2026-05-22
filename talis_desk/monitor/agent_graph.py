@@ -651,6 +651,10 @@ def _summary(
         "perfusion_cell_count": perfusion_metrics.get("cell_count", 0.0),
         "perfusion_routed_cell_count": perfusion_metrics.get("routed_cell_count", 0.0),
         "perfusion_max_dilation_score": perfusion_metrics.get("max_dilation_score", 0.0),
+        "perfusion_avg_latch_risk": perfusion_metrics.get("avg_latch_risk", 0.0),
+        "perfusion_avg_flow_shear": perfusion_metrics.get("avg_flow_shear", 0.0),
+        "perfusion_avg_transport_cost": perfusion_metrics.get("avg_transport_cost", 0.0),
+        "perfusion_avg_efficiency": perfusion_metrics.get("avg_perfusion_efficiency", 0.0),
         "perfusion_recommended_scouts": perfusion_metrics.get("recommended_scouts", 0.0),
         "market_evolve_status": market_evolve_scoreboard.get("status"),
         "market_evolve_summary": market_evolve_scoreboard.get("summary"),
@@ -696,7 +700,10 @@ def _timeline(
             "id": "perfusion",
             "label": "Perfusion",
             "status": "pass" if float(summary.get("perfusion_routed_cell_count") or 0) else "watch",
-            "detail": f"{int(float(summary.get('perfusion_routed_cell_count') or 0))} cells routed",
+            "detail": (
+                f"{int(float(summary.get('perfusion_routed_cell_count') or 0))} routed; "
+                f"latch={_safe_float(summary.get('perfusion_avg_latch_risk'), 0.0):.2f}"
+            ),
         },
         {"id": "graph", "label": "Graph", "status": "pass" if summary.get("nodes", 0) else "watch", "detail": f"{summary.get('nodes', 0)} nodes"},
         {"id": "cortex", "label": "Cortex", "status": "pass" if summary.get("situational_awareness_agents") else "watch", "detail": f"{len(summary.get('situational_awareness_agents') or [])} overseers"},

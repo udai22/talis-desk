@@ -71,11 +71,71 @@ def test_information_perfusion_dilates_unabsorbed_information_pressure(tmp_path)
     assert cell.metrics["price_absorption"] < 0.40
     assert cell.metrics["pressure_gradient"] > 0.55
     assert cell.metrics["source_oxygenation"] > 0.85
+    assert cell.metrics["flow_shear"] > 0.50
+    assert cell.metrics["perfusion_efficiency"] > 0.60
     assert "information_not_absorbed_by_price" in cell.quality_flags
 
     persisted = load_information_perfusion(cycle_id="cycle_perf", conn=store.conn)
     assert persisted[0]["route_directive"] == "dilate_scouts"
     assert persisted[0]["metrics"]["pressure_gradient"] == cell.metrics["pressure_gradient"]
+
+
+def test_information_perfusion_marks_latched_unabsorbed_pressure(tmp_path):
+    store = reset_desk_store_for_test(tmp_path / "desk.db")
+    persist_information_strings(
+        conn=store.conn,
+        cycle_id="cycle_perf_latch",
+        scout_id="scout_latch",
+        seed_id="seed_latch",
+        entity="VVV",
+        theme="early_social_alpha",
+        horizon="intraday",
+        lens="social_alpha",
+        bias_mode="frontier",
+        strings=[
+            InformationString(
+                title="VVV stale pressure needs unlatching",
+                thesis="VVV upward pressure is strong but may be trapped behind stale confirmation and non-absorbed price.",
+                mechanism="Several source families agree, but the cell needs a fresh repair pass before widening scout flow.",
+                expected_outcome="Fresh sources should either confirm upward repricing pressure or kill the stale chain.",
+                time_horizon="hour",
+                observed_at="2026-05-22T10:00:00+00:00",
+                conviction=0.96,
+                novelty_score=0.94,
+                crowdedness=0.12,
+                entities_chain=["VVV", "attention", "flow"],
+                depth_layers=[{"layer": 1, "claim": "attention"}, {"layer": 2, "claim": "flow"}],
+                evidence_refs=["fixture://our_hl_node/vvv", "fixture://orderbook/vvv", "fixture://twitter/vvv"],
+                quality_flags=[
+                    "source_family:our_hl_node",
+                    "source_family:market_microstructure",
+                    "source_family:grok_x_alpha",
+                    "stale_source_needs_refresh",
+                ],
+            )
+        ],
+    )
+    evaluate_information_price_outcomes(
+        cycle_id="cycle_perf_latch",
+        price_observations=[
+            {"entity": "VVV", "observed_at": "2026-05-22T09:59:00+00:00", "price": 10.0, "source": "fixture"},
+            {"entity": "VVV", "observed_at": "2026-05-22T11:05:00+00:00", "price": 10.02, "source": "fixture"},
+        ],
+        min_move_threshold_pct=0.02,
+        conn=store.conn,
+    )
+
+    snapshot = compute_information_perfusion(
+        cycle_id="cycle_perf_latch",
+        scout_budget=4,
+        conn=store.conn,
+    )
+
+    cell = snapshot.cells[0]
+    assert cell.metrics["latch_risk"] >= 0.45
+    assert cell.metrics["transport_cost"] > 0.0
+    assert snapshot.global_metrics["avg_latch_risk"] == cell.metrics["latch_risk"]
+    assert "information_latch_risk" in cell.quality_flags
 
 
 def test_information_perfusion_routes_next_scout_seed_from_pressure_matrix(tmp_path):

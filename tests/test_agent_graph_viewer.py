@@ -35,6 +35,8 @@ def test_agent_graph_state_normalizes_live_scout_artifacts(tmp_path: Path) -> No
     assert state["summary"]["outcome_eval_count"] == 1.0
     assert state["summary"]["outcome_direction_hit_rate"] == 1.0
     assert state["summary"]["early_repricing_hit_rate"] == 1.0
+    assert state["summary"]["perfusion_routed_cell_count"] == 1.0
+    assert state["summary"]["perfusion_avg_latch_risk"] == 0.49
     assert state["agents"][0]["price_feedback"]["outcome_count"] == 1
     assert state["cadence_policy"]["full_pipeline"]["cadence"] == "twice_daily"
     assert state["cadence_policy"]["always_on_flash"]["mode"] == "continuous_sentinel"
@@ -265,6 +267,43 @@ def _write_run(tmp_path: Path) -> Path:
                     "realized_edge_score": 1.0,
                     "lead_time_minutes": 65,
                     "quality_flags": ["direction_hit", "threshold_hit"],
+                }
+            ],
+        },
+        "information_perfusion.json": {
+            "schema_version": "information_perfusion_export_v1",
+            "cycle_id": "cycle_test",
+            "global_metrics": {
+                "cell_count": 1.0,
+                "routed_cell_count": 1.0,
+                "avg_information_pressure": 0.72,
+                "avg_pressure_gradient": 0.62,
+                "avg_source_oxygenation": 0.80,
+                "avg_resistance": 0.22,
+                "max_dilation_score": 0.74,
+                "avg_latch_risk": 0.49,
+                "avg_flow_shear": 0.55,
+                "avg_transport_cost": 0.13,
+                "avg_perfusion_efficiency": 0.72,
+                "recommended_scouts": 6.0,
+            },
+            "cells": [
+                {
+                    "cell_key": "HYPE|intraday|on_chain|frontier|node_intelligence",
+                    "entity": "HYPE",
+                    "horizon": "intraday",
+                    "lens": "on_chain",
+                    "theme": "node_intelligence",
+                    "route_directive": "dilate_scouts",
+                    "recommended_scouts": 6,
+                    "metrics": {
+                        "pressure_gradient": 0.62,
+                        "latch_risk": 0.49,
+                        "flow_shear": 0.55,
+                        "transport_cost": 0.13,
+                        "perfusion_efficiency": 0.72,
+                    },
+                    "quality_flags": ["information_not_absorbed_by_price", "information_latch_risk"],
                 }
             ],
         },

@@ -295,6 +295,41 @@ def _cell_from_rows(
         + (1.0 - source_oxygenation) * 0.32
     )
     pressure_gradient = _clamp01(information_pressure * (1.0 - price_absorption))
+    metabolic_demand = _clamp01(
+        information_pressure
+        * (
+            0.50
+            + avg_conviction * 0.25
+            + avg_novelty * (1.0 - avg_crowding) * 0.25
+        )
+    )
+    flow_shear = _clamp01(
+        pressure_gradient
+        * max(0.15, source_oxygenation)
+        * (1.0 - resistance * 0.35)
+    )
+    transport_cost = _clamp01(
+        resistance
+        * (
+            0.55
+            + staleness * 0.25
+            + (1.0 - source_oxygenation) * 0.20
+        )
+    )
+    latch_risk = _clamp01(
+        pressure_gradient
+        * (
+            0.45
+            + resistance * 0.35
+            + staleness * 0.20
+        )
+        * (1.0 - price_absorption * 0.50)
+    )
+    perfusion_efficiency = _clamp01(
+        source_oxygenation
+        * (1.0 - resistance)
+        * (0.75 + observed_rate * 0.25)
+    )
     dilation_score = _clamp01(
         pressure_gradient * 0.48
         + source_oxygenation * 0.18
@@ -317,6 +352,11 @@ def _cell_from_rows(
         "source_oxygenation": round(source_oxygenation, 4),
         "resistance": round(resistance, 4),
         "dilation_score": round(dilation_score, 4),
+        "metabolic_demand": round(metabolic_demand, 4),
+        "flow_shear": round(flow_shear, 4),
+        "transport_cost": round(transport_cost, 4),
+        "latch_risk": round(latch_risk, 4),
+        "perfusion_efficiency": round(perfusion_efficiency, 4),
         "observed_rate": round(observed_rate, 4),
         "avg_realized_edge_score": round(avg_realized_edge, 4),
         "evidence_coverage": round(evidence_coverage, 4),
@@ -446,6 +486,10 @@ def _global_metrics(cells: list[InformationPerfusionCell]) -> dict[str, float]:
         "avg_source_oxygenation": round(_avg([cell.metrics.get("source_oxygenation", 0.0) for cell in cells]), 4),
         "avg_resistance": round(_avg([cell.metrics.get("resistance", 0.0) for cell in cells]), 4),
         "max_dilation_score": round(max([cell.dilation_score for cell in cells] or [0.0]), 4),
+        "avg_latch_risk": round(_avg([cell.metrics.get("latch_risk", 0.0) for cell in cells]), 4),
+        "avg_flow_shear": round(_avg([cell.metrics.get("flow_shear", 0.0) for cell in cells]), 4),
+        "avg_transport_cost": round(_avg([cell.metrics.get("transport_cost", 0.0) for cell in cells]), 4),
+        "avg_perfusion_efficiency": round(_avg([cell.metrics.get("perfusion_efficiency", 0.0) for cell in cells]), 4),
         "recommended_scouts": float(sum(cell.recommended_scouts for cell in cells)),
     }
 
@@ -483,6 +527,12 @@ def _cell_flags(
         flags.add("high_resistance")
     if metrics.get("pressure_gradient", 0.0) >= 0.50:
         flags.add("high_pressure_gradient")
+    if metrics.get("latch_risk", 0.0) >= 0.45:
+        flags.add("information_latch_risk")
+    if metrics.get("flow_shear", 0.0) >= 0.50:
+        flags.add("high_flow_shear")
+    if metrics.get("transport_cost", 0.0) > metrics.get("flow_shear", 0.0):
+        flags.add("perfusion_transport_cost_exceeds_shear")
     if metrics.get("price_absorption", 0.0) <= 0.35 and metrics.get("information_pressure", 0.0) >= 0.50:
         flags.add("information_not_absorbed_by_price")
     return sorted(flags)

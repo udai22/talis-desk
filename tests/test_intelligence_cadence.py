@@ -236,6 +236,37 @@ def test_cadence_control_decision_uses_perfusion_pressure_as_routing_signal() ->
     assert "information_perfusion_positive_pressure" in decision["quality_flags"]
 
 
+def test_cadence_control_decision_repairs_latched_perfusion_before_widening() -> None:
+    decision = build_cadence_control_decision(
+        mode="sentinel_tick",
+        allow_live_spend=False,
+        scoreboard={
+            "id": "score_latch",
+            "status": "baseline_active",
+            "counts": {"open_experiments": 0, "candidate_programs": 0, "result_window": 0},
+            "hard_experiment_gate_summary": {"triggered": 0},
+            "evolution_memory": {"evolves": True, "best_score_delta_recent": 0.0},
+        },
+        information_perfusion={
+            "status": "ready",
+            "cell_count": 2.0,
+            "routed_cell_count": 1.0,
+            "avg_pressure_gradient": 0.50,
+            "avg_latch_risk": 0.52,
+            "high_latch_risk_rate": 0.50,
+            "max_dilation_score": 0.74,
+            "high_pressure_unabsorbed_rate": 0.50,
+        },
+    )
+
+    assert decision["decision"] == "perfusion_latch_repair_sentinel"
+    assert decision["allowed_next_step"] == "perfusion_latch_repair"
+    assert decision["recommended_next_run"]["scouts"] == 24
+    assert decision["recommended_next_run"]["requires_allow_live_spend"] is True
+    assert decision["information_perfusion"]["avg_latch_risk"] == 0.52
+    assert "information_perfusion_latch_risk" in decision["quality_flags"]
+
+
 def test_execute_cadence_report_summarizes_information_price_loop(tmp_path: Path) -> None:
     prompt = tmp_path / "live_canary" / "prompt_outputs"
     prompt.mkdir(parents=True)
@@ -289,6 +320,10 @@ def test_execute_cadence_report_summarizes_information_price_loop(tmp_path: Path
             "avg_pressure_gradient": 0.62,
             "avg_source_oxygenation": 0.80,
             "avg_resistance": 0.22,
+            "avg_latch_risk": 0.49,
+            "avg_flow_shear": 0.55,
+            "avg_transport_cost": 0.13,
+            "avg_perfusion_efficiency": 0.72,
             "max_dilation_score": 0.74,
             "recommended_scouts": 6.0,
         },
@@ -307,10 +342,14 @@ def test_execute_cadence_report_summarizes_information_price_loop(tmp_path: Path
                     "source_oxygenation": 0.80,
                     "resistance": 0.22,
                     "dilation_score": 0.74,
+                    "latch_risk": 0.49,
+                    "flow_shear": 0.55,
+                    "transport_cost": 0.13,
+                    "perfusion_efficiency": 0.72,
                 },
                 "route_directive": "dilate_scouts",
                 "recommended_scouts": 6,
-                "quality_flags": ["information_not_absorbed_by_price"],
+                "quality_flags": ["information_not_absorbed_by_price", "information_latch_risk"],
             }
         ],
     }))
@@ -342,8 +381,10 @@ def test_execute_cadence_report_summarizes_information_price_loop(tmp_path: Path
     assert report["control_decision"]["information_price_loop"]["avg_realized_edge_score"] == 0.95
     assert report["information_perfusion"]["status"] == "ready"
     assert report["information_perfusion"]["high_pressure_unabsorbed_rate"] == 1.0
+    assert report["information_perfusion"]["high_latch_risk_rate"] == 1.0
     assert report["information_perfusion"]["top_cells"][0]["route_directive"] == "dilate_scouts"
     assert report["control_decision"]["information_perfusion"]["max_dilation_score"] == 0.74
+    assert report["control_decision"]["information_perfusion"]["avg_latch_risk"] == 0.49
 
 
 def test_followup_plan_compiles_prior_report_control_decision_without_opening_spend_gate(tmp_path: Path) -> None:

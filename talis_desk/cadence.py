@@ -557,6 +557,8 @@ def build_cadence_control_decision(
     perfusion_high_unabsorbed = _floatish(perfusion.get("high_pressure_unabsorbed_rate"), default=0.0)
     perfusion_oxygenation_gap = _floatish(perfusion.get("oxygenation_gap_rate"), default=0.0)
     perfusion_avg_source_oxygenation = _floatish(perfusion.get("avg_source_oxygenation"), default=0.0)
+    perfusion_avg_latch_risk = _floatish(perfusion.get("avg_latch_risk"), default=0.0)
+    perfusion_high_latch_risk = _floatish(perfusion.get("high_latch_risk_rate"), default=0.0)
     if perfusion_status in {"missing", "not_found"}:
         flags.append("information_perfusion_missing")
     elif perfusion_cell_count <= 0:
@@ -571,6 +573,21 @@ def build_cadence_control_decision(
     }
     if can_perfusion_steer and perfusion_cell_count >= 1:
         if (
+            perfusion_high_latch_risk >= 0.25
+            and perfusion_avg_latch_risk >= 0.45
+            and perfusion_avg_pressure_gradient >= 0.35
+        ):
+            decision = "perfusion_latch_repair_sentinel"
+            allowed_next_step = "perfusion_latch_repair"
+            recommended_mode = "sentinel_tick"
+            recommended_scouts = max(recommended_scouts, 16)
+            blocks_wider_spend = False
+            why = (
+                "The perfusion matrix sees information pressure trapped behind resistance. "
+                "Run a small repair sentinel to unlatch stale, congested, or over-constrained evidence before adding broad scout flow."
+            )
+            flags.append("information_perfusion_latch_risk")
+        elif (
             perfusion_high_unabsorbed >= 0.25
             and perfusion_avg_pressure_gradient >= 0.45
             and perfusion_max_dilation >= 0.55
@@ -683,6 +700,7 @@ def _control_decision_requires_live_spend(
     return decision in {
         "collect_experiment_evidence",
         "continue_candidate_experiment",
+        "perfusion_latch_repair_sentinel",
         "perfusion_pressure_requests_sentinel",
         "perfusion_source_oxygenation_repair",
         "price_loop_confirms_signal",
@@ -793,6 +811,7 @@ def _perfusion_report_summary(root: Path) -> dict[str, Any]:
     quality_flags = _string_list(payload.get("quality_flags"))
     high_pressure_unabsorbed = 0
     oxygenation_gaps = 0
+    high_latch_risk = 0
     recommended_scouts = 0.0
     for cell in cell_rows:
         cell_flags = _string_list(cell.get("quality_flags"))
@@ -800,10 +819,13 @@ def _perfusion_report_summary(root: Path) -> dict[str, Any]:
         metrics = cell.get("metrics") if isinstance(cell.get("metrics"), dict) else {}
         pressure_gradient = _floatish(metrics.get("pressure_gradient"), default=0.0)
         price_absorption = _floatish(metrics.get("price_absorption"), default=1.0)
+        latch_risk = _floatish(metrics.get("latch_risk"), default=0.0)
         if "information_not_absorbed_by_price" in cell_flags or (
             pressure_gradient >= 0.50 and price_absorption <= 0.35
         ):
             high_pressure_unabsorbed += 1
+        if "information_latch_risk" in cell_flags or latch_risk >= 0.45:
+            high_latch_risk += 1
         if str(cell.get("route_directive") or "") == "oxygenate_sources":
             oxygenation_gaps += 1
         recommended_scouts += _floatish(cell.get("recommended_scouts"), default=0.0)
@@ -829,6 +851,22 @@ def _perfusion_report_summary(root: Path) -> dict[str, Any]:
             global_metrics.get("avg_resistance"),
             default=_avgish([_cell_metric(cell, "resistance") for cell in cell_rows]),
         ),
+        "avg_latch_risk": _floatish(
+            global_metrics.get("avg_latch_risk"),
+            default=_avgish([_cell_metric(cell, "latch_risk") for cell in cell_rows]),
+        ),
+        "avg_flow_shear": _floatish(
+            global_metrics.get("avg_flow_shear"),
+            default=_avgish([_cell_metric(cell, "flow_shear") for cell in cell_rows]),
+        ),
+        "avg_transport_cost": _floatish(
+            global_metrics.get("avg_transport_cost"),
+            default=_avgish([_cell_metric(cell, "transport_cost") for cell in cell_rows]),
+        ),
+        "avg_perfusion_efficiency": _floatish(
+            global_metrics.get("avg_perfusion_efficiency"),
+            default=_avgish([_cell_metric(cell, "perfusion_efficiency") for cell in cell_rows]),
+        ),
         "max_dilation_score": _floatish(
             global_metrics.get("max_dilation_score"),
             default=max([_cell_metric(cell, "dilation_score") for cell in cell_rows] or [0.0]),
@@ -839,6 +877,7 @@ def _perfusion_report_summary(root: Path) -> dict[str, Any]:
         ),
         "high_pressure_unabsorbed_rate": round(high_pressure_unabsorbed / max(1, len(cell_rows)), 4),
         "oxygenation_gap_rate": round(oxygenation_gaps / max(1, len(cell_rows)), 4),
+        "high_latch_risk_rate": round(high_latch_risk / max(1, len(cell_rows)), 4),
         "top_cells": _top_information_perfusion_cells(cell_rows),
         "quality_flags": sorted(set(quality_flags)),
     }
@@ -934,6 +973,10 @@ def _top_information_perfusion_cells(cells: list[dict[str, Any]], *, limit: int 
             "source_oxygenation": _cell_metric(cell, "source_oxygenation"),
             "resistance": _cell_metric(cell, "resistance"),
             "dilation_score": _cell_metric(cell, "dilation_score"),
+            "latch_risk": _cell_metric(cell, "latch_risk"),
+            "flow_shear": _cell_metric(cell, "flow_shear"),
+            "transport_cost": _cell_metric(cell, "transport_cost"),
+            "perfusion_efficiency": _cell_metric(cell, "perfusion_efficiency"),
             "quality_flags": _string_list(cell.get("quality_flags")),
         })
     return out
@@ -950,9 +993,14 @@ def _control_perfusion_payload(perfusion: dict[str, Any]) -> dict[str, Any]:
         "avg_pressure_gradient": _floatish(perfusion.get("avg_pressure_gradient"), default=0.0),
         "avg_source_oxygenation": _floatish(perfusion.get("avg_source_oxygenation"), default=0.0),
         "avg_resistance": _floatish(perfusion.get("avg_resistance"), default=0.0),
+        "avg_latch_risk": _floatish(perfusion.get("avg_latch_risk"), default=0.0),
+        "avg_flow_shear": _floatish(perfusion.get("avg_flow_shear"), default=0.0),
+        "avg_transport_cost": _floatish(perfusion.get("avg_transport_cost"), default=0.0),
+        "avg_perfusion_efficiency": _floatish(perfusion.get("avg_perfusion_efficiency"), default=0.0),
         "max_dilation_score": _floatish(perfusion.get("max_dilation_score"), default=0.0),
         "high_pressure_unabsorbed_rate": _floatish(perfusion.get("high_pressure_unabsorbed_rate"), default=0.0),
         "oxygenation_gap_rate": _floatish(perfusion.get("oxygenation_gap_rate"), default=0.0),
+        "high_latch_risk_rate": _floatish(perfusion.get("high_latch_risk_rate"), default=0.0),
         "top_cells": (perfusion.get("top_cells") if isinstance(perfusion.get("top_cells"), list) else [])[:5],
     }
 
