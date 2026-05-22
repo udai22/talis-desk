@@ -293,6 +293,7 @@ def run_market_evolve_step(
             evaluation=evaluation,
             cycle_id=cycle_id,
             cortex_review=cortex_review,
+            experiment_results=experiment_results,
             conn=db,
         )
         for child in children:
@@ -1587,6 +1588,7 @@ def propose_market_evolve_mutation(
     evaluation: MarketEvolveEvaluation,
     cycle_id: str,
     cortex_review: Optional[dict[str, Any]] = None,
+    experiment_results: Optional[list[dict[str, Any]]] = None,
     conn: Optional[sqlite3.Connection] = None,
 ) -> Optional[MarketEvolveProgram]:
     children = propose_market_evolve_mutations(
@@ -1594,6 +1596,7 @@ def propose_market_evolve_mutation(
         evaluation=evaluation,
         cycle_id=cycle_id,
         cortex_review=cortex_review,
+        experiment_results=experiment_results,
         max_children=1,
         conn=conn,
     )
@@ -1606,6 +1609,7 @@ def propose_market_evolve_mutations(
     evaluation: MarketEvolveEvaluation,
     cycle_id: str,
     cortex_review: Optional[dict[str, Any]] = None,
+    experiment_results: Optional[list[dict[str, Any]]] = None,
     max_children: Optional[int] = None,
     conn: Optional[sqlite3.Connection] = None,
 ) -> list[MarketEvolveProgram]:
@@ -1622,6 +1626,7 @@ def propose_market_evolve_mutations(
         metrics=evaluation.metrics,
         program=program,
         cortex_review=cortex_review,
+        experiment_results=experiment_results,
     ):
         child = _persist_market_evolve_mutation_candidate(
             program=program,
@@ -1954,6 +1959,7 @@ def _mutation_candidates_with_cortex_review(
     metrics: dict[str, float],
     program: MarketEvolveProgram,
     cortex_review: Optional[dict[str, Any]] = None,
+    experiment_results: Optional[list[dict[str, Any]]] = None,
 ) -> list[MarketEvolveMutationCandidate]:
     candidates: list[MarketEvolveMutationCandidate] = []
     seen: set[str] = set()
@@ -1978,6 +1984,18 @@ def _mutation_candidates_with_cortex_review(
 
     review_kind, review_rationale, review_patch, review_source = _mutation_from_cortex_review(cortex_review)
     add(review_kind, review_rationale, review_patch, review_source)
+
+    for rank, candidate in enumerate(
+        _mutation_candidates_from_failed_experiment_attribution(
+            experiment_results or [],
+            program=program,
+        ),
+        start=1,
+    ):
+        source = dict(candidate.mutation_source or {})
+        source.setdefault("source", "market_evolve_failed_experiment_attribution")
+        source.setdefault("candidate_rank", rank)
+        add(candidate.mutation_kind, candidate.rationale, candidate.mutation_patch, source)
 
     primary_kind, primary_rationale, primary_patch = _choose_mutation(metrics, program)
     primary_source = {
@@ -2356,6 +2374,207 @@ def _secondary_metric_mutation_candidates(
             },
             mutation_source=source("learned_tool_success_pressure"),
         ))
+    return out
+
+
+def _mutation_candidates_from_failed_experiment_attribution(
+    experiment_results: list[dict[str, Any]],
+    *,
+    program: MarketEvolveProgram,
+) -> list[MarketEvolveMutationCandidate]:
+    if not experiment_results:
+        return []
+    attribution = build_market_evolve_experiment_attribution(experiment_results)
+    rows = attribution.get("latest") if isinstance(attribution.get("latest"), list) else []
+    out: list[MarketEvolveMutationCandidate] = []
+    for row in rows[:4]:
+        if not isinstance(row, dict):
+            continue
+        signal = str(row.get("learning_signal") or "")
+        if signal not in {
+            "candidate_failed_hard_proof_gate",
+            "candidate_underperformed_or_regressed",
+        }:
+            continue
+        metrics = _attribution_repair_metrics(row)
+        if not metrics:
+            continue
+        patch = _failed_attribution_mutation_patch(metrics=metrics, program=program)
+        if not patch:
+            continue
+        experiment_id = str(row.get("experiment_id") or "unknown")
+        rationale = (
+            "A matched MarketEvolve experiment failed with concrete metric "
+            f"regressions ({', '.join(metrics[:4])}); create a counterfactual "
+            "candidate that repairs those dimensions instead of treating the "
+            "failure as generic negative signal."
+        )
+        source = {
+            "source": "market_evolve_failed_experiment_attribution",
+            "schema_version": attribution.get("schema_version"),
+            "experiment_id": experiment_id,
+            "result_id": row.get("result_id"),
+            "decision": row.get("decision"),
+            "score_delta": row.get("score_delta"),
+            "learning_signal": signal,
+            "diagnostic_codes": [
+                "failed_experiment_attribution",
+                *[_metric_flag_slug(metric) for metric in metrics[:6]],
+            ],
+            "target_metrics": {
+                _metric_base_key(metric): True
+                for metric in metrics[:8]
+            },
+            "falsification_gates": _attribution_repair_falsification_gates(row),
+        }
+        out.append(MarketEvolveMutationCandidate(
+            mutation_kind="repair_failed_experiment_attribution",
+            rationale=rationale,
+            mutation_patch=patch,
+            mutation_source=source,
+        ))
+    return out[:2]
+
+
+def _failed_attribution_mutation_patch(
+    *,
+    metrics: list[str],
+    program: MarketEvolveProgram,
+) -> dict[str, Any]:
+    thresholds = dict(
+        ((program.genome or {}).get("routing_thresholds") or DEFAULT_MARKET_EVOLVE_GENOME["routing_thresholds"])
+    )
+    prompt_policy = dict((program.genome or {}).get("prompt_policy") or {})
+    tool_policy = dict((program.genome or {}).get("tool_request_policy") or {})
+    metric_text = " ".join(metrics).lower()
+    patch: dict[str, Any] = {
+        "prompt_policy": {
+            "contract_pressure": "raise",
+            "require_mechanism": True,
+            "require_kill_signal": True,
+            "require_evidence_refs": True,
+            "prior_context_topk": min(10, int(prompt_policy.get("prior_context_topk") or 6) + 1),
+            "attribution_repair_metrics": metrics[:8],
+        },
+        "tool_request_policy": {
+            "require_expected_edge": True,
+            "require_eval_plan": True,
+            "max_tool_candidates_per_seed": min(
+                16,
+                int(tool_policy.get("max_tool_candidates_per_seed", 10)) + 1,
+            ),
+        },
+        "routing_thresholds": {},
+        "geometry_weights": {},
+    }
+    if "source_independence" in metric_text:
+        patch["tool_request_policy"].update({
+            "prefer_missing_source_family": True,
+            "min_source_families_per_trade_cell": 3,
+            "source_family_targets": _merged_source_family_targets(
+                tool_policy.get("source_family_targets"),
+                ["hydromancer", "our_hl_node", "market_microstructure", "grok_x_alpha", "web_attention"],
+            ),
+        })
+        patch["routing_thresholds"]["min_source_independence"] = min(
+            0.75,
+            max(0.45, float(thresholds.get("min_source_independence", 0.45)) + 0.05),
+        )
+    if "fragil" in metric_text or "fragile_verify" in metric_text:
+        patch["geometry_weights"]["fragility_penalty"] = min(
+            0.45,
+            float(((program.genome or {}).get("geometry_weights") or {}).get("fragility_penalty", 0.24)) + 0.06,
+        )
+        patch["routing_thresholds"].update({
+            "max_fragility": max(0.25, float(thresholds.get("max_fragility", 0.45)) - 0.05),
+            "verify_allow_fragility_max": max(
+                0.20,
+                float(thresholds.get("verify_allow_fragility_max", thresholds.get("max_fragility", 0.45))) - 0.05,
+            ),
+        })
+    if "prompt" in metric_text or "valid_string" in metric_text:
+        patch["prompt_policy"].update({
+            "min_information_strings": min(
+                3,
+                max(2, int(prompt_policy.get("min_information_strings") or 1)),
+            ),
+            "fallback_variants": [
+                "skeptical_operator_v1",
+                "source_first_v1",
+                "temporal_pyramid_v1",
+            ],
+        })
+    if "route_contract" in metric_text:
+        patch["prompt_policy"]["require_route_contract_alignment"] = True
+        patch["routing_thresholds"]["route_contract_min_success_rate"] = 0.70
+    if any(token in metric_text for token in ("tool", "adapter")):
+        patch["tool_request_policy"].update({
+            "runtime_adapter_backlog_priority": "high",
+            "require_runtime_adapter_eval_fixtures": True,
+            "max_new_tool_proposals_per_cycle": max(
+                4,
+                int(tool_policy.get("max_new_tool_proposals_per_cycle", 12)) - 1,
+            ),
+        })
+    if any(token in metric_text for token in ("outcome", "realized_edge", "direction_hit", "price")):
+        patch["prompt_policy"]["emphasize_price_feedback_refs"] = True
+        patch["tool_request_policy"].update({
+            "prefer_price_anchor_tools": True,
+            "require_disconfirming_price_check": True,
+        })
+        patch["routing_thresholds"]["price_feedback_exploitation_budget_share"] = min(
+            0.20,
+            float(thresholds.get("price_feedback_exploitation_budget_share") or 0.02) + 0.03,
+        )
+    if "perfusion" in metric_text:
+        patch["prompt_policy"]["emphasize_perfusion_state"] = True
+        patch["tool_request_policy"]["prefer_information_perfusion_tools"] = True
+        patch["routing_thresholds"]["perfusion_followup_budget_share"] = min(
+            0.20,
+            float(thresholds.get("perfusion_followup_budget_share") or 0.02) + 0.04,
+        )
+    return _prune_empty_dicts(patch)
+
+
+def _attribution_repair_falsification_gates(row: dict[str, Any]) -> list[dict[str, Any]]:
+    gates: list[dict[str, Any]] = []
+    for delta in [
+        *(row.get("proof_metric_deltas") or []),
+        *(row.get("top_negative_metric_deltas") or []),
+    ]:
+        if not isinstance(delta, dict):
+            continue
+        metric = str(delta.get("gate_metric") or delta.get("metric") or "")
+        if not metric:
+            continue
+        base_metric = _metric_base_key(metric)
+        candidate = _optional_float(delta.get("candidate"))
+        if candidate is None:
+            continue
+        lower_is_better = _metric_desirable_direction(base_metric) < 0
+        gates.append({
+            "metric": (
+                metric if metric.startswith(("candidate_", "control_"))
+                else f"candidate_{base_metric}"
+            ),
+            "operator": ">=" if lower_is_better else "<=",
+            "threshold": round(float(candidate), 4),
+            "decision": "reject_candidate",
+        })
+        if len(gates) >= 6:
+            break
+    return gates
+
+
+def _prune_empty_dicts(raw: dict[str, Any]) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for key, value in raw.items():
+        if isinstance(value, dict):
+            nested = _prune_empty_dicts(value)
+            if nested:
+                out[key] = nested
+        elif value not in (None, "", [], {}):
+            out[key] = value
     return out
 
 
@@ -5777,6 +5996,8 @@ def _mutation_hypothesis(mutation_kind: str, rationale: str) -> str:
         return "If cortex tasks must claim, observe the shape, and complete before external follow-ups, the map-to-worker loop becomes reliable enough to train routing policy."
     if mutation_kind == "tighten_prompt_contract":
         return "If the scout contract is stricter, cheap model calls emit more valid decision-changing strings per dollar."
+    if mutation_kind == "repair_failed_experiment_attribution":
+        return "If failed A/B attribution is turned into a targeted policy patch, the next candidate should repair the exact metric regressions instead of randomly exploring around the failure."
     if mutation_kind == "exploit_learned_tool_surface":
         return "If proven learned tools are exposed earlier, scouts gather more useful evidence without widening raw call count."
     if mutation_kind == "exploit_price_feedback_surface":
@@ -5835,6 +6056,13 @@ def _mutation_target_metrics(mutation_kind: str, metrics: dict[str, float]) -> d
             "avg_prompt_quality",
             "prompt_pass_rate",
             "prompt_contract_failure_rate",
+        ],
+        "repair_failed_experiment_attribution": [
+            "valid_string_rate",
+            "avg_source_independence",
+            "avg_fragility",
+            "tool_eval_failed_rate",
+            "avg_realized_edge_score",
         ],
         "widen_source_families": [
             "avg_source_independence",
@@ -6143,6 +6371,8 @@ def _mutation_kill_signal(mutation_kind: str) -> str:
         return "Candidate does not raise cortex task completion/shape-observation rates or continues failing worker tasks."
     if mutation_kind == "tighten_prompt_contract":
         return "Candidate does not improve prompt quality/pass rate or reduces valid string yield enough to lose the experiment."
+    if mutation_kind == "repair_failed_experiment_attribution":
+        return "Candidate repeats the same attributed metric regressions, fails its attribution-derived proof gates, or loses again to control."
     if mutation_kind == "exploit_price_feedback_surface":
         return "Candidate does not preserve or improve price-outcome hit rate and realized edge on matched slices."
     if mutation_kind == "tighten_price_feedback_contract":

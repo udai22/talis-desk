@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from talis_desk.information_map import (
+    DEFAULT_MARKET_EVOLVE_GENOME,
     InformationString,
+    MarketEvolveEvaluation,
     apply_market_evolve_policy_to_seeds,
     build_market_evolve_scoreboard,
     load_market_evolve_scoreboards,
     persist_information_strings,
+    propose_market_evolve_mutations,
     run_market_evolve_step,
+    seed_default_market_evolve_program,
 )
 from talis_desk.information_map.market_evolve import (
     _scoreboard_next_actions,
@@ -216,3 +221,86 @@ def test_market_evolve_scoreboard_turns_failed_attribution_into_repair_action() 
     assert repair["learning_signal"] == "candidate_failed_hard_proof_gate"
     assert "candidate_avg_source_independence" in repair["metrics"]
     assert "candidate_avg_fragility" in repair["metrics"]
+
+
+def test_market_evolve_failed_attribution_proposes_counterfactual_mutation(tmp_path: Path) -> None:
+    store = reset_desk_store_for_test(tmp_path / "desk.db")
+    program = seed_default_market_evolve_program(cycle_id="cycle_attr_mutation_plan", conn=store.conn)
+    evaluation = MarketEvolveEvaluation(
+        evaluation_id="meval_attr_mutation",
+        program_id=program.program_id,
+        cycle_id="cycle_attr_mutation",
+        evaluator_version="test",
+        score=0.61,
+        metrics={
+            "scout_count": 24.0,
+            "valid_string_rate": 0.72,
+            "avg_source_independence": 0.58,
+            "avg_fragility": 0.34,
+            "tool_eval_failed_rate": 0.04,
+            "avg_realized_edge_score": 0.52,
+        },
+        passed=True,
+    )
+    failed_result = {
+        "id": "mres_attr_mutation",
+        "experiment_id": "mexp_attr_mutation",
+        "cycle_id": "cycle_attr_mutation",
+        "decision": "reject_candidate",
+        "score_delta": -0.12,
+        "control_score": 0.67,
+        "candidate_score": 0.55,
+        "control_metrics": {
+            "valid_string_rate": 0.82,
+            "avg_source_independence": 0.72,
+            "avg_fragility": 0.28,
+            "tool_eval_failed_rate": 0.03,
+        },
+        "candidate_metrics": {
+            "valid_string_rate": 0.57,
+            "avg_source_independence": 0.36,
+            "avg_fragility": 0.63,
+            "tool_eval_failed_rate": 0.18,
+        },
+        "falsification_gate_results": [
+            {
+                "metric": "candidate_avg_source_independence",
+                "operator": ">=",
+                "threshold": 0.45,
+                "observed": 0.36,
+                "triggered": True,
+                "decision": "reject_candidate",
+                "status": "triggered",
+            }
+        ],
+    }
+
+    children = propose_market_evolve_mutations(
+        program=program,
+        evaluation=evaluation,
+        cycle_id="cycle_attr_mutation",
+        experiment_results=[failed_result],
+        max_children=1,
+        conn=store.conn,
+    )
+
+    assert children
+    mutation = store.conn.execute(
+        """
+        SELECT mutation_kind, mutation_json
+        FROM market_evolve_mutations
+        WHERE child_program_id = ?
+        """,
+        (children[0].program_id,),
+    ).fetchone()
+    assert mutation["mutation_kind"] == "repair_failed_experiment_attribution"
+    payload = json.loads(mutation["mutation_json"])
+    proof = payload["_evolution_proof"]
+    assert proof["mutation_source"] == "market_evolve_failed_experiment_attribution"
+    assert proof["source_diagnostic_codes"][0] == "failed_experiment_attribution"
+    assert "candidate_avg_source_independence" in [
+        gate["metric"] for gate in proof["falsification_gates"]
+    ]
+    assert payload["prompt_policy"]["attribution_repair_metrics"]
+    assert payload["tool_request_policy"]["prefer_missing_source_family"] is True
+    assert payload["geometry_weights"]["fragility_penalty"] > DEFAULT_MARKET_EVOLVE_GENOME["geometry_weights"]["fragility_penalty"]
