@@ -87,14 +87,14 @@
 <main>
   <section class="hero">
     <div>
-      <div class="eyebrow">Scout system launch gate / ready for live 1000 ramp</div>
-      <h1>The tournament opened the 1,000-scout ramp.</h1>
-      <p>A live distribution earned the next spend gate. Scheduled production is still blocked until repeatability proves itself across independent 1,000-scout runs.</p>
+      <div class="eyebrow">Scout system launch gate / blocked by tournament</div>
+      <h1>The gate is doing its job.</h1>
+      <p>Something important is not proven yet. The system is stopping before scale, preserving capital and attention until the failed rung is repaired.</p>
     </div>
     <div class="grid hero-grid">
-      <div class="card"><span>Decision</span><h3 class="pass">ready for live 1000 ramp</h3><p>The live tournament passed distribution gates. A capped 1,000-scout ramp is allowed, not scheduled production.</p></div>
-      <div class="card"><span>Spend posture</span><h3>Locked</h3><p>Paid calls remain behind the explicit live-spend flag.</p></div>
-      <div class="card"><span>Allowed next</span><h3>live 1000 scout ramp</h3><p>The gate never jumps straight to production.</p></div>
+      <div class="card"><span>Decision</span><h3 class="blocked">blocked by tournament</h3><p>The live tournament blocked promotion. Repair the failed gates before increasing scout spend.</p></div>
+      <div class="card"><span>Spend posture</span><h3>Automatic</h3><p>Paid calls remain behind the explicit live-spend flag.</p></div>
+      <div class="card"><span>Allowed next</span><h3>tool creation quality repair 100</h3><p>The gate never jumps straight to production.</p></div>
       <div class="card"><span>Schedule</span><h3>Blocked</h3><p>Scheduled shadow requires repeat 1,000-scout proof.</p></div>
     </div>
   </section>
@@ -102,7 +102,15 @@
   <section>
     <h2>Proof Ladder</h2>
     <p>This is the control system. Each rung must become true in order: offline mechanics, live preflight, explicit spend, live quality, tournament promotion, then repeatability.</p>
-    <div class="grid proof"><div class="card"><span>passed</span><h3 class="pass">deterministic 100 scout system</h3><p>100 scouts traverse seed generation, scout harness, storage, synthesis, geometry, self-healing, and MarketEvolve without provider spend.</p></div><div class="card"><span>passed</span><h3 class="pass">live provider preflight</h3><p>Provider import, tool atlas, and market universe are present before spending.</p></div><div class="card"><span>passed</span><h3 class="pass">explicit spend gate</h3><p>No paid model calls happen unless --allow-live-spend is present.</p></div><div class="card"><span>passed</span><h3 class="pass">live canary quality</h3><p>Live scouts must pass provider, evidence, string-yield, duplicate, synthesis, geometry, and self-healing gates.</p></div><div class="card"><span>passed</span><h3 class="pass">tournament promotion</h3><p>The tournament is the only authority for 100/1,000-scout spend promotion.</p></div><div class="card"><span>blocked</span><h3 class="blocked">repeatability before schedule</h3><p>Scheduled shadow production requires repeat 1,000-scout evidence across independent runs.</p></div></div>
+    <div class="grid proof"><div class="card"><span>passed</span><h3 class="pass">deterministic 100 scout system</h3><p>100 scouts traverse seed generation, scout harness, storage, synthesis, geometry, self-healing, and MarketEvolve without provider spend.</p></div><div class="card"><span>passed</span><h3 class="pass">live provider preflight</h3><p>Provider import, tool atlas, and market universe are present before spending.</p></div><div class="card"><span>passed</span><h3 class="pass">explicit spend gate</h3><p>No paid model calls happen unless --allow-live-spend is present.</p></div><div class="card"><span>passed</span><h3 class="pass">live canary quality</h3><p>Live scouts must pass provider, evidence, string-yield, duplicate, synthesis, geometry, and self-healing gates.</p></div><div class="card"><span>blocked</span><h3 class="blocked">tournament promotion</h3><p>Tournament blocked scale because agent-created tool proposals were not evaluator-grade.</p></div><div class="card"><span>blocked</span><h3 class="blocked">repeatability before schedule</h3><p>Scheduled shadow production requires repeat 1,000-scout evidence across independent runs.</p></div></div>
+  </section>
+
+  <section>
+    <h2>Tournament Verdict</h2>
+    <p>The tournament is the spend authority. It now grades not just model outputs, but whether agent-created tools are evaluator-grade before the system buys a wider ramp.</p>
+    <div class="panel">
+      <ul class="list"><li><span>Decision<small>tournament promotion result</small></span><b>no promotion</b></li><li><span>Ready for 1,000<small>capped ramp authority</small></span><b>False</b></li><li><span>Failed gates<small>tool_creation_quality_pass_rate_ge_0_70, tool_creation_eval_plan_rate_ge_0_85, tool_creation_expected_edge_rate_ge_0_60</small></span><b>4</b></li><li><span>Tool proposals<small>agent-created tools emitted by the run</small></span><b>189</b></li><li><span>Proposal quality<small>share passing deterministic proposal evaluator</small></span><b>0.4127</b></li><li><span>Eval plans<small>share with a fixture/eval plan</small></span><b>0.4127</b></li><li><span>Expected edges<small>share naming the map edge they would add</small></span><b>0.0212</b></li></ul>
+    </div>
   </section>
 
   <section>
@@ -146,7 +154,7 @@
     <div class="panel command">
       <h2>Next Command</h2>
       <p>This is the exact next move. It spends only if a human deliberately runs it with the live-spend flag.</p>
-      <pre>PYTHONPATH=. python scripts/run_scout_system_launch_gate.py --allow-live-spend --live-scouts 1000 --live-cost-cap-usd 5.00 --live-concurrency 8 --max-tool-iterations 1 --ramp-policy /tmp/talis-live100-20260522/live_canary/prompt_outputs/live_scout_ramp_policy.json</pre>
+      <pre>PYTHONPATH=. python scripts/run_scout_system_launch_gate.py --allow-live-spend --live-scouts 100 --live-cost-cap-usd 1.00 --live-concurrency 4 --max-tool-iterations 1 --ramp-policy /Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_ramp_policy.json</pre>
       <ul class="list">
         <li><span>Launch report</span><b><a href="launch_gate_report.json">open</a></b></li>
         <li><span>Launch markdown</span><b><a href="launch_gate_report.md">open</a></b></li>
@@ -185,7 +193,7 @@
     <div class="panel">
       <h2>Pre-1000 Watchlist</h2>
       <p>The 100-scout run opened the next experimental ramp, but scheduled production stays blocked until repeatability is proven. These are the gates to watch in the next authorized run.</p>
-      <ul class="list"><li><span>Authorized 1,000 experiment<small>human approval still required before spend</small></span><b>True</b></li><li><span>Scheduled production<small>requires independent shadow-run repeatability</small></span><b>False</b></li><li><span>Executable ramp policy<small>applied with --ramp-policy on the next live slice</small></span><b>lrp_cycle_live100_20260522_live_100_100</b></li><li><span>Prior red pocket<small>must be watched or repaired</small></span><b>invented tools</b></li><li><span>Prior red pocket<small>must be watched or repaired</small></span><b>json unparseable</b></li><li><span>Watch metric<small>tracked during the next ramp</small></span><b>accepted_unique_high_quality_coverage_per_dollar_delta</b></li><li><span>Watch metric<small>tracked during the next ramp</small></span><b>empty_hypothesis_with_strings_rate</b></li><li><span>Watch metric<small>tracked during the next ramp</small></span><b>invented_tool_persist_rate</b></li><li><span>Watch metric<small>tracked during the next ramp</small></span><b>json_unparseable_rate</b></li><li><span>Watch metric<small>tracked during the next ramp</small></span><b>missing_evidence_refs_rate</b></li></ul>
+      <ul class="list"><li><span>Authorized 1,000 experiment<small>human approval still required before spend</small></span><b>False</b></li><li><span>Scheduled production<small>requires independent shadow-run repeatability</small></span><b>False</b></li><li><span>Executable ramp policy<small>applied with --ramp-policy on the next live slice</small></span><b>lrp_cycle_live100_20260522_live_100_100</b></li><li><span>Prior red pocket<small>must be watched or repaired</small></span><b>invented tools</b></li><li><span>Prior red pocket<small>must be watched or repaired</small></span><b>json unparseable</b></li><li><span>Watch metric<small>tracked during the next ramp</small></span><b>accepted_unique_high_quality_coverage_per_dollar_delta</b></li><li><span>Watch metric<small>tracked during the next ramp</small></span><b>empty_hypothesis_with_strings_rate</b></li><li><span>Watch metric<small>tracked during the next ramp</small></span><b>invented_tool_persist_rate</b></li><li><span>Watch metric<small>tracked during the next ramp</small></span><b>json_unparseable_rate</b></li><li><span>Watch metric<small>tracked during the next ramp</small></span><b>missing_evidence_refs_rate</b></li></ul>
     </div>
   </section>
 

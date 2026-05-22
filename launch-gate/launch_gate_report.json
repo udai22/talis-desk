@@ -2,12 +2,12 @@
   "allow_live_spend": true,
   "artifact_dir": "/private/tmp/talis-live100-20260522",
   "decision": {
-    "allowed_next_step": "live_1000_scout_ramp",
-    "exit_ok": true,
-    "human_authorization_required": true,
-    "next_command": "PYTHONPATH=. python scripts/run_scout_system_launch_gate.py --allow-live-spend --live-scouts 1000 --live-cost-cap-usd 5.00 --live-concurrency 8 --max-tool-iterations 1 --ramp-policy /tmp/talis-live100-20260522/live_canary/prompt_outputs/live_scout_ramp_policy.json",
-    "reason": "The live tournament passed distribution gates. A capped 1,000-scout ramp is allowed, not scheduled production.",
-    "status": "ready_for_live_1000_ramp"
+    "allowed_next_step": "tool_creation_quality_repair_100",
+    "exit_ok": false,
+    "human_authorization_required": false,
+    "next_command": "PYTHONPATH=. python scripts/run_scout_system_launch_gate.py --allow-live-spend --live-scouts 100 --live-cost-cap-usd 1.00 --live-concurrency 4 --max-tool-iterations 1 --ramp-policy /Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_ramp_policy.json",
+    "reason": "The live tournament blocked promotion. Repair the failed gates before increasing scout spend.",
+    "status": "blocked_by_tournament"
   },
   "deterministic": {
     "cycle_id": "cycle_live100_20260522_deterministic_100",
@@ -700,8 +700,13 @@
         ]
       },
       "pre_1000_gate": {
-        "blocking_before_1000": [],
-        "interpretation": "The 1,000 ramp may run only as an explicitly authorized experiment. The listed repair metrics must be watched; passing the ramp does not schedule production.",
+        "blocking_before_1000": [
+          "tool_creation_quality_pass_rate_ge_0_70",
+          "tool_creation_eval_plan_rate_ge_0_85",
+          "tool_creation_expected_edge_rate_ge_0_60",
+          "tool_creation_would_change_decision_rate_ge_0_60"
+        ],
+        "interpretation": "The old learning report opened the ramp, but the stricter tournament now blocks 1,000 until tool creation quality is repaired.",
         "must_watch_metrics": [
           "accepted_unique_high_quality_coverage_per_dollar_delta",
           "empty_hypothesis_with_strings_rate",
@@ -723,7 +728,7 @@
           "top_geometry_confirmation_rate improves on frontier/tension cells",
           "scheduled production remains blocked until two independent 1,000-scout shadow runs pass repeatability gates"
         ],
-        "ready_for_authorized_1000": true,
+        "ready_for_authorized_1000": false,
         "red_failure_modes_from_prior_ramp": [
           "invented_tools",
           "json_unparseable"
@@ -7710,8 +7715,8 @@
     },
     {
       "id": "tournament_promotion",
-      "passed": true,
-      "summary": "The tournament is the only authority for 100/1,000-scout spend promotion."
+      "passed": false,
+      "summary": "Tournament blocked scale because agent-created tool proposals were not evaluator-grade."
     },
     {
       "id": "repeatability_before_schedule",
@@ -15580,11 +15585,96 @@
     }
   ],
   "tournament": {
-    "decision": "promote_to_1000_scout_ramp",
-    "ready_for_live_100": true,
-    "ready_for_live_1000": true,
+    "decision": "no_promotion",
+    "failed_gates": [
+      "tool_creation_quality_pass_rate_ge_0_70",
+      "tool_creation_eval_plan_rate_ge_0_85",
+      "tool_creation_expected_edge_rate_ge_0_60",
+      "tool_creation_would_change_decision_rate_ge_0_60"
+    ],
+    "ready_for_live_100": false,
+    "ready_for_live_1000": false,
     "ready_for_scheduled_production": false,
-    "reason": "The 100+ scout live distribution passed provider reliability, string yield, duplicate, prompt-quality, temporal-structure, geometry, self-healing, and MarketEvolve proof gates. A 1,000-scout ramp is allowed under a hard cap; it is still a ramp, not an always-on production schedule."
+    "reason": "The top candidate `flash_temporal_v4_deepseek_v4_flash_n100_t45_0_c4_iter1_live_100` still failed: tool_creation_quality_pass_rate_ge_0_70, tool_creation_eval_plan_rate_ge_0_85, tool_creation_expected_edge_rate_ge_0_60, tool_creation_would_change_decision_rate_ge_0_60. Do not promote the 100-scout stage yet.",
+    "tool_creation_evolution": {
+      "db_path": "/private/tmp/talis-live100-20260522/live_canary/desk-live-canary.db",
+      "expected_tool_proposals": 4,
+      "failed_gates": [
+        "tool_creation_quality_pass_rate_ge_0_70",
+        "tool_creation_eval_plan_rate_ge_0_85",
+        "tool_creation_expected_edge_rate_ge_0_60",
+        "tool_creation_would_change_decision_rate_ge_0_60"
+      ],
+      "gates": {
+        "tool_creation_db_observed": true,
+        "tool_creation_eval_failed_rate_le_0_25": true,
+        "tool_creation_eval_plan_rate_ge_0_85": false,
+        "tool_creation_expected_edge_rate_ge_0_60": false,
+        "tool_creation_proposal_rows_observed": true,
+        "tool_creation_quality_pass_rate_ge_0_70": false,
+        "tool_creation_runtime_adapter_backlog_rate_le_0_50": true,
+        "tool_creation_would_change_decision_rate_ge_0_60": false
+      },
+      "metrics": {
+        "avg_quality_score": 0.6711,
+        "eval_failed_count": 0,
+        "eval_failed_rate": 0.0,
+        "eval_plan_rate": 0.4127,
+        "expected_edge_rate": 0.0212,
+        "promotion_gate_rate": 1.0,
+        "quality_pass_rate": 0.4127,
+        "runtime_adapter_backlog_count": 0,
+        "runtime_adapter_backlog_rate": 0.0,
+        "would_change_decision_rate": 0.0212
+      },
+      "observed": true,
+      "proposal_count": 189,
+      "quality_flags": [],
+      "required": true,
+      "status_counts": {
+        "proposed": 189
+      },
+      "top_quality_flags": [
+        {
+          "count": 111,
+          "flag": "missing_eval_plan"
+        }
+      ],
+      "top_tools": [
+        {
+          "count": 72,
+          "tool_name": "hydromancer_actor_quality_bulk"
+        },
+        {
+          "count": 38,
+          "tool_name": "hl_node_reject_burst_reader"
+        },
+        {
+          "count": 38,
+          "tool_name": "hl_node_stream_reader"
+        },
+        {
+          "count": 37,
+          "tool_name": "wallet_route_state_monitor"
+        },
+        {
+          "count": 1,
+          "tool_name": "mempool_pending_intent"
+        },
+        {
+          "count": 1,
+          "tool_name": "source_health_citations"
+        },
+        {
+          "count": 1,
+          "tool_name": "live_tradeable_universe_source_health"
+        },
+        {
+          "count": 1,
+          "tool_name": "source_family_context_expander"
+        }
+      ]
+    }
   },
   "viewer_index": "/Users/udaikhattar/talis-desk/docs/scout-system-test/index.html"
 }
