@@ -1,10 +1,10 @@
 # Live Scout Tournament
 
-- decision: `promote_to_1000_scout_ramp`
-- ready_for_live_100: `True`
-- ready_for_live_1000: `True`
+- decision: `no_promotion`
+- ready_for_live_100: `False`
+- ready_for_live_1000: `False`
 - ready_for_scheduled_production: `False`
-- reason: The 100+ scout live distribution passed provider reliability, string yield, duplicate, prompt-quality, temporal-structure, geometry, self-healing, and MarketEvolve proof gates. A 1,000-scout ramp is allowed under a hard cap; it is still a ramp, not an always-on production schedule.
+- reason: The top candidate `flash_temporal_v4_deepseek_v4_flash_n100_t45_0_c4_iter1_live_100` still failed: tool_creation_quality_pass_rate_ge_0_70, tool_creation_eval_plan_rate_ge_0_85, tool_creation_expected_edge_rate_ge_0_60, tool_creation_would_change_decision_rate_ge_0_60. Do not promote the 100-scout stage yet.
 - repeatability_ready: `False`
 - repeatability_runs: `0/2`
 
@@ -12,8 +12,8 @@
 
 ### flash_temporal_v4_deepseek_v4_flash_n100_t45_0_c4_iter1_live_100
 
-- score: `0.9625`
-- promotion_eligible: `True`
+- score: `0.932`
+- promotion_eligible: `False`
 - scouts: `93/100`
 - success_rate: `0.93`
 - provider_error_rate: `0.0`
@@ -26,12 +26,13 @@
 - market_evolve_proof: `policy=True arms=True falsified=True`
 - ramp_policy_rehearsal: `required=True observed=True status=pass decision=policy_can_gate_live_spend`
 - ramp_policy_metrics: `tool_refresh=1.0 source_coverage=1.0 over_limit=0`
-- failed_gates: `none`
+- tool_creation: `required=True proposals=189 quality_pass=0.4127 eval_plan=0.4127 expected_edge=0.0212`
+- failed_gates: `tool_creation_quality_pass_rate_ge_0_70, tool_creation_eval_plan_rate_ge_0_85, tool_creation_expected_edge_rate_ge_0_60, tool_creation_would_change_decision_rate_ge_0_60`
 
-This 100-scout distribution is clean enough for a capped 1,000-scout ramp, but not scheduled production.
+Blocked from scale because agent-created tool proposals are not yet evaluator-grade.
 
 ## Next Experiment Plan
 
-- `live_1000_ramp`: Validate the winning policy at broad market-sensing scale under a hard cap.
-  - command: `PYTHONPATH=.:talis_tic python scripts/run_live_scout_canary.py --n-scouts 1000 --concurrency 8 --cost-cap-usd 5.00 --provider-timeout-s 45 --prompt-variant flash_temporal_v4 --max-tool-iterations 1 --ramp-policy /Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_ramp_policy.json --allow-live-spend`
-  - promotion_rule: Promote to a repeat 1,000-scout shadow trial only if the 1,000-scout run keeps provider errors <= 0.02, success >= 0.9, duplicate rate <= 0.2, structural misses <= 0.1, and produces usable geometry/coverage deltas. Scheduled production remains blocked until an independent repeat 1,000 run passes.
+- `tool_creation_quality_repair_100`: Repair the agent-created tool surface before buying a larger scout ramp. Scouts may request and create tools, but every proposed tool needs an expected market-map edge, decision-change claim, and deterministic eval plan.
+  - command: `PYTHONPATH=. python scripts/run_scout_system_launch_gate.py --allow-live-spend --live-scouts 100 --live-cost-cap-usd 1.00 --live-concurrency 4 --max-tool-iterations 1 --ramp-policy /Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_ramp_policy.json`
+  - promotion_rule: Do not promote to 1,000 until analysis_tool_proposals pass quality >= 70%, eval-plan attachment >= 85%, expected-edge attachment >= 60%, decision-change attachment >= 60%, and eval/runtime backlog stays bounded.

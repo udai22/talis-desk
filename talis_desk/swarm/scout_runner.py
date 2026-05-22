@@ -1679,6 +1679,43 @@ def _analysis_tool_proposal_from_node_dict(
     artifact_id: str,
     seed: SeedCell,
 ) -> AnalysisToolProposal:
+    tool_name = str(raw.get("tool_name") or "node_discovery_tool")
+    purpose = str(raw.get("purpose") or "").strip()
+    source_family = str(raw.get("source_family") or "").strip()
+    trigger = str(raw.get("trigger") or "").strip()
+    if not purpose:
+        purpose = (
+            "Resolve a node-intelligence coverage gap with sourced observations, "
+            "raw offsets, and fixture-backed promotion evidence."
+        )
+    if not source_family:
+        source_family = _source_family_from_request(tool_name, "", purpose)
+    if not trigger:
+        trigger = "node_intelligence_coverage_gap"
+    input_shape = dict(raw.get("input_shape") or {})
+    if not input_shape:
+        input_shape = {
+            "entity": seed.entity,
+            "horizon": seed.horizon,
+            "lens": seed.lens,
+            "source_family": source_family,
+        }
+    promotion_gate = dict(raw.get("promotion_gate") or {})
+    promotion_gate.setdefault(
+        "expected_edge",
+        f"{source_family} -> {seed.entity}/{seed.horizon}/{seed.lens} node-intelligence map edge",
+    )
+    promotion_gate.setdefault("expected_info_value", 0.65)
+    promotion_gate.setdefault("would_change_decision", True)
+    promotion_gate.setdefault("must_emit_source_timestamp_or_rejection", True)
+    eval_plan = dict(raw.get("eval_plan") or {})
+    if not eval_plan:
+        eval_plan = {
+            "fixture_source": "node_intelligence_coverage_gap",
+            "fixture_types": [trigger, source_family],
+            "min_pass_rate": 0.80,
+            "must_link_artifact_id": artifact_id,
+        }
     return AnalysisToolProposal(
         cycle_id=cycle_id,
         artifact_kind=artifact_kind,
@@ -1687,16 +1724,19 @@ def _analysis_tool_proposal_from_node_dict(
         horizon=seed.horizon,
         lens=seed.lens,
         proposal_kind="new_tool",
-        tool_name=str(raw.get("tool_name") or "node_discovery_tool"),
-        purpose=str(raw.get("purpose") or ""),
-        source_family=str(raw.get("source_family") or ""),
-        trigger=str(raw.get("trigger") or ""),
-        input_shape=dict(raw.get("input_shape") or {}),
-        promotion_gate=dict(raw.get("promotion_gate") or {}),
-        eval_plan=dict(raw.get("eval_plan") or {}),
+        tool_name=tool_name,
+        purpose=purpose,
+        source_family=source_family,
+        trigger=trigger,
+        input_shape=input_shape,
+        promotion_gate=promotion_gate,
+        eval_plan=eval_plan,
         priority=str(raw.get("priority") or "medium"),
         created_by="node_intelligence_discovery",
-        quality_flags=["from_node_intelligence_coverage_gap"],
+        quality_flags=[
+            "from_node_intelligence_coverage_gap",
+            "node_tool_proposal_eval_plan_normalized",
+        ],
     )
 
 

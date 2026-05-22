@@ -62,6 +62,12 @@ DEFAULT_THRESHOLDS = {
     "ramp_policy_rehearsal_min_watch_metrics_attached_rate": 1.00,
     "ramp_policy_rehearsal_min_strict_contract_rate": 1.00,
     "ramp_policy_rehearsal_max_over_limit_count": 0,
+    "tool_creation_min_quality_pass_rate": 0.70,
+    "tool_creation_min_eval_plan_rate": 0.85,
+    "tool_creation_min_expected_edge_rate": 0.60,
+    "tool_creation_min_would_change_decision_rate": 0.60,
+    "tool_creation_max_eval_failed_rate": 0.25,
+    "tool_creation_max_runtime_adapter_backlog_rate": 0.50,
 }
 
 
@@ -109,6 +115,12 @@ def main() -> int:
         "ramp_policy_rehearsal_min_watch_metrics_attached_rate": args.ramp_policy_rehearsal_min_watch_metrics_attached_rate,
         "ramp_policy_rehearsal_min_strict_contract_rate": args.ramp_policy_rehearsal_min_strict_contract_rate,
         "ramp_policy_rehearsal_max_over_limit_count": args.ramp_policy_rehearsal_max_over_limit_count,
+        "tool_creation_min_quality_pass_rate": args.tool_creation_min_quality_pass_rate,
+        "tool_creation_min_eval_plan_rate": args.tool_creation_min_eval_plan_rate,
+        "tool_creation_min_expected_edge_rate": args.tool_creation_min_expected_edge_rate,
+        "tool_creation_min_would_change_decision_rate": args.tool_creation_min_would_change_decision_rate,
+        "tool_creation_max_eval_failed_rate": args.tool_creation_max_eval_failed_rate,
+        "tool_creation_max_runtime_adapter_backlog_rate": args.tool_creation_max_runtime_adapter_backlog_rate,
     }
     report_paths = [Path(p).expanduser().resolve() for p in args.reports]
     tournament = evaluate_live_scout_tournament(report_paths, thresholds=thresholds)
@@ -173,6 +185,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--ramp-policy-rehearsal-min-watch-metrics-attached-rate", type=float, default=DEFAULT_THRESHOLDS["ramp_policy_rehearsal_min_watch_metrics_attached_rate"])
     parser.add_argument("--ramp-policy-rehearsal-min-strict-contract-rate", type=float, default=DEFAULT_THRESHOLDS["ramp_policy_rehearsal_min_strict_contract_rate"])
     parser.add_argument("--ramp-policy-rehearsal-max-over-limit-count", type=int, default=DEFAULT_THRESHOLDS["ramp_policy_rehearsal_max_over_limit_count"])
+    parser.add_argument("--tool-creation-min-quality-pass-rate", type=float, default=DEFAULT_THRESHOLDS["tool_creation_min_quality_pass_rate"])
+    parser.add_argument("--tool-creation-min-eval-plan-rate", type=float, default=DEFAULT_THRESHOLDS["tool_creation_min_eval_plan_rate"])
+    parser.add_argument("--tool-creation-min-expected-edge-rate", type=float, default=DEFAULT_THRESHOLDS["tool_creation_min_expected_edge_rate"])
+    parser.add_argument("--tool-creation-min-would-change-decision-rate", type=float, default=DEFAULT_THRESHOLDS["tool_creation_min_would_change_decision_rate"])
+    parser.add_argument("--tool-creation-max-eval-failed-rate", type=float, default=DEFAULT_THRESHOLDS["tool_creation_max_eval_failed_rate"])
+    parser.add_argument("--tool-creation-max-runtime-adapter-backlog-rate", type=float, default=DEFAULT_THRESHOLDS["tool_creation_max_runtime_adapter_backlog_rate"])
     return parser.parse_args()
 
 
@@ -290,6 +308,12 @@ def evaluate_live_scout_candidate(path: Path, *, thresholds: dict[str, float | i
         n_requested=n_requested,
         ramp_policy_path=ramp_policy_path,
     )
+    tool_creation = _tool_creation_evolution_metrics(
+        report,
+        thresholds=thresholds,
+        n_requested=n_requested,
+        expected_tool_proposals=int(self_healing.get("tool_proposals") or 0),
+    )
     provider_error_rate = max(
         len(transcript_errors) / max(call_count, 1),
         quality_provider_errors / max(n_requested, 1),
@@ -331,6 +355,7 @@ def evaluate_live_scout_candidate(path: Path, *, thresholds: dict[str, float | i
         "self_healing_no_failures": int(self_healing.get("failed_tasks") or 0) == 0,
     }
     gates.update(ramp_policy_rehearsal.get("gates") or {})
+    gates.update(tool_creation.get("gates") or {})
     if n_requested >= int(thresholds["distribution_min_scouts"]):
         gates.update({
             "distribution_sample_size_ge_100": n_requested >= int(thresholds["distribution_min_scouts"]),
@@ -426,6 +451,7 @@ def evaluate_live_scout_candidate(path: Path, *, thresholds: dict[str, float | i
         },
         "market_evolve": market_evolve,
         "ramp_policy_rehearsal": ramp_policy_rehearsal,
+        "tool_creation_evolution": tool_creation,
         "original_canary_verdict": original_verdict,
         "gates": gates,
         "failed_gates": failed_gates,
@@ -613,6 +639,155 @@ def _ramp_policy_rehearsal_metrics(
     }
 
 
+def _tool_creation_evolution_metrics(
+    report: dict[str, Any],
+    *,
+    thresholds: dict[str, float | int],
+    n_requested: int,
+    expected_tool_proposals: int,
+) -> dict[str, Any]:
+    required = n_requested >= int(thresholds["distribution_min_scouts"]) or expected_tool_proposals > 0
+    db_path = Path(str(report.get("db_path") or ""))
+    if not db_path.exists():
+        gates = {}
+        if required:
+            gates = {
+                "tool_creation_db_observed": False,
+                "tool_creation_proposal_rows_observed": False,
+            }
+        return {
+            "required": required,
+            "observed": False,
+            "db_path": str(db_path) if str(db_path) else "",
+            "expected_tool_proposals": expected_tool_proposals,
+            "proposal_count": 0,
+            "status_counts": {},
+            "top_tools": [],
+            "metrics": {},
+            "gates": gates,
+            "failed_gates": [name for name, ok in gates.items() if not ok],
+            "quality_flags": ["tool_creation_db_missing"] if required else [],
+        }
+    rows: list[dict[str, Any]] = []
+    quality_flags: list[str] = []
+    try:
+        with sqlite3.connect(str(db_path)) as conn:
+            conn.row_factory = sqlite3.Row
+            if not _table_exists(conn, "analysis_tool_proposals"):
+                quality_flags.append("analysis_tool_proposals_table_missing")
+            else:
+                columns = _table_columns(conn, "analysis_tool_proposals")
+                where = "WHERE cycle_id = ?"
+                if "transaction_to" in columns:
+                    where += " AND transaction_to IS NULL"
+                rows = [
+                    dict(row)
+                    for row in conn.execute(
+                        f"SELECT * FROM analysis_tool_proposals {where}",
+                        (str(report.get("cycle_id") or ""),),
+                    ).fetchall()
+                ]
+    except Exception as exc:
+        quality_flags.append(f"tool_creation_db_error:{type(exc).__name__}")
+        rows = []
+
+    try:
+        from talis_desk.tool_atlas.discovery import evaluate_analysis_tool_proposal
+    except Exception:
+        evaluate_analysis_tool_proposal = None  # type: ignore[assignment]
+        quality_flags.append("tool_creation_evaluator_unavailable")
+
+    status_counts: dict[str, int] = {}
+    tool_counts: dict[str, int] = {}
+    scores: list[float] = []
+    pass_count = 0
+    eval_plan_count = 0
+    promotion_gate_count = 0
+    expected_edge_count = 0
+    would_change_count = 0
+    eval_failed_count = 0
+    runtime_adapter_count = 0
+    row_flags: dict[str, int] = {}
+    for row in rows:
+        status = str(row.get("status") or "unknown")
+        status_counts[status] = status_counts.get(status, 0) + 1
+        tool_name = str(row.get("tool_name") or "unknown")
+        tool_counts[tool_name] = tool_counts.get(tool_name, 0) + 1
+        if status == "eval_failed":
+            eval_failed_count += 1
+        if status in {"needs_runtime_adapter", "adapter_requested"}:
+            runtime_adapter_count += 1
+        eval_plan = _json_dict(row.get("eval_plan_json") or row.get("eval_plan"))
+        promotion_gate = _json_dict(row.get("promotion_gate_json") or row.get("promotion_gate"))
+        if eval_plan:
+            eval_plan_count += 1
+        if promotion_gate:
+            promotion_gate_count += 1
+        if str(promotion_gate.get("expected_edge") or "").strip():
+            expected_edge_count += 1
+        if promotion_gate.get("would_change_decision") is True:
+            would_change_count += 1
+        if evaluate_analysis_tool_proposal is not None:
+            q = evaluate_analysis_tool_proposal(row)
+            scores.append(float(q.score))
+            if q.passed:
+                pass_count += 1
+            for flag in q.flags:
+                row_flags[flag] = row_flags.get(flag, 0) + 1
+    n = len(rows)
+    avg_score = sum(scores) / max(1, len(scores))
+    quality_pass_rate = pass_count / max(1, n)
+    eval_plan_rate = eval_plan_count / max(1, n)
+    expected_edge_rate = expected_edge_count / max(1, n)
+    would_change_rate = would_change_count / max(1, n)
+    eval_failed_rate = eval_failed_count / max(1, n)
+    runtime_adapter_rate = runtime_adapter_count / max(1, n)
+    gates = {}
+    if required or n:
+        gates = {
+            "tool_creation_db_observed": db_path.exists(),
+            "tool_creation_proposal_rows_observed": n >= max(1, expected_tool_proposals),
+            "tool_creation_quality_pass_rate_ge_0_70": quality_pass_rate >= float(thresholds["tool_creation_min_quality_pass_rate"]),
+            "tool_creation_eval_plan_rate_ge_0_85": eval_plan_rate >= float(thresholds["tool_creation_min_eval_plan_rate"]),
+            "tool_creation_expected_edge_rate_ge_0_60": expected_edge_rate >= float(thresholds["tool_creation_min_expected_edge_rate"]),
+            "tool_creation_would_change_decision_rate_ge_0_60": would_change_rate >= float(thresholds["tool_creation_min_would_change_decision_rate"]),
+            "tool_creation_eval_failed_rate_le_0_25": eval_failed_rate <= float(thresholds["tool_creation_max_eval_failed_rate"]),
+            "tool_creation_runtime_adapter_backlog_rate_le_0_50": runtime_adapter_rate <= float(thresholds["tool_creation_max_runtime_adapter_backlog_rate"]),
+        }
+    failed = [name for name, ok in gates.items() if not ok]
+    return {
+        "required": required,
+        "observed": bool(n),
+        "db_path": str(db_path),
+        "expected_tool_proposals": expected_tool_proposals,
+        "proposal_count": n,
+        "status_counts": status_counts,
+        "top_tools": [
+            {"tool_name": name, "count": count}
+            for name, count in sorted(tool_counts.items(), key=lambda kv: kv[1], reverse=True)[:12]
+        ],
+        "metrics": {
+            "avg_quality_score": round(avg_score, 4),
+            "quality_pass_rate": round(quality_pass_rate, 4),
+            "eval_plan_rate": round(eval_plan_rate, 4),
+            "promotion_gate_rate": round(promotion_gate_count / max(1, n), 4),
+            "expected_edge_rate": round(expected_edge_rate, 4),
+            "would_change_decision_rate": round(would_change_rate, 4),
+            "eval_failed_rate": round(eval_failed_rate, 4),
+            "runtime_adapter_backlog_rate": round(runtime_adapter_rate, 4),
+            "eval_failed_count": eval_failed_count,
+            "runtime_adapter_backlog_count": runtime_adapter_count,
+        },
+        "top_quality_flags": [
+            {"flag": flag, "count": count}
+            for flag, count in sorted(row_flags.items(), key=lambda kv: kv[1], reverse=True)[:12]
+        ],
+        "gates": gates,
+        "failed_gates": failed,
+        "quality_flags": sorted(set(quality_flags)),
+    }
+
+
 def render_tournament_markdown(report: dict[str, Any]) -> str:
     decision = report.get("promotion_decision") if isinstance(report.get("promotion_decision"), dict) else {}
     repeatability = report.get("shadow_repeatability") if isinstance(report.get("shadow_repeatability"), dict) else {}
@@ -636,6 +811,8 @@ def render_tournament_markdown(report: dict[str, Any]) -> str:
         evolve = c.get("market_evolve") or {}
         rehearsal = c.get("ramp_policy_rehearsal") or {}
         rehearsal_metrics = rehearsal.get("metrics") if isinstance(rehearsal.get("metrics"), dict) else {}
+        tool_creation = c.get("tool_creation_evolution") or {}
+        tool_creation_metrics = tool_creation.get("metrics") if isinstance(tool_creation.get("metrics"), dict) else {}
         lines.extend([
             f"### {c.get('candidate_id')}",
             "",
@@ -653,6 +830,7 @@ def render_tournament_markdown(report: dict[str, Any]) -> str:
             f"- market_evolve_proof: `policy={evolve.get('policy_stamped_on_seeds')} arms={evolve.get('control_arm_present') and evolve.get('candidate_arm_present')} falsified={evolve.get('falsification_gates_evaluated')}`",
             f"- ramp_policy_rehearsal: `required={rehearsal.get('required')} observed={rehearsal.get('observed')} status={rehearsal.get('status')} decision={rehearsal.get('decision')}`",
             f"- ramp_policy_metrics: `tool_refresh={rehearsal_metrics.get('tool_candidate_refresh_rate')} source_coverage={rehearsal_metrics.get('source_target_coverage_rate')} over_limit={rehearsal_metrics.get('over_limit_count')}`",
+            f"- tool_creation: `required={tool_creation.get('required')} proposals={tool_creation.get('proposal_count')} quality_pass={tool_creation_metrics.get('quality_pass_rate')} eval_plan={tool_creation_metrics.get('eval_plan_rate')} expected_edge={tool_creation_metrics.get('expected_edge_rate')}`",
             f"- failed_gates: `{', '.join(c.get('failed_gates') or []) or 'none'}`",
             "",
             str(c.get("interpretation") or ""),
@@ -673,6 +851,8 @@ def _score_candidate(candidate: dict[str, Any]) -> float:
     sample = candidate["sample"]
     m = candidate["map_effect"]
     e = candidate.get("market_evolve") if isinstance(candidate.get("market_evolve"), dict) else {}
+    tc = candidate.get("tool_creation_evolution") if isinstance(candidate.get("tool_creation_evolution"), dict) else {}
+    tc_metrics = tc.get("metrics") if isinstance(tc.get("metrics"), dict) else {}
     success = _to_float(q.get("success_rate"))
     strings = min(1.0, _to_float(q.get("strings_per_scout")) / 1.5)
     evidence = _to_float(q.get("evidence_ok_rate"))
@@ -681,6 +861,8 @@ def _score_candidate(candidate: dict[str, Any]) -> float:
     self_healing = 1.0 if not m.get("self_healing_failed") else 0.0
     provider_error = _to_float(q.get("provider_error_rate"))
     tool_error = _to_float(q.get("tool_error_rate"))
+    tool_creation_quality = _to_float(tc_metrics.get("quality_pass_rate"), default=1.0 if not tc.get("required") else 0.0)
+    tool_creation_missing_eval = max(0.0, 1.0 - _to_float(tc_metrics.get("eval_plan_rate"), default=1.0))
     duplicate = _to_float(q.get("duplicate_hypothesis_rate"), default=1.0)
     cost_per = _to_float(q.get("cost_per_scout_usd"))
     cost_eff = max(0.0, 1.0 - min(1.0, cost_per / DEFAULT_THRESHOLDS["max_cost_per_scout_usd"]))
@@ -710,11 +892,13 @@ def _score_candidate(candidate: dict[str, Any]) -> float:
         + 0.10 * geometry
         + 0.08 * self_healing
         + 0.06 * market_evolve_proof
+        + 0.04 * tool_creation_quality
         + 0.08 * cost_eff
         + 0.10 * latency
         + 0.02 * sample_bonus
         - 0.22 * provider_error
         - 0.18 * tool_error
+        - 0.08 * tool_creation_missing_eval
         - 0.10 * duplicate
     )
     return round(max(0.0, min(1.0, score)), 4)
@@ -1112,6 +1296,7 @@ def _next_experiment_plan(
     plan: list[dict[str, Any]] = []
     sample = winner.get("sample") if isinstance(winner.get("sample"), dict) else {}
     requested = int(sample.get("requested") or 0)
+    ramp_policy_arg = _ramp_policy_command_arg(winner)
     scale_quality_failed = bool({
         "distribution_success_rate_ge_0_90",
         "distribution_structural_flag_rate_le_0_10",
@@ -1121,6 +1306,7 @@ def _next_experiment_plan(
     }.intersection(failed))
     market_evolve_failed = any(name.startswith("distribution_market_evolve_") or name.startswith("scale_market_evolve_") for name in failed)
     ramp_policy_rehearsal_failed = any(name.startswith("ramp_policy_rehearsal_") for name in failed)
+    tool_creation_failed = any(name.startswith("tool_creation_") for name in failed)
     if ramp_policy_rehearsal_failed:
         policy_path = str(((winner.get("configuration") or {}).get("ramp_policy_path")) or "PROMPT_OUTPUT_DIR/live_scout_ramp_policy.json")
         plan.append({
@@ -1140,6 +1326,25 @@ def _next_experiment_plan(
                 "Do not run the next paid ramp until live_scout_ramp_policy_rehearsal.json has "
                 "status=pass, decision=policy_can_gate_live_spend, tool refresh >= 95%, source "
                 "target coverage >= 60%, strict contract attachment at 100%, and zero over-limit cells."
+            ),
+        })
+    if tool_creation_failed:
+        plan.append({
+            "id": "tool_creation_quality_repair_100",
+            "purpose": (
+                "Repair the agent-created tool surface before buying a larger scout ramp. "
+                "Scouts may request and create tools, but every proposed tool needs an expected "
+                "market-map edge, decision-change claim, and deterministic eval plan."
+            ),
+            "command": (
+                "PYTHONPATH=. python scripts/run_scout_system_launch_gate.py --allow-live-spend "
+                "--live-scouts 100 --live-cost-cap-usd 1.00 --live-concurrency 4 "
+                f"--max-tool-iterations 1 {ramp_policy_arg}".rstrip()
+            ),
+            "promotion_rule": (
+                "Do not promote to 1,000 until analysis_tool_proposals pass quality >= 70%, "
+                "eval-plan attachment >= 85%, expected-edge attachment >= 60%, "
+                "decision-change attachment >= 60%, and eval/runtime backlog stays bounded."
             ),
         })
     if market_evolve_failed:
@@ -1381,6 +1586,8 @@ def _interpret_candidate(candidate: dict[str, Any]) -> str:
         fragments.append("useful scout completion is below the 90% scale gate")
     if any(name.startswith("ramp_policy_rehearsal_") for name in failed):
         fragments.append("the learned next-run policy has not passed the no-spend rehearsal gate")
+    if any(name.startswith("tool_creation_") for name in failed):
+        fragments.append("agent-created tool proposals are not yet evaluator-grade")
     if any(name.startswith("distribution_market_evolve_") or name.startswith("scale_market_evolve_") for name in failed):
         fragments.append("the evolution proof loop did not run cleanly across matched control/candidate slices")
     if "avg_prompt_quality_ge_min" in failed or "low_prompt_quality_rate_le_max" in failed:
@@ -1564,6 +1771,33 @@ def _read_sibling_json(report_path: Path, filename: str) -> Any:
 
 def _read_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+        (table,),
+    ).fetchone()
+    return row is not None
+
+
+def _table_columns(conn: sqlite3.Connection, table: str) -> set[str]:
+    return {
+        str(row[1])
+        for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
+    }
+
+
+def _json_dict(raw: Any) -> dict[str, Any]:
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str) and raw.strip():
+        try:
+            parsed = json.loads(raw)
+            return parsed if isinstance(parsed, dict) else {}
+        except Exception:
+            return {}
+    return {}
 
 
 def _write_json(path: Path, data: Any) -> None:

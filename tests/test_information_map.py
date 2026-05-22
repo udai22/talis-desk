@@ -96,6 +96,7 @@ from talis_desk.swarm.scout_runner import (
     _expanded_tool_candidate_rows,
     _infer_tool_args,
     _infer_tool_args_for_candidate,
+    _analysis_tool_proposal_from_node_dict,
     _normalize_tool_requests,
     _node_snapshots_for_scout,
     _successful_tool_call_ids,
@@ -4017,6 +4018,37 @@ def test_analysis_tool_proposals_apply_to_all_analysis_and_iterate(tmp_path):
     assert improved_ids[0] in {r["id"] for r in rows}
     assert any(r["parent_proposal_id"] == ids[0] and r["iteration"] == 1 for r in rows)
     assert store.conn.execute("SELECT COUNT(*) FROM analysis_tool_proposals").fetchone()[0] == len(proposals) + 1
+
+
+def test_node_tool_proposals_are_normalized_to_evaluator_grade_contracts():
+    seed = SeedCell(
+        seed_id="seed_node_tool_contract",
+        entity="HYPE",
+        horizon="intraday",
+        lens="on_chain",
+        bias_mode="frontier",
+        theme="node_intelligence",
+    )
+
+    proposal = _analysis_tool_proposal_from_node_dict(
+        {
+            "tool_name": "hl_node_reject_burst_reader",
+            "purpose": "Read reject bursts from our node.",
+            "priority": "high",
+        },
+        cycle_id="cycle_node_tool_contract",
+        artifact_kind="node_intelligence",
+        artifact_id="nint_contract",
+        seed=seed,
+    )
+    quality = evaluate_analysis_tool_proposal(proposal)
+
+    assert proposal.source_family == "our_hl_node"
+    assert proposal.eval_plan["min_pass_rate"] == 0.80
+    assert proposal.promotion_gate["expected_edge"].startswith("our_hl_node -> HYPE/intraday/on_chain")
+    assert proposal.promotion_gate["would_change_decision"] is True
+    assert quality.passed
+    assert "node_tool_proposal_eval_plan_normalized" in proposal.quality_flags
 
 
 def test_analysis_tool_proposal_promotes_learned_tool_and_dispatches(monkeypatch, tmp_path):

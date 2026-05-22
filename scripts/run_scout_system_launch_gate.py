@@ -231,8 +231,17 @@ def build_launch_gate_report(
         "market_universe_ok",
     ))
     tournament_decision = (
-        tournament_report.get("promotion_decision")
+        dict(tournament_report.get("promotion_decision") or {})
         if isinstance(tournament_report.get("promotion_decision"), dict)
+        else {}
+    )
+    next_plan = tournament_report.get("next_experiment_plan") if isinstance(tournament_report.get("next_experiment_plan"), list) else []
+    if tournament_decision and next_plan and isinstance(next_plan[0], dict):
+        tournament_decision["next_command"] = next_plan[0].get("command") or ""
+        tournament_decision["next_experiment_id"] = next_plan[0].get("id") or ""
+    tournament_winner = (
+        tournament_report.get("winner")
+        if isinstance(tournament_report.get("winner"), dict)
         else {}
     )
     proof_ladder = _proof_ladder(
@@ -294,6 +303,8 @@ def build_launch_gate_report(
             "ready_for_live_1000": bool(tournament_decision.get("ready_for_live_1000")),
             "ready_for_scheduled_production": bool(tournament_decision.get("ready_for_scheduled_production")),
             "reason": tournament_decision.get("reason") or "",
+            "failed_gates": tournament_winner.get("failed_gates") or [],
+            "tool_creation_evolution": tournament_winner.get("tool_creation_evolution") or {},
         },
         "stages": [asdict(stage) for stage in stages],
     }
@@ -337,6 +348,7 @@ def render_launch_gate_markdown(report: dict[str, Any]) -> str:
         f"- decision: `{tournament.get('decision')}`",
         f"- ready_for_live_1000: `{tournament.get('ready_for_live_1000')}`",
         f"- ready_for_scheduled_production: `{tournament.get('ready_for_scheduled_production')}`",
+        f"- failed_gates: `{', '.join(tournament.get('failed_gates') or []) or 'none'}`",
         "",
         "## Proof Ladder",
         "",
@@ -405,6 +417,7 @@ def render_launch_gate_html(report: dict[str, Any]) -> str:
     learning_order_rows = _learning_work_order_rows(learning)
     pre_1000_rows = _pre_1000_rows(learning)
     ramp_policy_rehearsal_rows = _ramp_policy_rehearsal_rows(ramp_policy_rehearsal)
+    tournament_rows = _tournament_gate_rows(tournament)
     next_command = str(decision.get("next_command") or "")
     scout_viewer = str(report.get("viewer_index") or "")
     return f"""<!doctype html>
@@ -512,6 +525,14 @@ def render_launch_gate_html(report: dict[str, Any]) -> str:
     <h2>Proof Ladder</h2>
     <p>This is the control system. Each rung must become true in order: offline mechanics, live preflight, explicit spend, live quality, tournament promotion, then repeatability.</p>
     <div class="grid proof">{proof_rows}</div>
+  </section>
+
+  <section>
+    <h2>Tournament Verdict</h2>
+    <p>The tournament is the spend authority. It now grades not just model outputs, but whether agent-created tools are evaluator-grade before the system buys a wider ramp.</p>
+    <div class="panel">
+      <ul class="list">{tournament_rows}</ul>
+    </div>
   </section>
 
   <section>
@@ -824,11 +845,15 @@ def _launch_decision(
         }
     return {
         "status": "blocked_by_tournament",
-        "allowed_next_step": "repair_prompt_tool_or_market_evolve_policy",
+        "allowed_next_step": str(tournament_decision.get("next_experiment_id") or "repair_prompt_tool_or_market_evolve_policy"),
         "human_authorization_required": False,
         "exit_ok": False,
         "reason": "The live tournament blocked promotion. Repair the failed gates before increasing scout spend.",
-        "next_command": str((live_report.get("scale_decision") or {}).get("next_step") or "Inspect live_scout_tournament_report.json"),
+        "next_command": str(
+            tournament_decision.get("next_command")
+            or (live_report.get("scale_decision") or {}).get("next_step")
+            or "Inspect live_scout_tournament_report.json"
+        ),
     }
 
 
@@ -1202,6 +1227,35 @@ def _ramp_policy_rehearsal_rows(rehearsal: dict[str, Any]) -> str:
         ("New candidates", str(metrics.get("tool_candidate_added_count") or 0), "new allowed tools added by policy"),
         ("Source target coverage", str(metrics.get("source_target_coverage_rate") or 0), "targeted source families observed after policy"),
     ]
+    return "".join(
+        "<li>"
+        f"<span>{html.escape(label)}<small>{html.escape(note)}</small></span>"
+        f"<b>{html.escape(value)}</b>"
+        "</li>"
+        for label, value, note in rows
+    )
+
+
+def _tournament_gate_rows(tournament: dict[str, Any]) -> str:
+    failed = tournament.get("failed_gates") if isinstance(tournament.get("failed_gates"), list) else []
+    tool_creation = (
+        tournament.get("tool_creation_evolution")
+        if isinstance(tournament.get("tool_creation_evolution"), dict)
+        else {}
+    )
+    metrics = tool_creation.get("metrics") if isinstance(tool_creation.get("metrics"), dict) else {}
+    rows = [
+        ("Decision", str(tournament.get("decision") or "missing").replace("_", " "), "tournament promotion result"),
+        ("Ready for 1,000", str(bool(tournament.get("ready_for_live_1000"))), "capped ramp authority"),
+        ("Failed gates", str(len(failed)), ", ".join(str(x) for x in failed[:3]) or "none"),
+    ]
+    if tool_creation:
+        rows.extend([
+            ("Tool proposals", str(tool_creation.get("proposal_count") or 0), "agent-created tools emitted by the run"),
+            ("Proposal quality", str(metrics.get("quality_pass_rate") or 0), "share passing deterministic proposal evaluator"),
+            ("Eval plans", str(metrics.get("eval_plan_rate") or 0), "share with a fixture/eval plan"),
+            ("Expected edges", str(metrics.get("expected_edge_rate") or 0), "share naming the map edge they would add"),
+        ])
     return "".join(
         "<li>"
         f"<span>{html.escape(label)}<small>{html.escape(note)}</small></span>"

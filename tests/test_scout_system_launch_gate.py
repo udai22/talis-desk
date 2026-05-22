@@ -86,6 +86,34 @@ def test_launch_gate_uses_tournament_as_only_1000_promotion_authority():
     assert report["proof_ladder"][5]["passed"] is False
 
 
+def test_launch_gate_surfaces_tournament_repair_command_when_blocked():
+    report = build_launch_gate_report(
+        deterministic_report=_deterministic_report(),
+        live_report=_live_pass_report(n_scouts=100),
+        tournament_report={
+            "promotion_decision": {
+                "decision": "no_promotion",
+                "ready_for_live_100": False,
+                "ready_for_live_1000": False,
+                "ready_for_scheduled_production": False,
+                "reason": "Tool creation gate failed.",
+            },
+            "next_experiment_plan": [
+                {
+                    "id": "tool_creation_quality_repair_100",
+                    "command": "PYTHONPATH=. python scripts/run_scout_system_launch_gate.py --live-scouts 100",
+                }
+            ],
+        },
+        allow_live_spend=True,
+    )
+
+    decision = report["decision"]
+    assert decision["status"] == "blocked_by_tournament"
+    assert decision["allowed_next_step"] == "tool_creation_quality_repair_100"
+    assert decision["next_command"].endswith("--live-scouts 100")
+
+
 def test_launch_gate_blocks_when_deterministic_market_evolve_readiness_fails():
     deterministic = _deterministic_report()
     deterministic["readiness"]["status"] = "fail"

@@ -136,6 +136,28 @@ def test_live_scout_tournament_blocks_hundred_scout_distribution_without_market_
     assert tournament["next_experiment_plan"][0]["id"] == "market_evolve_proof_repair_100"
 
 
+def test_live_scout_tournament_blocks_low_quality_tool_creation_before_1000(tmp_path):
+    report_path = _write_canary(
+        tmp_path,
+        n_requested=100,
+        success_rate=0.93,
+        transcript_errors=0,
+        duplicate_rate=0.06,
+        completed=93,
+        geometry_cells=100,
+        low_quality_tool_creation=True,
+    )
+
+    tournament = evaluate_live_scout_tournament([report_path])
+
+    assert tournament["promotion_decision"]["decision"] == "no_promotion"
+    assert tournament["winner"]["promotion_eligible"] is False
+    assert "tool_creation_eval_plan_rate_ge_0_85" in tournament["winner"]["failed_gates"]
+    assert "tool_creation_expected_edge_rate_ge_0_60" in tournament["winner"]["failed_gates"]
+    assert tournament["winner"]["tool_creation_evolution"]["metrics"]["quality_pass_rate"] < 0.70
+    assert tournament["next_experiment_plan"][0]["id"] == "tool_creation_quality_repair_100"
+
+
 def test_live_scout_tournament_promotes_clean_thousand_scout_distribution_to_shadow_trial(tmp_path):
     report_path = _write_canary(
         tmp_path,
@@ -379,6 +401,8 @@ def _write_canary(
     include_ramp_policy_rehearsal: bool | None = None,
     ramp_policy_rehearsal_status: str = "pass",
     ramp_policy_rehearsal_metrics: dict | None = None,
+    include_tool_creation_evolution: bool | None = None,
+    low_quality_tool_creation: bool = False,
 ) -> Path:
     tmp_path.mkdir(parents=True, exist_ok=True)
     report_path = tmp_path / "live_scout_canary_report.json"
@@ -430,7 +454,7 @@ def _write_canary(
             "self_healing": {
                 "completed_tasks": 4,
                 "failed_tasks": 0,
-                "tool_proposals": 2,
+                "tool_proposals": 3 if n_requested >= 100 else 0,
             },
         },
         "transcript_summary": {
@@ -555,6 +579,14 @@ def _write_canary(
             }),
             encoding="utf-8",
         )
+    if include_tool_creation_evolution is None:
+        include_tool_creation_evolution = n_requested >= 100
+    if include_tool_creation_evolution:
+        _write_analysis_tool_proposals(
+            db_path,
+            cycle_id=cycle_id,
+            low_quality=low_quality_tool_creation,
+        )
     return report_path
 
 
@@ -565,5 +597,100 @@ def _write_tool_log_db(path: Path, *, tool_call_count: int, tool_error_count: in
             conn.execute(
                 "INSERT INTO tool_call_log (error) VALUES (?)",
                 ("resolve_error" if i < tool_error_count else "",),
+            )
+        conn.commit()
+
+
+def _write_analysis_tool_proposals(path: Path, *, cycle_id: str, low_quality: bool) -> None:
+    with sqlite3.connect(str(path)) as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS analysis_tool_proposals (
+                id TEXT PRIMARY KEY,
+                cycle_id TEXT,
+                artifact_kind TEXT,
+                artifact_id TEXT,
+                entity TEXT,
+                horizon TEXT,
+                lens TEXT,
+                proposal_kind TEXT,
+                tool_name TEXT,
+                purpose TEXT,
+                source_family TEXT,
+                trigger TEXT,
+                input_shape_json TEXT,
+                promotion_gate_json TEXT,
+                eval_plan_json TEXT,
+                priority TEXT,
+                status TEXT,
+                parent_proposal_id TEXT,
+                iteration INTEGER,
+                created_by TEXT,
+                quality_flags TEXT,
+                created_at TEXT,
+                valid_from TEXT,
+                transaction_from TEXT,
+                transaction_to TEXT
+            )
+            """
+        )
+        rows = [
+            ("hl_node_stream_reader", "our_hl_node"),
+            ("hydromancer_actor_quality_bulk", "hydromancer"),
+            ("hyperevm_mempool_actor_watch", "mempool"),
+        ]
+        for i, (tool_name, source_family) in enumerate(rows):
+            eval_plan = (
+                {}
+                if low_quality else
+                {"fixtures": ["source_event", "rejection_path"], "min_pass_rate": 0.8}
+            )
+            promotion_gate = (
+                {"has_source": True}
+                if low_quality else
+                {
+                    "expected_edge": f"{source_family} -> HYPE/intraday/on_chain edge",
+                    "expected_info_value": 0.78,
+                    "would_change_decision": True,
+                    "must_emit_source_timestamp_or_rejection": True,
+                }
+            )
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO analysis_tool_proposals (
+                    id, cycle_id, artifact_kind, artifact_id, entity, horizon,
+                    lens, proposal_kind, tool_name, purpose, source_family,
+                    trigger, input_shape_json, promotion_gate_json, eval_plan_json,
+                    priority, status, parent_proposal_id, iteration, created_by,
+                    quality_flags, created_at, valid_from, transaction_from,
+                    transaction_to
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+                """,
+                (
+                    f"atp_test_{i}",
+                    cycle_id,
+                    "node_intelligence",
+                    f"nint_{i}",
+                    "HYPE",
+                    "intraday",
+                    "on_chain",
+                    "new_tool",
+                    tool_name,
+                    "Create a sourced read-only analysis tool for a missing market-map edge.",
+                    source_family,
+                    "node_intelligence_coverage_gap",
+                    json.dumps({"entity": "HYPE", "source_family": source_family}),
+                    json.dumps(promotion_gate),
+                    json.dumps(eval_plan),
+                    "high",
+                    "proposed",
+                    "",
+                    0,
+                    "test",
+                    json.dumps([]),
+                    "2026-05-22T00:00:00+00:00",
+                    "2026-05-22T00:00:00+00:00",
+                    "2026-05-22T00:00:00+00:00",
+                ),
             )
         conn.commit()
