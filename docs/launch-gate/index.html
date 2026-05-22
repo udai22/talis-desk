@@ -162,7 +162,7 @@
     <div class="panel command">
       <h2>Next Command</h2>
       <p>This is the exact next move. It spends only if a human deliberately runs it with the live-spend flag.</p>
-      <pre>PYTHONPATH=. python scripts/run_scout_system_launch_gate.py --allow-live-spend --live-scouts 100 --live-cost-cap-usd 1.00 --live-concurrency 4 --max-tool-iterations 1 --ramp-policy /Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_ramp_policy.json</pre>
+      <pre>PYTHONPATH=. python scripts/run_scout_system_launch_gate.py --allow-live-spend --live-scouts 100 --live-cost-cap-usd 1.00 --live-concurrency 4 --max-tool-iterations 1 --repair-tool-proposal-contracts --tool-proposal-repair-limit 500 --ramp-policy /Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_ramp_policy.json</pre>
       <ul class="list">
         <li><span>Launch report</span><b><a href="launch_gate_report.json">open</a></b></li>
         <li><span>Launch markdown</span><b><a href="launch_gate_report.md">open</a></b></li>
@@ -174,7 +174,7 @@
   <section class="grid two">
     <div class="panel">
       <h2>What The Run Learned</h2>
-      <p>The live 100-scout run produced useful scout strings, but the tournament now blocks scale because the agent-created tool proposals did not yet carry evaluator-grade graph edges, expected information value, and fixture plans. A no-spend repair replay converts the current backlog into gradeable child proposals; the next paid step is a fresh 100-scout repair run, not a 1,000-scout ramp.</p>
+      <p>The live 100-scout run produced useful scout strings, but the tournament now blocks scale because the agent-created tool proposals did not yet carry evaluator-grade graph edges, expected information value, and fixture plans. The repair loop is now wired into the native live canary path; the next paid step is a fresh 100-scout repair run with --repair-tool-proposal-contracts, not a 1,000-scout ramp.</p>
       <ul class="list">
         <li><span>Average prompt quality</span><b>0.8622</b></li>
         <li><span>Weak scout packets</span><b>15</b></li>

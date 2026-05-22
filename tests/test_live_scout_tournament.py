@@ -3,7 +3,13 @@ import sqlite3
 from pathlib import Path
 
 from scripts.evaluate_live_scout_tournament import evaluate_live_scout_tournament
-from talis_desk.tool_atlas import repair_low_quality_analysis_tool_proposals
+from scripts.run_live_scout_canary import _tool_creation_contract_repair_report
+from talis_desk.store import DeskStore
+from talis_desk.tool_atlas import (
+    AnalysisToolProposal,
+    persist_analysis_tool_proposals,
+    repair_low_quality_analysis_tool_proposals,
+)
 
 
 def test_live_scout_tournament_blocks_failed_provider_candidate(tmp_path):
@@ -157,6 +163,7 @@ def test_live_scout_tournament_blocks_low_quality_tool_creation_before_1000(tmp_
     assert "tool_creation_expected_edge_rate_ge_0_60" in tournament["winner"]["failed_gates"]
     assert tournament["winner"]["tool_creation_evolution"]["metrics"]["quality_pass_rate"] < 0.70
     assert tournament["next_experiment_plan"][0]["id"] == "tool_creation_quality_repair_100"
+    assert "--repair-tool-proposal-contracts" in tournament["next_experiment_plan"][0]["command"]
 
 
 def test_live_scout_tournament_scores_repaired_tool_creation_frontier(tmp_path):
@@ -188,6 +195,43 @@ def test_live_scout_tournament_scores_repaired_tool_creation_frontier(tmp_path):
     assert tool_creation["metrics"]["quality_pass_rate"] == 1.0
     assert "tool_creation_quality_pass_rate_ge_0_70" not in tournament["winner"]["failed_gates"]
     assert "tool_creation_expected_edge_rate_ge_0_60" not in tournament["winner"]["failed_gates"]
+
+
+def test_live_canary_tool_contract_repair_report_repairs_current_frontier(tmp_path):
+    store = DeskStore(db_path=tmp_path / "desk.db")
+    proposal = AnalysisToolProposal(
+        cycle_id="cycle_native_tool_repair",
+        artifact_kind="node_intelligence",
+        artifact_id="nint_native_tool_repair",
+        entity="HYPE",
+        horizon="intraday",
+        lens="on_chain",
+        proposal_kind="new_tool",
+        tool_name="wallet_route_state_monitor",
+        purpose="Track actor wallet state transitions.",
+        source_family="our_hl_node",
+        trigger="node_intelligence_coverage_gap",
+        input_shape={"asset": "HYPE"},
+        promotion_gate={"has_route_classification": True},
+        eval_plan={},
+        priority="high",
+    )
+    persist_analysis_tool_proposals([proposal], conn=store.conn)
+
+    report = _tool_creation_contract_repair_report(
+        cycle_id="cycle_native_tool_repair",
+        conn=store.conn,
+        enabled=True,
+        limit=10,
+    )
+
+    assert report["status"] == "pass"
+    assert report["repairs_created"] == 1
+    assert report["before"]["metrics"]["quality_pass_rate"] == 0.0
+    assert report["after"]["metrics"]["quality_pass_rate"] == 1.0
+    assert report["after"]["metrics"]["eval_plan_rate"] == 1.0
+    assert report["after"]["metrics"]["expected_edge_rate"] == 1.0
+    assert report["gates"]["tool_contract_frontier_quality_ge_0_70"] is True
 
 
 def test_live_scout_tournament_promotes_clean_thousand_scout_distribution_to_shadow_trial(tmp_path):

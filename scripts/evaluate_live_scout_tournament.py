@@ -1344,7 +1344,8 @@ def _next_experiment_plan(
             "command": (
                 "PYTHONPATH=. python scripts/run_scout_system_launch_gate.py --allow-live-spend "
                 "--live-scouts 100 --live-cost-cap-usd 1.00 --live-concurrency 4 "
-                f"--max-tool-iterations 1 {ramp_policy_arg}".rstrip()
+                "--max-tool-iterations 1 --repair-tool-proposal-contracts "
+                f"--tool-proposal-repair-limit 500 {ramp_policy_arg}".rstrip()
             ),
             "promotion_rule": (
                 "Do not promote to 1,000 until analysis_tool_proposals pass quality >= 70%, "

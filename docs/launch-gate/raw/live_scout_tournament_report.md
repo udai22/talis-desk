@@ -34,5 +34,5 @@ Blocked from scale because agent-created tool proposals are not yet evaluator-gr
 ## Next Experiment Plan
 
 - `tool_creation_quality_repair_100`: Repair the agent-created tool surface before buying a larger scout ramp. Scouts may request and create tools, but every proposed tool needs an expected market-map edge, decision-change claim, and deterministic eval plan.
-  - command: `PYTHONPATH=. python scripts/run_scout_system_launch_gate.py --allow-live-spend --live-scouts 100 --live-cost-cap-usd 1.00 --live-concurrency 4 --max-tool-iterations 1 --ramp-policy /Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_ramp_policy.json`
+  - command: `PYTHONPATH=. python scripts/run_scout_system_launch_gate.py --allow-live-spend --live-scouts 100 --live-cost-cap-usd 1.00 --live-concurrency 4 --max-tool-iterations 1 --repair-tool-proposal-contracts --tool-proposal-repair-limit 500 --ramp-policy /Users/udaikhattar/talis-desk/docs/launch-gate/raw/live_scout_ramp_policy.json`
   - promotion_rule: Do not promote to 1,000 until analysis_tool_proposals pass quality >= 70%, eval-plan attachment >= 85%, expected-edge attachment >= 60%, decision-change attachment >= 60%, and eval/runtime backlog stays bounded.

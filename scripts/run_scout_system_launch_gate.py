@@ -127,6 +127,12 @@ def main() -> int:
         "--prompt-output-dir",
         str(live_dir),
     ]
+    if args.repair_tool_proposal_contracts:
+        live_cmd.extend([
+            "--repair-tool-proposal-contracts",
+            "--tool-proposal-repair-limit",
+            str(args.tool_proposal_repair_limit),
+        ])
     if args.prompt_variant:
         live_cmd.extend(["--prompt-variant", args.prompt_variant])
     if args.ramp_policy:
@@ -1333,6 +1339,7 @@ def _publish_live_artifacts(report: dict[str, Any], *, output_dir: Path) -> dict
         "live_scout_learning_report_md": prompt_output_dir / "live_scout_learning_report.md",
         "live_scout_ramp_policy_json": prompt_output_dir / "live_scout_ramp_policy.json",
         "live_scout_ramp_policy_rehearsal_json": prompt_output_dir / "live_scout_ramp_policy_rehearsal.json",
+        "tool_creation_contract_repair_json": prompt_output_dir / "tool_creation_contract_repair.json",
         "market_evolve_hard_experiment_json": prompt_output_dir / "market_evolve_hard_experiment.json",
     }
     raw_dir.mkdir(parents=True, exist_ok=True)
@@ -1377,6 +1384,7 @@ def _artifact_rows(report: dict[str, Any]) -> str:
         "live_scout_learning_report_md": "Learning markdown",
         "live_scout_ramp_policy_json": "Executable ramp policy",
         "live_scout_ramp_policy_rehearsal_json": "Ramp policy rehearsal",
+        "tool_creation_contract_repair_json": "Tool contract repair report",
         "market_evolve_hard_experiment_json": "MarketEvolve hard experiment",
         "live_scout_tournament_report_json": "Tournament report",
         "live_scout_tournament_report_md": "Tournament markdown",
@@ -1480,6 +1488,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--live-cost-cap-usd", type=float, default=0.10)
     parser.add_argument("--provider-timeout-s", type=float, default=45.0)
     parser.add_argument("--max-tool-iterations", type=int, default=1)
+    parser.add_argument("--repair-tool-proposal-contracts", action="store_true")
+    parser.add_argument("--tool-proposal-repair-limit", type=int, default=500)
     parser.add_argument("--ramp-policy", default="")
     parser.add_argument("--prompt-variant", default="flash_temporal_v4")
     parser.add_argument("--allow-live-spend", action="store_true")

@@ -64,7 +64,12 @@ from talis_desk.swarm.seed_generator import (
     SeedCell,
     generate_seeds,
 )
-from talis_desk.tool_atlas import regenerate_tool_atlas
+from talis_desk.tool_atlas import (
+    load_analysis_tool_proposals,
+    regenerate_tool_atlas,
+    repair_low_quality_analysis_tool_proposals,
+)
+from talis_desk.tool_atlas.discovery import evaluate_analysis_tool_proposal
 
 from scripts.run_100_scout_readiness_slice import (
     DEFAULT_THEMES,
@@ -299,6 +304,16 @@ def main() -> int:
             conn=store.conn,
             limit=args.self_healing_limit,
         )
+        tool_creation_contract_repair = _tool_creation_contract_repair_report(
+            cycle_id=cycle_id,
+            conn=store.conn,
+            enabled=args.repair_tool_proposal_contracts,
+            limit=args.tool_proposal_repair_limit,
+        )
+        _write_json(
+            prompt_output_dir / "tool_creation_contract_repair.json",
+            tool_creation_contract_repair,
+        )
         metrics = _metrics(
             cycle_id=cycle_id,
             seeds=seeds,
@@ -317,6 +332,7 @@ def main() -> int:
             transcript=transcript,
             elapsed_s=time.perf_counter() - started,
         )
+        metrics["tool_creation_contract_repair"] = tool_creation_contract_repair
         market_evolve_step = run_market_evolve_step(cycle_id=cycle_id, conn=store.conn)
         market_evolve_lineage = build_market_evolve_lineage(conn=store.conn)
         policy_apps = load_market_evolve_policy_applications(cycle_id=cycle_id, conn=store.conn, limit=max(500, len(seeds) * 3))
@@ -375,6 +391,8 @@ def main() -> int:
             "provider_timeout_s": args.provider_timeout_s,
             "prompt_variant_override": args.prompt_variant,
             "max_tool_iterations": args.max_tool_iterations,
+            "repair_tool_proposal_contracts": args.repair_tool_proposal_contracts,
+            "tool_proposal_repair_limit": args.tool_proposal_repair_limit,
             "ramp_policy_path": args.ramp_policy,
             "ramp_policy": ramp_policy,
             "ramp_policy_application": ramp_policy_application,
@@ -383,11 +401,13 @@ def main() -> int:
             "prompt_preview": prompt_preview,
             "slice_preview": slice_preview,
             "metrics": metrics,
+            "tool_creation_contract_repair": tool_creation_contract_repair,
             "verdict": verdict,
             "artifacts": {
                 "seeds": str(seed_path),
                 "outputs": str(outputs_path),
                 "slice_preview": str(prompt_output_dir / "live_scout_slice_preview.json"),
+                "tool_creation_contract_repair": str(prompt_output_dir / "tool_creation_contract_repair.json"),
             },
             "transcript_summary": transcript_summary,
             "scale_decision": _scale_decision(verdict, n_scouts=args.n_scouts),
@@ -416,6 +436,15 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--provider-timeout-s", type=float, default=45.0)
     parser.add_argument("--prompt-variant", default="", help="Optional forced scout prompt variant for this canary.")
     parser.add_argument("--max-tool-iterations", type=int, default=1)
+    parser.add_argument(
+        "--repair-tool-proposal-contracts",
+        action="store_true",
+        help=(
+            "Run the proposal-contract repair loop after scouts/self-healing emit "
+            "analysis_tool_proposals, before tournament evaluation."
+        ),
+    )
+    parser.add_argument("--tool-proposal-repair-limit", type=int, default=500)
     parser.add_argument(
         "--ramp-policy",
         default="",
@@ -819,6 +848,149 @@ def _write_live_slice_preview(
     return preview
 
 
+def _tool_creation_contract_repair_report(
+    *,
+    cycle_id: str,
+    conn: Any,
+    enabled: bool,
+    limit: int,
+) -> dict[str, Any]:
+    before_rows = load_analysis_tool_proposals(
+        cycle_id=cycle_id,
+        limit=max(1, int(limit)),
+        conn=conn,
+    )
+    before = _tool_proposal_contract_metrics(before_rows)
+    repairs = []
+    if enabled:
+        repairs = repair_low_quality_analysis_tool_proposals(
+            cycle_id=cycle_id,
+            limit=max(1, int(limit)),
+            conn=conn,
+        )
+    after_rows = load_analysis_tool_proposals(
+        cycle_id=cycle_id,
+        limit=max(1, int(limit) * 2),
+        conn=conn,
+    )
+    after = _tool_proposal_contract_metrics(after_rows)
+    gates = _tool_contract_repair_gates(after)
+    failed = [name for name, ok in gates.items() if not ok]
+    required = before.get("proposal_count", 0) > 0
+    return {
+        "schema_version": "talis_tool_creation_contract_repair_v1",
+        "cycle_id": cycle_id,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "enabled": bool(enabled),
+        "required": required,
+        "limit": max(1, int(limit)),
+        "status": "pass" if (not required or not failed) else "blocked",
+        "before": before,
+        "after": after,
+        "repairs_created": len(repairs),
+        "repairs": [
+            {
+                "parent_proposal_id": r.parent_proposal_id,
+                "repaired_proposal_id": r.repaired_proposal_id,
+                "tool_name": r.tool_name,
+                "previous_score": r.previous_score,
+                "repaired_score": r.repaired_score,
+                "status": r.status,
+                "quality_flags": r.quality_flags,
+            }
+            for r in repairs
+        ],
+        "gates": gates,
+        "failed_gates": failed,
+        "quality_flags": (
+            []
+            if enabled or not required else
+            ["tool_creation_contract_repair_available_but_not_enabled"]
+        ),
+    }
+
+
+def _tool_proposal_contract_metrics(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    frontier = _frontier_tool_proposal_rows(rows)
+    status_counts = dict(Counter(str(row.get("status") or "unknown") for row in rows))
+    tool_counts = dict(Counter(str(row.get("tool_name") or "unknown") for row in rows))
+    pass_count = 0
+    eval_plan_count = 0
+    promotion_gate_count = 0
+    expected_edge_count = 0
+    would_change_count = 0
+    scores: list[float] = []
+    flags: Counter[str] = Counter()
+    for row in frontier:
+        promotion_gate = row.get("promotion_gate_json")
+        if not isinstance(promotion_gate, dict):
+            promotion_gate = {}
+        eval_plan = row.get("eval_plan_json")
+        if not isinstance(eval_plan, dict):
+            eval_plan = {}
+        if eval_plan:
+            eval_plan_count += 1
+        if promotion_gate:
+            promotion_gate_count += 1
+        if str(promotion_gate.get("expected_edge") or "").strip():
+            expected_edge_count += 1
+        if promotion_gate.get("would_change_decision") is True:
+            would_change_count += 1
+        quality = evaluate_analysis_tool_proposal(row)
+        scores.append(float(quality.score))
+        if quality.passed:
+            pass_count += 1
+        flags.update(quality.flags)
+    n = len(frontier)
+    return {
+        "proposal_count": len(rows),
+        "frontier_proposal_count": n,
+        "status_counts": status_counts,
+        "top_tools": [
+            {"tool_name": name, "count": count}
+            for name, count in Counter(tool_counts).most_common(10)
+        ],
+        "metrics": {
+            "avg_quality_score": round(sum(scores) / max(1, len(scores)), 4),
+            "quality_pass_rate": round(pass_count / max(1, n), 4),
+            "eval_plan_rate": round(eval_plan_count / max(1, n), 4),
+            "promotion_gate_rate": round(promotion_gate_count / max(1, n), 4),
+            "expected_edge_rate": round(expected_edge_count / max(1, n), 4),
+            "would_change_decision_rate": round(would_change_count / max(1, n), 4),
+        },
+        "top_quality_flags": [
+            {"flag": name, "count": count}
+            for name, count in flags.most_common(10)
+        ],
+    }
+
+
+def _frontier_tool_proposal_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    parent_ids = {
+        str(row.get("parent_proposal_id") or "")
+        for row in rows
+        if str(row.get("parent_proposal_id") or "").strip()
+    }
+    return [
+        row for row in rows
+        if str(row.get("id") or "") not in parent_ids
+        and str(row.get("status") or "").lower() != "superseded"
+    ]
+
+
+def _tool_contract_repair_gates(metrics: dict[str, Any]) -> dict[str, bool]:
+    n = int(metrics.get("frontier_proposal_count") or 0)
+    values = metrics.get("metrics") if isinstance(metrics.get("metrics"), dict) else {}
+    if n <= 0:
+        return {}
+    return {
+        "tool_contract_frontier_quality_ge_0_70": _to_float(values.get("quality_pass_rate")) >= 0.70,
+        "tool_contract_eval_plan_rate_ge_0_85": _to_float(values.get("eval_plan_rate")) >= 0.85,
+        "tool_contract_expected_edge_rate_ge_0_60": _to_float(values.get("expected_edge_rate")) >= 0.60,
+        "tool_contract_would_change_decision_rate_ge_0_60": _to_float(values.get("would_change_decision_rate")) >= 0.60,
+    }
+
+
 def _live_canary_verdict(
     metrics: dict[str, Any],
     *,
@@ -935,6 +1107,8 @@ def _blocked_report(
         "provider_timeout_s": args.provider_timeout_s,
         "prompt_variant_override": args.prompt_variant,
         "max_tool_iterations": args.max_tool_iterations,
+        "repair_tool_proposal_contracts": args.repair_tool_proposal_contracts,
+        "tool_proposal_repair_limit": args.tool_proposal_repair_limit,
         "ramp_policy_path": args.ramp_policy,
         "ramp_policy": ramp_policy,
         "ramp_policy_application": ramp_policy_application,
@@ -1038,6 +1212,15 @@ def _render_markdown(report: dict[str, Any]) -> str:
     metrics = report.get("metrics") if isinstance(report.get("metrics"), dict) else {}
     scouts = metrics.get("scouts") if isinstance(metrics.get("scouts"), dict) else {}
     info = metrics.get("information_map") if isinstance(metrics.get("information_map"), dict) else {}
+    repair = (
+        report.get("tool_creation_contract_repair")
+        if isinstance(report.get("tool_creation_contract_repair"), dict)
+        else metrics.get("tool_creation_contract_repair")
+        if isinstance(metrics.get("tool_creation_contract_repair"), dict)
+        else {}
+    )
+    repair_after = repair.get("after") if isinstance(repair.get("after"), dict) else {}
+    repair_after_metrics = repair_after.get("metrics") if isinstance(repair_after.get("metrics"), dict) else {}
     lines = [
         "# Live Scout Canary",
         "",
@@ -1056,6 +1239,21 @@ def _render_markdown(report: dict[str, Any]) -> str:
     ]
     for name, ok in (verdict.get("gates") or {}).items():
         lines.append(f"- {'PASS' if ok else 'FAIL'} `{name}`")
+    if repair:
+        lines.extend([
+            "",
+            "## Tool Creation Contract Repair",
+            "",
+            f"- enabled: `{repair.get('enabled')}`",
+            f"- status: `{repair.get('status')}`",
+            f"- repairs_created: `{repair.get('repairs_created')}`",
+            f"- frontier_proposals: `{repair_after.get('frontier_proposal_count')}`",
+            f"- quality_pass_rate: `{repair_after_metrics.get('quality_pass_rate')}`",
+            f"- eval_plan_rate: `{repair_after_metrics.get('eval_plan_rate')}`",
+            f"- expected_edge_rate: `{repair_after_metrics.get('expected_edge_rate')}`",
+        ])
+        for name, ok in (repair.get("gates") or {}).items():
+            lines.append(f"- {'PASS' if ok else 'FAIL'} `{name}`")
     lines.extend([
         "",
         "## Decision",
