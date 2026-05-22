@@ -2218,6 +2218,40 @@
       "user_prompt_chars": 1064,
       "user_prompt_excerpt": "as_of_utc=2026-05-22T15:42:45.191166+00:00\nFreshness rule: for intraday/1d/1w horizons, do not use old historical dates as live catalyst evidence unless explicitly labeled as regime context.\n\nCell:\n  entity=kFLOKI\n  horizon=1d\n  lens=factor\n  bias_mode=mean_reversion\n  theme=hyperliquid_node_intelligence\n\natlas_policy:\n  Scouts may use any read-only approved atlas tool/source before the LLM call, under the evidence budget. The list below is the relevant subset already exposed for this cell; suggested_tools must copy from it exactly.\n\n\nallowed_tool_candidates:\n  tic://tool/builtin/query_timeseries@v1\n  tic://tool/builtin/query_source_health@v1\n  tic://tool/agent_native/find_similar_setups@v1\n  tic://tool/builtin/compute_float_absorption_rate@v1\n  tic://tool/builtin/compute_wallet_stats@v1\n  tic://tool/builtin/solar_iv_regression@v1\n  tic://tool/builtin/query_claims_by_entity@v1\n  tic://tool/agent_native/find_confluence@v1\n  tic://tool/agent_native/replay_artifact_reasoning@v1\n  tic://tool/agent_native/semantic_search@v1\n\nReturn one JSON object only."
     },
+    "ramp_policy_rehearsal": {
+      "decision": "policy_can_gate_live_spend",
+      "gates": {
+        "candidate_menu_not_smaller": true,
+        "policy_attached_all": true,
+        "repair_ids_attached_all": true,
+        "source_target_coverage": true,
+        "strict_contract_all": true,
+        "tool_overbreadth_ok": true,
+        "tool_refresh_all": true,
+        "watch_metrics_attached_all": true
+      },
+      "metrics": {
+        "candidate_tool_delta_avg": 0.917,
+        "policy_attached_rate": 1.0,
+        "source_target_coverage_rate": 1.0,
+        "tool_candidate_added_count": 11,
+        "tool_candidate_refresh_rate": 1.0
+      },
+      "policy_id": "lrp_cycle_live100_20260522_live_100_100",
+      "quality_flags": [],
+      "schema_version": "live_scout_ramp_policy_rehearsal_v1",
+      "score": 1.0,
+      "seed_count": 12,
+      "status": "pass",
+      "target_source_family_hits": {
+        "event_feed": 9,
+        "hydromancer": 5,
+        "market_timeseries": 12,
+        "our_node": 6,
+        "parallel_web": 4,
+        "source_health": 12
+      }
+    },
     "scale_decision": {
       "decision": "evaluate_live_1000_ramp_next",
       "next_step": "Run the live scout tournament evaluator over the 100-scout report. Promote to 1,000 only if the distribution gates pass.",
@@ -7695,6 +7729,7 @@
     "live_scout_preview_user_prompt_md": "raw/live_scout_preview_user_prompt.md",
     "live_scout_prompt_preview_json": "raw/live_scout_prompt_preview.json",
     "live_scout_ramp_policy_json": "raw/live_scout_ramp_policy.json",
+    "live_scout_ramp_policy_rehearsal_json": "raw/live_scout_ramp_policy_rehearsal.json",
     "live_scout_slice_preview_json": "raw/live_scout_slice_preview.json",
     "live_scout_tournament_report_json": "raw/live_scout_tournament_report.json",
     "live_scout_transcript_json": "raw/live_scout_transcript.json"

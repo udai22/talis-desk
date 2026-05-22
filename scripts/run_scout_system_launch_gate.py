@@ -284,6 +284,7 @@ def build_launch_gate_report(
             "prompt_preview": _prompt_preview_summary(live_report),
             "slice_preview": _slice_preview_summary(live_report),
             "learning_report": _learning_report_summary(live_report),
+            "ramp_policy_rehearsal": _ramp_policy_rehearsal_summary(live_report),
             "prompt_output_dir": live_report.get("prompt_output_dir") or "",
             "artifacts": live_report.get("artifacts") or {},
         },
@@ -398,10 +399,12 @@ def render_launch_gate_html(report: dict[str, Any]) -> str:
     ) or "<li><span>No tool candidates captured</span><b>blocked</b></li>"
     artifact_rows = _artifact_rows(report)
     learning = live.get("learning_report") if isinstance(live.get("learning_report"), dict) else {}
+    ramp_policy_rehearsal = live.get("ramp_policy_rehearsal") if isinstance(live.get("ramp_policy_rehearsal"), dict) else {}
     learning_mode_rows = _learning_failure_rows(learning)
     learning_arm_rows = _learning_arm_rows(learning)
     learning_order_rows = _learning_work_order_rows(learning)
     pre_1000_rows = _pre_1000_rows(learning)
+    ramp_policy_rehearsal_rows = _ramp_policy_rehearsal_rows(ramp_policy_rehearsal)
     next_command = str(decision.get("next_command") or "")
     scout_viewer = str(report.get("viewer_index") or "")
     return f"""<!doctype html>
@@ -592,6 +595,22 @@ def render_launch_gate_html(report: dict[str, Any]) -> str:
       <h2>Pre-1000 Watchlist</h2>
       <p>The 100-scout run opened the next experimental ramp, but scheduled production stays blocked until repeatability is proven. These are the gates to watch in the next authorized run.</p>
       <ul class="list">{pre_1000_rows}</ul>
+    </div>
+  </section>
+
+  <section class="grid two">
+    <div class="panel">
+      <h2>Ramp Policy Rehearsal</h2>
+      <p>This is the no-spend paired experiment: same slice before and after the learned policy, judged before any provider call is allowed.</p>
+      <ul class="list">{ramp_policy_rehearsal_rows}</ul>
+    </div>
+    <div class="panel">
+      <h2>Spend Discipline</h2>
+      <p>The next ramp can only scale from a policy that changed real scout affordances and passed its rehearsal gates.</p>
+      <ul class="list">
+        <li><span>Policy status<small>paired no-spend evaluator</small></span><b>{html.escape(str(ramp_policy_rehearsal.get("status") or "not captured"))}</b></li>
+        <li><span>Decision<small>pre-provider gate</small></span><b>{html.escape(str(ramp_policy_rehearsal.get("decision") or "pending").replace("_", " "))}</b></li>
+      </ul>
     </div>
   </section>
 
@@ -994,6 +1013,31 @@ def _learning_report_summary(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _ramp_policy_rehearsal_summary(report: dict[str, Any]) -> dict[str, Any]:
+    rehearsal = report.get("ramp_policy_rehearsal") if isinstance(report.get("ramp_policy_rehearsal"), dict) else {}
+    if not rehearsal:
+        return {}
+    metrics = rehearsal.get("metrics") if isinstance(rehearsal.get("metrics"), dict) else {}
+    return {
+        "schema_version": rehearsal.get("schema_version"),
+        "policy_id": rehearsal.get("policy_id"),
+        "status": rehearsal.get("status"),
+        "decision": rehearsal.get("decision"),
+        "score": rehearsal.get("score"),
+        "seed_count": rehearsal.get("seed_count"),
+        "metrics": {
+            "policy_attached_rate": metrics.get("policy_attached_rate"),
+            "tool_candidate_refresh_rate": metrics.get("tool_candidate_refresh_rate"),
+            "tool_candidate_added_count": metrics.get("tool_candidate_added_count"),
+            "source_target_coverage_rate": metrics.get("source_target_coverage_rate"),
+            "candidate_tool_delta_avg": metrics.get("candidate_tool_delta_avg"),
+        },
+        "gates": rehearsal.get("gates") if isinstance(rehearsal.get("gates"), dict) else {},
+        "target_source_family_hits": rehearsal.get("target_source_family_hits") or {},
+        "quality_flags": rehearsal.get("quality_flags") or [],
+    }
+
+
 def _build_live_learning_report(
     *,
     live_report_path: Path,
@@ -1146,6 +1190,27 @@ def _pre_1000_rows(learning: dict[str, Any]) -> str:
     )
 
 
+def _ramp_policy_rehearsal_rows(rehearsal: dict[str, Any]) -> str:
+    if not rehearsal:
+        return "<li><span>No policy rehearsal captured<small>run a no-spend slice with --ramp-policy first</small></span><b>missing</b></li>"
+    metrics = rehearsal.get("metrics") if isinstance(rehearsal.get("metrics"), dict) else {}
+    rows = [
+        ("Status", str(rehearsal.get("status") or "unknown"), "hard gate result"),
+        ("Score", str(rehearsal.get("score") or 0), "fraction of paired gates passing"),
+        ("Seeds", str(rehearsal.get("seed_count") or 0), "paired no-spend slice size"),
+        ("Tool refresh", str(metrics.get("tool_candidate_refresh_rate") or 0), "share of seeds whose tool menu was refreshed"),
+        ("New candidates", str(metrics.get("tool_candidate_added_count") or 0), "new allowed tools added by policy"),
+        ("Source target coverage", str(metrics.get("source_target_coverage_rate") or 0), "targeted source families observed after policy"),
+    ]
+    return "".join(
+        "<li>"
+        f"<span>{html.escape(label)}<small>{html.escape(note)}</small></span>"
+        f"<b>{html.escape(value)}</b>"
+        "</li>"
+        for label, value, note in rows
+    )
+
+
 def _publish_live_artifacts(report: dict[str, Any], *, output_dir: Path) -> dict[str, str]:
     live = report.get("live") if isinstance(report.get("live"), dict) else {}
     prompt_output_dir = Path(str(live.get("prompt_output_dir") or "")).expanduser()
@@ -1165,6 +1230,7 @@ def _publish_live_artifacts(report: dict[str, Any], *, output_dir: Path) -> dict
         "live_scout_learning_report_json": prompt_output_dir / "live_scout_learning_report.json",
         "live_scout_learning_report_md": prompt_output_dir / "live_scout_learning_report.md",
         "live_scout_ramp_policy_json": prompt_output_dir / "live_scout_ramp_policy.json",
+        "live_scout_ramp_policy_rehearsal_json": prompt_output_dir / "live_scout_ramp_policy_rehearsal.json",
     }
     raw_dir.mkdir(parents=True, exist_ok=True)
     for key, src in candidates.items():
@@ -1200,6 +1266,7 @@ def _artifact_rows(report: dict[str, Any]) -> str:
         "live_scout_learning_report_json": "Learning report",
         "live_scout_learning_report_md": "Learning markdown",
         "live_scout_ramp_policy_json": "Executable ramp policy",
+        "live_scout_ramp_policy_rehearsal_json": "Ramp policy rehearsal",
         "live_scout_tournament_report_json": "Tournament report",
         "live_scout_canary_report_md": "Canary markdown",
     }

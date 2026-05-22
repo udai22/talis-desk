@@ -8,6 +8,7 @@ locally routed tool candidates or MarketEvolve metadata.
 from __future__ import annotations
 
 import json
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -117,6 +118,129 @@ def apply_live_scout_ramp_policy_to_seeds(
     }
 
 
+def build_live_scout_ramp_policy_rehearsal(
+    *,
+    baseline_seeds: list[Any],
+    candidate_seeds: list[Any],
+    policy: dict[str, Any],
+    application: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Compare the same no-spend slice before/after a ramp policy patch."""
+    application = application if isinstance(application, dict) else {}
+    baseline_rows = [_seed_affordance_row(seed) for seed in baseline_seeds]
+    candidate_rows = [_seed_affordance_row(seed) for seed in candidate_seeds]
+    seed_count = max(len(candidate_rows), len(baseline_rows), 1)
+    seed_patch = policy.get("seed_payload_patch") if isinstance(policy.get("seed_payload_patch"), dict) else {}
+    watch_metrics = _string_list(policy.get("watch_metrics"))
+    repair_ids = _string_list(policy.get("repair_work_order_ids"))
+    target_families = _normalize_source_families(seed_patch.get("source_family_targets_append"))
+    candidate_family_counts = Counter(
+        family
+        for row in candidate_rows
+        for family in row.get("source_families", [])
+    )
+    baseline_family_counts = Counter(
+        family
+        for row in baseline_rows
+        for family in row.get("source_families", [])
+    )
+    tool_deltas = []
+    for idx, row in enumerate(candidate_rows):
+        baseline = baseline_rows[idx] if idx < len(baseline_rows) else {}
+        before = set(baseline.get("tool_candidates") or [])
+        after = set(row.get("tool_candidates") or [])
+        tool_deltas.append({
+            "seed_id": row.get("seed_id"),
+            "entity": row.get("entity"),
+            "horizon": row.get("horizon"),
+            "lens": row.get("lens"),
+            "baseline_tool_count": len(before),
+            "candidate_tool_count": len(after),
+            "added_tools": sorted(after - before)[:12],
+            "removed_tools": sorted(before - after)[:12],
+            "source_families": row.get("source_families") or [],
+        })
+    policy_id = str(policy.get("policy_id") or "")
+    policy_attached_rate = _rate(
+        sum(1 for row in candidate_rows if row.get("learning_policy_id") == policy_id),
+        seed_count,
+    )
+    watch_attached_rate = _rate(
+        sum(1 for row in candidate_rows if set(watch_metrics).issubset(set(row.get("learning_watch_metrics") or []))),
+        seed_count,
+    ) if watch_metrics else 1.0
+    repair_attached_rate = _rate(
+        sum(1 for row in candidate_rows if set(repair_ids).issubset(set(row.get("learning_repair_work_order_ids") or []))),
+        seed_count,
+    ) if repair_ids else 1.0
+    strict_contract_rate = _rate(
+        sum(1 for row in candidate_rows if row.get("prompt_contract_pressure") in {"strict", "high", "raise"}),
+        seed_count,
+    )
+    refreshed_rate = _rate(
+        int(application.get("tool_candidate_refreshed_seed_count") or 0),
+        seed_count,
+    )
+    target_hits = {
+        family: int(candidate_family_counts.get(family, 0))
+        for family in target_families
+    }
+    target_coverage_rate = _rate(sum(1 for hits in target_hits.values() if hits > 0), max(1, len(target_hits))) if target_hits else 1.0
+    baseline_avg_tools = _avg(row.get("tool_candidate_count") for row in baseline_rows)
+    candidate_avg_tools = _avg(row.get("tool_candidate_count") for row in candidate_rows)
+    max_limit = int(seed_patch.get("tool_candidate_limit_min") or max([row.get("tool_candidate_count") or 0 for row in candidate_rows] or [0]) or 0)
+    over_limit_count = sum(
+        1 for row in candidate_rows
+        if max_limit > 0 and int(row.get("tool_candidate_count") or 0) > max_limit
+    )
+    gates = {
+        "policy_attached_all": policy_attached_rate >= 0.999,
+        "watch_metrics_attached_all": watch_attached_rate >= 0.999,
+        "repair_ids_attached_all": repair_attached_rate >= 0.999,
+        "strict_contract_all": strict_contract_rate >= 0.999,
+        "tool_refresh_all": refreshed_rate >= 0.999 if max_limit else True,
+        "candidate_menu_not_smaller": candidate_avg_tools >= baseline_avg_tools,
+        "source_target_coverage": target_coverage_rate >= (0.60 if target_hits else 1.0),
+        "tool_overbreadth_ok": over_limit_count == 0,
+    }
+    score = round(sum(1.0 for ok in gates.values() if ok) / max(1, len(gates)), 4)
+    status = "pass" if all(gates.values()) else "fail"
+    return {
+        "schema_version": "live_scout_ramp_policy_rehearsal_v1",
+        "policy_id": policy_id,
+        "status": status,
+        "decision": "policy_can_gate_live_spend" if status == "pass" else "repair_policy_before_live_spend",
+        "score": score,
+        "seed_count": len(candidate_rows),
+        "baseline": {
+            "avg_tool_candidates": round(baseline_avg_tools, 3),
+            "source_family_counts": dict(sorted(baseline_family_counts.items())),
+        },
+        "candidate": {
+            "avg_tool_candidates": round(candidate_avg_tools, 3),
+            "source_family_counts": dict(sorted(candidate_family_counts.items())),
+        },
+        "metrics": {
+            "policy_attached_rate": policy_attached_rate,
+            "watch_metrics_attached_rate": watch_attached_rate,
+            "repair_ids_attached_rate": repair_attached_rate,
+            "strict_contract_rate": strict_contract_rate,
+            "tool_candidate_refresh_rate": refreshed_rate,
+            "tool_candidate_added_count": int(application.get("tool_candidate_added_count") or 0),
+            "source_target_coverage_rate": target_coverage_rate,
+            "candidate_tool_delta_avg": round(candidate_avg_tools - baseline_avg_tools, 3),
+            "over_limit_count": over_limit_count,
+        },
+        "target_source_family_hits": target_hits,
+        "gates": gates,
+        "sample_deltas": tool_deltas[:20],
+        "application": application,
+        "quality_flags": [] if status == "pass" else [
+            f"failed_gate:{name}" for name, ok in gates.items() if not ok
+        ],
+    }
+
+
 def _matching_geometry_targets(seed: Any, targets: list[dict[str, Any]]) -> list[dict[str, Any]]:
     if not targets:
         return []
@@ -141,6 +265,29 @@ def _matching_geometry_targets(seed: Any, targets: list[dict[str, Any]]) -> list
             "source_work_order_id": target.get("source_work_order_id"),
         })
     return out
+
+
+def _seed_affordance_row(seed: Any) -> dict[str, Any]:
+    payload = dict(getattr(seed, "payload", None) or {})
+    tools = _string_list(payload.get("tool_candidates"))
+    families = sorted({_source_family_for_uri(uri) for uri in tools})
+    return {
+        "seed_id": str(getattr(seed, "seed_id", "") or ""),
+        "entity": str(getattr(seed, "entity", "") or ""),
+        "horizon": str(getattr(seed, "horizon", "") or ""),
+        "lens": str(getattr(seed, "lens", "") or ""),
+        "bias_mode": str(getattr(seed, "bias_mode", "") or ""),
+        "theme": str(getattr(seed, "theme", "") or ""),
+        "tool_candidate_count": len(tools),
+        "tool_candidates": tools,
+        "source_families": families,
+        "learning_policy_id": payload.get("learning_policy_id"),
+        "learning_watch_metrics": _string_list(payload.get("learning_watch_metrics")),
+        "learning_repair_work_order_ids": _string_list(payload.get("learning_repair_work_order_ids")),
+        "prompt_contract_pressure": payload.get("prompt_contract_pressure"),
+        "source_family_targets": _string_list(payload.get("source_family_targets")),
+        "learning_tool_candidate_refresh": payload.get("learning_tool_candidate_refresh") or {},
+    }
 
 
 def _refresh_seed_tool_candidates(seed: Any) -> dict[str, Any]:
@@ -175,6 +322,57 @@ def _refresh_seed_tool_candidates(seed: Any) -> dict[str, Any]:
     }
     setattr(seed, "payload", payload)
     return payload["learning_tool_candidate_refresh"]
+
+
+def _normalize_source_families(raw: Any) -> list[str]:
+    aliases = {
+        "our_hl_node": "our_node",
+        "hl_node": "our_node",
+        "web_attention": "parallel_web",
+        "market_microstructure": "market_timeseries",
+    }
+    out = []
+    for item in _string_list(raw):
+        key = item.lower()
+        out.append(aliases.get(key, key))
+    return sorted(set(out))
+
+
+def _source_family_for_uri(uri: str) -> str:
+    text = str(uri or "").lower()
+    if "hydromancer" in text:
+        return "hydromancer"
+    if "parallel" in text or "perplexity" in text:
+        return "parallel_web"
+    if "source_health" in text:
+        return "source_health"
+    if "event" in text or "calendar" in text or "news" in text:
+        return "event_feed"
+    if any(tok in text for tok in ("timeseries", "candles", "l2", "orderbook", "microstructure", "funding")):
+        return "market_timeseries"
+    if any(tok in text for tok in ("hl_", "clearinghouse", "builder", "reject", "wallet")):
+        return "our_node"
+    if "celestial" in text or "astro" in text:
+        return "astrology"
+    if "polymarket" in text:
+        return "prediction_market"
+    if "source/" in text:
+        return text.split("source/", 1)[1].split("/", 1)[0].split("@", 1)[0]
+    return "tool_atlas"
+
+
+def _rate(numerator: int | float, denominator: int | float) -> float:
+    return round(float(numerator) / max(1.0, float(denominator)), 4)
+
+
+def _avg(values: Any) -> float:
+    nums = []
+    for raw in values:
+        try:
+            nums.append(float(raw or 0.0))
+        except Exception:
+            nums.append(0.0)
+    return sum(nums) / max(1, len(nums))
 
 
 def _raise_string(payload: dict[str, Any], key: str, raw: Any) -> None:

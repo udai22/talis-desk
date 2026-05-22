@@ -58,6 +58,7 @@ def test_launch_gate_preflight_blocks_before_live_spend_but_allows_authorized_ca
     assert "launch_gate_report.json" in html
     assert "Repair Work Orders" in html
     assert "Pre-1000 Watchlist" in html
+    assert "Ramp Policy Rehearsal" in html
 
 
 def test_launch_gate_uses_tournament_as_only_1000_promotion_authority():

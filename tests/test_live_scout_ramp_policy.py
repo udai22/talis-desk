@@ -1,4 +1,9 @@
-from talis_desk.information_map.live_ramp_policy import apply_live_scout_ramp_policy_to_seeds
+import copy
+
+from talis_desk.information_map.live_ramp_policy import (
+    apply_live_scout_ramp_policy_to_seeds,
+    build_live_scout_ramp_policy_rehearsal,
+)
 from talis_desk.swarm.seed_generator import SeedCell
 
 
@@ -7,7 +12,7 @@ def test_live_scout_ramp_policy_monotonically_patches_seed_payload(monkeypatch):
         assert seed.payload["source_family_targets"] == ["market_timeseries", "hydromancer", "our_node"]
         return [
             "tic://tool/hydromancer/get_hl_pnl_leaderboard@v1",
-            "tic://tool/builtin/query_source_health@v1",
+            "tic://source/hl/hl_reject_corpus",
         ]
 
     monkeypatch.setattr(
@@ -54,7 +59,14 @@ def test_live_scout_ramp_policy_monotonically_patches_seed_payload(monkeypatch):
         ],
     }
 
+    baseline = copy.deepcopy([seed])
     result = apply_live_scout_ramp_policy_to_seeds([seed], policy)
+    rehearsal = build_live_scout_ramp_policy_rehearsal(
+        baseline_seeds=baseline,
+        candidate_seeds=[seed],
+        policy=policy,
+        application=result,
+    )
 
     assert result["status"] == "applied"
     assert result["geometry_annotated_seed_count"] == 1
@@ -69,8 +81,15 @@ def test_live_scout_ramp_policy_monotonically_patches_seed_payload(monkeypatch):
     assert seed.payload["tool_candidates"] == [
         "tic://tool/existing@v1",
         "tic://tool/hydromancer/get_hl_pnl_leaderboard@v1",
-        "tic://tool/builtin/query_source_health@v1",
+        "tic://source/hl/hl_reject_corpus",
     ]
     assert seed.payload["learning_tool_candidate_refresh"]["after_count"] == 3
     assert seed.payload["source_family_targets"] == ["market_timeseries", "hydromancer", "our_node"]
     assert seed.payload["learning_geometry_replication_targets"][0]["cell_key"] == "HYPE|intraday|on_chain|frontier|node_flow"
+    assert rehearsal["schema_version"] == "live_scout_ramp_policy_rehearsal_v1"
+    assert rehearsal["status"] == "pass"
+    assert rehearsal["decision"] == "policy_can_gate_live_spend"
+    assert rehearsal["metrics"]["tool_candidate_refresh_rate"] == 1.0
+    assert rehearsal["metrics"]["tool_candidate_added_count"] == 2
+    assert rehearsal["metrics"]["source_target_coverage_rate"] >= 0.6
+    assert rehearsal["gates"]["candidate_menu_not_smaller"] is True

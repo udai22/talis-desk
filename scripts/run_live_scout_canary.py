@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import copy
 import json
 import os
 import tempfile
@@ -40,6 +41,7 @@ from talis_desk.information_map import (
 from talis_desk.information_map.deep_scout_prompt import build_deep_scout_system_prompt
 from talis_desk.information_map.live_ramp_policy import (
     apply_live_scout_ramp_policy_to_seeds,
+    build_live_scout_ramp_policy_rehearsal,
     load_live_scout_ramp_policy,
 )
 from talis_desk.market_map.coverage_audit import build_coverage_gap_manifest
@@ -142,11 +144,21 @@ def main() -> int:
         _force_live_seed_runtime_options(seeds, args=args)
         ramp_policy: dict[str, Any] = {}
         ramp_policy_application: dict[str, Any] = {}
+        ramp_policy_rehearsal: dict[str, Any] = {}
         if args.ramp_policy:
+            baseline_seeds = copy.deepcopy(seeds)
             ramp_policy = load_live_scout_ramp_policy(args.ramp_policy)
             ramp_policy_application = apply_live_scout_ramp_policy_to_seeds(seeds, ramp_policy)
+            ramp_policy_rehearsal = build_live_scout_ramp_policy_rehearsal(
+                baseline_seeds=baseline_seeds,
+                candidate_seeds=seeds,
+                policy=ramp_policy,
+                application=ramp_policy_application,
+            )
         seed_path = prompt_output_dir / "live_scout_canary_seeds.json"
         _write_json(seed_path, [_seed_payload(seed) for seed in seeds])
+        if ramp_policy_rehearsal:
+            _write_json(prompt_output_dir / "live_scout_ramp_policy_rehearsal.json", ramp_policy_rehearsal)
         prompt_preview = _write_live_prompt_preview(
             prompt_output_dir=prompt_output_dir,
             seeds=seeds,
@@ -170,6 +182,7 @@ def main() -> int:
                 preflight=preflight,
                 ramp_policy=ramp_policy,
                 ramp_policy_application=ramp_policy_application,
+                ramp_policy_rehearsal=ramp_policy_rehearsal,
                 reason="explicit_live_spend_flag_missing",
                 elapsed_s=time.perf_counter() - started,
             )
@@ -190,7 +203,29 @@ def main() -> int:
                 preflight=preflight,
                 ramp_policy=ramp_policy,
                 ramp_policy_application=ramp_policy_application,
+                ramp_policy_rehearsal=ramp_policy_rehearsal,
                 reason="provider_import_failed",
+                elapsed_s=time.perf_counter() - started,
+            )
+            _write_canary_report(prompt_output_dir, report)
+            _print_report_paths(prompt_output_dir, report)
+            return 0
+
+        if ramp_policy_rehearsal and ramp_policy_rehearsal.get("status") != "pass":
+            report = _blocked_report(
+                args=args,
+                cycle_id=cycle_id,
+                db_path=db_path,
+                artifact_dir=artifact_dir,
+                prompt_output_dir=prompt_output_dir,
+                seed_path=seed_path,
+                prompt_preview=prompt_preview,
+                slice_preview=slice_preview,
+                preflight=preflight,
+                ramp_policy=ramp_policy,
+                ramp_policy_application=ramp_policy_application,
+                ramp_policy_rehearsal=ramp_policy_rehearsal,
+                reason="ramp_policy_rehearsal_failed",
                 elapsed_s=time.perf_counter() - started,
             )
             _write_canary_report(prompt_output_dir, report)
@@ -343,6 +378,7 @@ def main() -> int:
             "ramp_policy_path": args.ramp_policy,
             "ramp_policy": ramp_policy,
             "ramp_policy_application": ramp_policy_application,
+            "ramp_policy_rehearsal": ramp_policy_rehearsal,
             "preflight": preflight,
             "prompt_preview": prompt_preview,
             "slice_preview": slice_preview,
@@ -869,6 +905,7 @@ def _blocked_report(
     preflight: dict[str, Any],
     ramp_policy: dict[str, Any],
     ramp_policy_application: dict[str, Any],
+    ramp_policy_rehearsal: dict[str, Any],
     reason: str,
     elapsed_s: float,
 ) -> dict[str, Any]:
@@ -879,6 +916,8 @@ def _blocked_report(
         "market_universe_ok": bool(preflight.get("market_universe_ok")),
         "explicit_live_spend_allowed": bool(args.allow_live_spend),
     }
+    if ramp_policy:
+        gates["ramp_policy_rehearsal_ok"] = ramp_policy_rehearsal.get("status") == "pass"
     return {
         "schema_version": "talis_live_scout_canary_v1",
         "mode": "preflight_no_live_spend",
@@ -899,6 +938,7 @@ def _blocked_report(
         "ramp_policy_path": args.ramp_policy,
         "ramp_policy": ramp_policy,
         "ramp_policy_application": ramp_policy_application,
+        "ramp_policy_rehearsal": ramp_policy_rehearsal,
         "preflight": preflight,
         "prompt_preview": prompt_preview,
         "slice_preview": slice_preview,
@@ -916,6 +956,7 @@ def _blocked_report(
             "seeds": str(seed_path),
             "prompt_preview": str(prompt_output_dir / "live_scout_prompt_preview.json"),
             "slice_preview": str(prompt_output_dir / "live_scout_slice_preview.json"),
+            "ramp_policy_rehearsal": str(prompt_output_dir / "live_scout_ramp_policy_rehearsal.json"),
             "preview_system_prompt": str(prompt_output_dir / "live_scout_preview_system_prompt.md"),
             "preview_user_prompt": str(prompt_output_dir / "live_scout_preview_user_prompt.md"),
         },
