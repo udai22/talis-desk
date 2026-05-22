@@ -197,6 +197,48 @@ def test_live_scout_tournament_scores_repaired_tool_creation_frontier(tmp_path):
     assert "tool_creation_expected_edge_rate_ge_0_60" not in tournament["winner"]["failed_gates"]
 
 
+def test_live_scout_tournament_surfaces_native_tool_contract_repair_report(tmp_path):
+    report_path = _write_canary(
+        tmp_path,
+        n_requested=100,
+        success_rate=0.93,
+        transcript_errors=0,
+        duplicate_rate=0.06,
+        completed=93,
+        geometry_cells=100,
+    )
+    report = json.loads(report_path.read_text())
+    report["repair_tool_proposal_contracts"] = True
+    report["tool_creation_contract_repair"] = {
+        "enabled": True,
+        "required": True,
+        "status": "pass",
+        "repairs_created": 7,
+        "before": {"metrics": {"quality_pass_rate": 0.41}},
+        "after": {
+            "frontier_proposal_count": 3,
+            "metrics": {
+                "quality_pass_rate": 1.0,
+                "eval_plan_rate": 1.0,
+                "expected_edge_rate": 1.0,
+                "would_change_decision_rate": 1.0,
+            },
+        },
+        "gates": {"tool_contract_frontier_quality_ge_0_70": True},
+        "failed_gates": [],
+    }
+    report_path.write_text(json.dumps(report), encoding="utf-8")
+
+    tournament = evaluate_live_scout_tournament([report_path])
+
+    repair = tournament["winner"]["tool_creation_contract_repair"]
+    assert repair["observed"] is True
+    assert repair["enabled"] is True
+    assert repair["status"] == "pass"
+    assert repair["repairs_created"] == 7
+    assert repair["after"]["metrics"]["quality_pass_rate"] == 1.0
+
+
 def test_live_canary_tool_contract_repair_report_repairs_current_frontier(tmp_path):
     store = DeskStore(db_path=tmp_path / "desk.db")
     proposal = AnalysisToolProposal(

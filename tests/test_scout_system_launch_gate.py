@@ -114,6 +114,49 @@ def test_launch_gate_surfaces_tournament_repair_command_when_blocked():
     assert decision["next_command"].endswith("--live-scouts 100")
 
 
+def test_launch_gate_surfaces_native_tool_repair_harness():
+    live = _live_pass_report(n_scouts=100)
+    live["tool_creation_contract_repair"] = {
+        "enabled": True,
+        "required": True,
+        "status": "pass",
+        "repairs_created": 4,
+        "after": {
+            "frontier_proposal_count": 9,
+            "metrics": {
+                "quality_pass_rate": 1.0,
+                "eval_plan_rate": 1.0,
+                "expected_edge_rate": 1.0,
+            },
+        },
+    }
+    report = build_launch_gate_report(
+        deterministic_report=_deterministic_report(),
+        live_report=live,
+        tournament_report={
+            "promotion_decision": {
+                "decision": "no_promotion",
+                "ready_for_live_100": False,
+                "ready_for_live_1000": False,
+                "ready_for_scheduled_production": False,
+                "reason": "Still blocked by other gates.",
+            },
+            "winner": {
+                "failed_gates": ["other_gate"],
+                "tool_creation_contract_repair": live["tool_creation_contract_repair"],
+            },
+        },
+        allow_live_spend=True,
+    )
+
+    assert report["live"]["tool_creation_contract_repair"]["status"] == "pass"
+    assert report["tournament"]["tool_creation_contract_repair"]["repairs_created"] == 4
+    html = render_launch_gate_html(report)
+    assert "Native Repair Harness" in html
+    assert "run_live_scout_canary --repair-tool-proposal-contracts" in html
+    assert "<b>4</b>" in html
+
+
 def test_launch_gate_blocks_when_deterministic_market_evolve_readiness_fails():
     deterministic = _deterministic_report()
     deterministic["readiness"]["status"] = "fail"

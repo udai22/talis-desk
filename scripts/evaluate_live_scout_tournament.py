@@ -314,6 +314,7 @@ def evaluate_live_scout_candidate(path: Path, *, thresholds: dict[str, float | i
         n_requested=n_requested,
         expected_tool_proposals=int(self_healing.get("tool_proposals") or 0),
     )
+    tool_contract_repair = _tool_contract_repair_metrics(report)
     provider_error_rate = max(
         len(transcript_errors) / max(call_count, 1),
         quality_provider_errors / max(n_requested, 1),
@@ -452,6 +453,7 @@ def evaluate_live_scout_candidate(path: Path, *, thresholds: dict[str, float | i
         "market_evolve": market_evolve,
         "ramp_policy_rehearsal": ramp_policy_rehearsal,
         "tool_creation_evolution": tool_creation,
+        "tool_creation_contract_repair": tool_contract_repair,
         "original_canary_verdict": original_verdict,
         "gates": gates,
         "failed_gates": failed_gates,
@@ -793,6 +795,37 @@ def _tool_creation_evolution_metrics(
     }
 
 
+def _tool_contract_repair_metrics(report: dict[str, Any]) -> dict[str, Any]:
+    raw = report.get("tool_creation_contract_repair")
+    if not isinstance(raw, dict):
+        metrics = report.get("metrics") if isinstance(report.get("metrics"), dict) else {}
+        raw = metrics.get("tool_creation_contract_repair") if isinstance(metrics.get("tool_creation_contract_repair"), dict) else {}
+    if not raw:
+        return {
+            "observed": False,
+            "enabled": bool(report.get("repair_tool_proposal_contracts")),
+            "status": "missing",
+            "repairs_created": 0,
+            "before": {},
+            "after": {},
+            "gates": {},
+            "failed_gates": [],
+            "quality_flags": ["tool_creation_contract_repair_missing"],
+        }
+    return {
+        "observed": True,
+        "enabled": bool(raw.get("enabled")),
+        "required": bool(raw.get("required")),
+        "status": str(raw.get("status") or "unknown"),
+        "repairs_created": int(raw.get("repairs_created") or 0),
+        "before": raw.get("before") if isinstance(raw.get("before"), dict) else {},
+        "after": raw.get("after") if isinstance(raw.get("after"), dict) else {},
+        "gates": raw.get("gates") if isinstance(raw.get("gates"), dict) else {},
+        "failed_gates": raw.get("failed_gates") if isinstance(raw.get("failed_gates"), list) else [],
+        "quality_flags": raw.get("quality_flags") if isinstance(raw.get("quality_flags"), list) else [],
+    }
+
+
 def render_tournament_markdown(report: dict[str, Any]) -> str:
     decision = report.get("promotion_decision") if isinstance(report.get("promotion_decision"), dict) else {}
     repeatability = report.get("shadow_repeatability") if isinstance(report.get("shadow_repeatability"), dict) else {}
@@ -818,6 +851,9 @@ def render_tournament_markdown(report: dict[str, Any]) -> str:
         rehearsal_metrics = rehearsal.get("metrics") if isinstance(rehearsal.get("metrics"), dict) else {}
         tool_creation = c.get("tool_creation_evolution") or {}
         tool_creation_metrics = tool_creation.get("metrics") if isinstance(tool_creation.get("metrics"), dict) else {}
+        contract_repair = c.get("tool_creation_contract_repair") or {}
+        contract_after = contract_repair.get("after") if isinstance(contract_repair.get("after"), dict) else {}
+        contract_after_metrics = contract_after.get("metrics") if isinstance(contract_after.get("metrics"), dict) else {}
         lines.extend([
             f"### {c.get('candidate_id')}",
             "",
@@ -836,6 +872,7 @@ def render_tournament_markdown(report: dict[str, Any]) -> str:
             f"- ramp_policy_rehearsal: `required={rehearsal.get('required')} observed={rehearsal.get('observed')} status={rehearsal.get('status')} decision={rehearsal.get('decision')}`",
             f"- ramp_policy_metrics: `tool_refresh={rehearsal_metrics.get('tool_candidate_refresh_rate')} source_coverage={rehearsal_metrics.get('source_target_coverage_rate')} over_limit={rehearsal_metrics.get('over_limit_count')}`",
             f"- tool_creation: `required={tool_creation.get('required')} proposals={tool_creation.get('proposal_count')} frontier={tool_creation.get('frontier_proposal_count')} quality_pass={tool_creation_metrics.get('quality_pass_rate')} eval_plan={tool_creation_metrics.get('eval_plan_rate')} expected_edge={tool_creation_metrics.get('expected_edge_rate')}`",
+            f"- tool_contract_repair: `observed={contract_repair.get('observed')} enabled={contract_repair.get('enabled')} status={contract_repair.get('status')} repairs={contract_repair.get('repairs_created')} after_quality={contract_after_metrics.get('quality_pass_rate')}`",
             f"- failed_gates: `{', '.join(c.get('failed_gates') or []) or 'none'}`",
             "",
             str(c.get("interpretation") or ""),

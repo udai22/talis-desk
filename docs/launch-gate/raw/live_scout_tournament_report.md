@@ -27,6 +27,7 @@
 - ramp_policy_rehearsal: `required=True observed=True status=pass decision=policy_can_gate_live_spend`
 - ramp_policy_metrics: `tool_refresh=1.0 source_coverage=1.0 over_limit=0`
 - tool_creation: `required=True proposals=189 frontier=189 quality_pass=0.0212 eval_plan=0.4127 expected_edge=0.0212`
+- tool_contract_repair: `observed=False enabled=False status=missing repairs=0 after_quality=None`
 - failed_gates: `tool_creation_quality_pass_rate_ge_0_70, tool_creation_eval_plan_rate_ge_0_85, tool_creation_expected_edge_rate_ge_0_60, tool_creation_would_change_decision_rate_ge_0_60`
 
 Blocked from scale because agent-created tool proposals are not yet evaluator-grade.

@@ -300,6 +300,7 @@ def build_launch_gate_report(
             "slice_preview": _slice_preview_summary(live_report),
             "learning_report": _learning_report_summary(live_report),
             "ramp_policy_rehearsal": _ramp_policy_rehearsal_summary(live_report),
+            "tool_creation_contract_repair": _tool_creation_contract_repair_summary(live_report),
             "prompt_output_dir": live_report.get("prompt_output_dir") or "",
             "artifacts": live_report.get("artifacts") or {},
         },
@@ -311,6 +312,7 @@ def build_launch_gate_report(
             "reason": tournament_decision.get("reason") or "",
             "failed_gates": tournament_winner.get("failed_gates") or [],
             "tool_creation_evolution": tournament_winner.get("tool_creation_evolution") or {},
+            "tool_creation_contract_repair": tournament_winner.get("tool_creation_contract_repair") or {},
         },
         "stages": [asdict(stage) for stage in stages],
     }
@@ -430,6 +432,14 @@ def render_launch_gate_html(report: dict[str, Any]) -> str:
         else {}
     )
     repair_replay_rows = _tool_repair_replay_rows(repair_replay)
+    native_repair = (
+        live.get("tool_creation_contract_repair")
+        if isinstance(live.get("tool_creation_contract_repair"), dict)
+        else tournament.get("tool_creation_contract_repair")
+        if isinstance(tournament.get("tool_creation_contract_repair"), dict)
+        else {}
+    )
+    native_repair_rows = _native_tool_repair_rows(native_repair)
     next_command = str(decision.get("next_command") or "")
     learning_next_allowed = str(
         decision.get("allowed_next_step")
@@ -562,6 +572,14 @@ def render_launch_gate_html(report: dict[str, Any]) -> str:
     <p>This is the no-spend repair check on the 100-scout tool backlog: bad parent proposals stay auditable, repaired child proposals become the current frontier, and a fresh live run is still required before scaling.</p>
     <div class="panel">
       <ul class="list">{repair_replay_rows}</ul>
+    </div>
+  </section>
+
+  <section>
+    <h2>Native Repair Harness</h2>
+    <p>The next live repair run must emit this from inside the canary itself. This separates a useful offline replay from proof that live scouts, tool proposals, repair, and tournament evaluation are wired as one system.</p>
+    <div class="panel">
+      <ul class="list">{native_repair_rows}</ul>
     </div>
   </section>
 
@@ -1093,6 +1111,29 @@ def _ramp_policy_rehearsal_summary(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _tool_creation_contract_repair_summary(report: dict[str, Any]) -> dict[str, Any]:
+    repair = report.get("tool_creation_contract_repair")
+    if not isinstance(repair, dict):
+        metrics = report.get("metrics") if isinstance(report.get("metrics"), dict) else {}
+        repair = metrics.get("tool_creation_contract_repair") if isinstance(metrics.get("tool_creation_contract_repair"), dict) else {}
+    if not repair:
+        return {}
+    before = repair.get("before") if isinstance(repair.get("before"), dict) else {}
+    after = repair.get("after") if isinstance(repair.get("after"), dict) else {}
+    return {
+        "schema_version": repair.get("schema_version"),
+        "enabled": bool(repair.get("enabled")),
+        "required": bool(repair.get("required")),
+        "status": repair.get("status") or "unknown",
+        "repairs_created": int(repair.get("repairs_created") or 0),
+        "before": before,
+        "after": after,
+        "gates": repair.get("gates") if isinstance(repair.get("gates"), dict) else {},
+        "failed_gates": repair.get("failed_gates") if isinstance(repair.get("failed_gates"), list) else [],
+        "quality_flags": repair.get("quality_flags") if isinstance(repair.get("quality_flags"), list) else [],
+    }
+
+
 def _build_live_learning_report(
     *,
     live_report_path: Path,
@@ -1309,6 +1350,29 @@ def _tool_repair_replay_rows(repair: dict[str, Any]) -> str:
         ("After eval plans", str(after.get("eval_plan_rate") or 0), "fixture-backed proposal contracts"),
         ("After expected edges", str(after.get("expected_edge_rate") or 0), "map edges named by repaired contracts"),
         ("Scale authority", str(repair.get("scale_authority") or "fresh_live_repair_required"), "replay is proof of repair loop, not live spend authority"),
+    ]
+    return "".join(
+        "<li>"
+        f"<span>{html.escape(label)}<small>{html.escape(note)}</small></span>"
+        f"<b>{html.escape(value)}</b>"
+        "</li>"
+        for label, value, note in rows
+    )
+
+
+def _native_tool_repair_rows(repair: dict[str, Any]) -> str:
+    if not repair:
+        return "<li><span>Native repair report<small>fresh live repair run has not emitted tool_creation_contract_repair.json yet</small></span><b>pending</b></li>"
+    after = repair.get("after") if isinstance(repair.get("after"), dict) else {}
+    metrics = after.get("metrics") if isinstance(after.get("metrics"), dict) else {}
+    rows = [
+        ("Enabled", str(bool(repair.get("enabled"))), "run_live_scout_canary --repair-tool-proposal-contracts"),
+        ("Status", str(repair.get("status") or "unknown"), "native repair gate result"),
+        ("Repairs created", str(repair.get("repairs_created") or 0), "child proposal iterations written inside the live artifact"),
+        ("Current frontier", str(after.get("frontier_proposal_count") or 0), "post-repair non-superseded contracts"),
+        ("Quality", str(metrics.get("quality_pass_rate") or 0), "post-repair deterministic evaluator pass rate"),
+        ("Eval plans", str(metrics.get("eval_plan_rate") or 0), "fixture-backed contract rate"),
+        ("Expected edges", str(metrics.get("expected_edge_rate") or 0), "map-edge attachment rate"),
     ]
     return "".join(
         "<li>"
