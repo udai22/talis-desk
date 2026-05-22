@@ -75,6 +75,12 @@ from .outcomes import (
     persist_price_observations,
     summarize_information_price_outcomes,
 )
+from .price_sources import (
+    PriceObservationBatch,
+    collect_hyperliquid_mid_price_observations,
+    default_hyperliquid_price_sources,
+    fetch_hyperliquid_all_mids,
+)
 from .adversarial import (
     AdversarialReview,
     apply_adversarial_review,
@@ -197,6 +203,10 @@ __all__ = [
     "normalize_price_observation",
     "persist_price_observations",
     "summarize_information_price_outcomes",
+    "PriceObservationBatch",
+    "collect_hyperliquid_mid_price_observations",
+    "default_hyperliquid_price_sources",
+    "fetch_hyperliquid_all_mids",
     "AdversarialReview",
     "apply_adversarial_review",
     "review_information_string",

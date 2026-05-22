@@ -30,6 +30,8 @@ def test_sentinel_plan_is_always_on_flash_without_live_spend_by_default(tmp_path
     assert _arg_after(live_cmd, "--n-scouts") == "24"
     assert _arg_after(live_cmd, "--cost-cap-usd") == "0.26"
     assert _arg_after(live_cmd, "--max-tool-iterations") == "1"
+    assert "--preserve-db" in live_cmd
+    assert "--collect-price-observations" in live_cmd
     scoreboard_cmd = plan.commands[1].command
     assert _arg_after(scoreboard_cmd, "--db").endswith("live_canary/desk-live-canary.db")
     assert _arg_after(scoreboard_cmd, "--cadence-mode") == "sentinel_tick"
@@ -82,6 +84,7 @@ def test_full_pipeline_plan_wires_launch_gate_and_daily_brief(tmp_path: Path) ->
     assert _arg_after(launch_cmd, "--live-scouts") == "1000"
     assert _arg_after(launch_cmd, "--live-cost-cap-usd") == "5.00"
     assert _arg_after(launch_cmd, "--ramp-policy") == "/tmp/policy.json"
+    assert "--collect-price-observations" in launch_cmd
     assert "--allow-live-spend" not in launch_cmd
     assert "run_full_desk.py" in brief_cmd
     assert _arg_after(brief_cmd, "--cycle-id") == "cycle_full_brief"

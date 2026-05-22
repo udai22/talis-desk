@@ -30,10 +30,13 @@ from talis_desk.information_map import (
     apply_market_evolve_policy_to_seeds,
     build_alpha_geometry_cortex_review,
     build_market_evolve_lineage,
+    collect_hyperliquid_mid_price_observations,
     compute_alpha_geometry,
+    evaluate_information_price_outcomes,
     load_market_evolve_policy_applications,
     prepare_market_evolve_experiment_seed_pairs,
     plan_alpha_geometry_actions,
+    persist_price_observations,
     recent_information_strings,
     run_information_synthesis,
     run_market_evolve_step,
@@ -52,7 +55,7 @@ from talis_desk.market_map.self_healing import (
     post_market_map_self_healing_work_orders,
 )
 from talis_desk.market_map.universe import build_market_universe
-from talis_desk.store import reset_desk_store_for_test
+from talis_desk.store import DeskStore, reset_desk_store_for_test
 from talis_desk.swarm.scout_runner import (
     _apply_prompt_contract_pressure,
     _build_user_prompt,
@@ -106,7 +109,7 @@ def main() -> int:
 
     cycle_id = args.cycle_id or f"cycle_live_scout_canary_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
     db_path = Path(args.db).expanduser().resolve() if args.db else artifact_dir / "desk-live-canary.db"
-    store = reset_desk_store_for_test(db_path)
+    store = DeskStore(db_path=db_path) if args.preserve_db else reset_desk_store_for_test(db_path)
     restore_chat: Callable[[], None] | None = None
     try:
         preflight = _preflight(cycle_id=cycle_id)
@@ -173,6 +176,14 @@ def main() -> int:
             cycle_id=cycle_id,
             seeds=seeds,
         )
+        price_observation_start = _collect_live_price_observations(
+            enabled=args.collect_price_observations,
+            stage="start",
+            prompt_output_dir=prompt_output_dir,
+            seeds=seeds,
+            conn=store.conn,
+            timeout_s=args.price_source_timeout_s,
+        )
 
         if not args.allow_live_spend:
             report = _blocked_report(
@@ -188,6 +199,7 @@ def main() -> int:
                 ramp_policy=ramp_policy,
                 ramp_policy_application=ramp_policy_application,
                 ramp_policy_rehearsal=ramp_policy_rehearsal,
+                price_observation_start=price_observation_start,
                 reason="explicit_live_spend_flag_missing",
                 elapsed_s=time.perf_counter() - started,
             )
@@ -209,6 +221,7 @@ def main() -> int:
                 ramp_policy=ramp_policy,
                 ramp_policy_application=ramp_policy_application,
                 ramp_policy_rehearsal=ramp_policy_rehearsal,
+                price_observation_start=price_observation_start,
                 reason="provider_import_failed",
                 elapsed_s=time.perf_counter() - started,
             )
@@ -230,6 +243,7 @@ def main() -> int:
                 ramp_policy=ramp_policy,
                 ramp_policy_application=ramp_policy_application,
                 ramp_policy_rehearsal=ramp_policy_rehearsal,
+                price_observation_start=price_observation_start,
                 reason="ramp_policy_rehearsal_failed",
                 elapsed_s=time.perf_counter() - started,
             )
@@ -262,6 +276,22 @@ def main() -> int:
         )
 
         strings = recent_information_strings(cycle_id=cycle_id, conn=store.conn, limit=max(200, args.n_scouts * 10))
+        price_observation_final = _collect_live_price_observations(
+            enabled=args.collect_price_observations,
+            stage="final",
+            prompt_output_dir=prompt_output_dir,
+            seeds=seeds,
+            conn=store.conn,
+            timeout_s=args.price_source_timeout_s,
+        )
+        information_price_outcomes = _evaluate_live_information_price_outcomes(
+            enabled=args.collect_price_observations,
+            cycle_id=cycle_id,
+            prompt_output_dir=prompt_output_dir,
+            conn=store.conn,
+            min_move_threshold_pct=args.price_outcome_threshold_pct,
+            limit=max(500, args.n_scouts * 10),
+        )
         synthesis = run_information_synthesis(
             cycle_id=cycle_id,
             max_strings=max(50, args.n_scouts * 3),
@@ -333,6 +363,11 @@ def main() -> int:
             elapsed_s=time.perf_counter() - started,
         )
         metrics["tool_creation_contract_repair"] = tool_creation_contract_repair
+        metrics["price_observations"] = {
+            "start": _price_observation_summary(price_observation_start),
+            "final": _price_observation_summary(price_observation_final),
+        }
+        metrics["information_price_outcomes"] = information_price_outcomes.get("summary", {})
         market_evolve_step = run_market_evolve_step(cycle_id=cycle_id, conn=store.conn)
         market_evolve_lineage = build_market_evolve_lineage(conn=store.conn)
         policy_apps = load_market_evolve_policy_applications(cycle_id=cycle_id, conn=store.conn, limit=max(500, len(seeds) * 3))
@@ -394,9 +429,16 @@ def main() -> int:
             "repair_tool_proposal_contracts": args.repair_tool_proposal_contracts,
             "tool_proposal_repair_limit": args.tool_proposal_repair_limit,
             "ramp_policy_path": args.ramp_policy,
+            "preserve_db": args.preserve_db,
+            "collect_price_observations": args.collect_price_observations,
             "ramp_policy": ramp_policy,
             "ramp_policy_application": ramp_policy_application,
             "ramp_policy_rehearsal": ramp_policy_rehearsal,
+            "price_observations": {
+                "start": price_observation_start,
+                "final": price_observation_final,
+            },
+            "information_price_outcomes": information_price_outcomes,
             "preflight": preflight,
             "prompt_preview": prompt_preview,
             "slice_preview": slice_preview,
@@ -407,6 +449,9 @@ def main() -> int:
                 "seeds": str(seed_path),
                 "outputs": str(outputs_path),
                 "slice_preview": str(prompt_output_dir / "live_scout_slice_preview.json"),
+                "price_observations_start": str(prompt_output_dir / "live_price_observations_start.json"),
+                "price_observations_final": str(prompt_output_dir / "live_price_observations_final.json"),
+                "information_price_outcomes": str(prompt_output_dir / "information_price_outcomes.json"),
                 "tool_creation_contract_repair": str(prompt_output_dir / "tool_creation_contract_repair.json"),
             },
             "transcript_summary": transcript_summary,
@@ -434,6 +479,18 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--cost-cap-usd", type=float, default=0.10)
     parser.add_argument("--self-healing-limit", type=int, default=6)
     parser.add_argument("--provider-timeout-s", type=float, default=45.0)
+    parser.add_argument(
+        "--preserve-db",
+        action="store_true",
+        help="Open the desk DB in append mode instead of resetting it; intended for always-on sentinel ticks.",
+    )
+    parser.add_argument(
+        "--collect-price-observations",
+        action="store_true",
+        help="Collect Hyperliquid allMids before/after scouts and evaluate information strings against price.",
+    )
+    parser.add_argument("--price-source-timeout-s", type=float, default=8.0)
+    parser.add_argument("--price-outcome-threshold-pct", type=float, default=0.02)
     parser.add_argument("--prompt-variant", default="", help="Optional forced scout prompt variant for this canary.")
     parser.add_argument("--max-tool-iterations", type=int, default=1)
     parser.add_argument(
@@ -536,6 +593,103 @@ def _preflight(*, cycle_id: str) -> dict[str, Any]:
         }
     except Exception as exc:
         out["market_universe_error"] = f"{type(exc).__name__}: {exc}"
+    return out
+
+
+def _collect_live_price_observations(
+    *,
+    enabled: bool,
+    stage: str,
+    prompt_output_dir: Path,
+    seeds: list[SeedCell],
+    conn: Any,
+    timeout_s: float,
+) -> dict[str, Any]:
+    path = prompt_output_dir / f"live_price_observations_{stage}.json"
+    if not enabled:
+        payload = {
+            "schema_version": "talis_live_price_observation_stage_v1",
+            "stage": stage,
+            "status": "skipped",
+            "observed_count": 0,
+            "quality_flags": ["price_observation_collection_disabled"],
+        }
+        _write_json(path, payload)
+        return payload
+    entities = _seed_entities(seeds)
+    batch = collect_hyperliquid_mid_price_observations(
+        entities,
+        timeout_s=timeout_s,
+    )
+    persisted_ids = persist_price_observations(batch.observations, conn=conn)
+    payload = {
+        "schema_version": "talis_live_price_observation_stage_v1",
+        "stage": stage,
+        "status": "collected" if batch.observations else "empty",
+        "observed_count": len(batch.observations),
+        "persisted_count": len(persisted_ids),
+        **batch.to_dict(),
+    }
+    _write_json(path, payload)
+    return payload
+
+
+def _evaluate_live_information_price_outcomes(
+    *,
+    enabled: bool,
+    cycle_id: str,
+    prompt_output_dir: Path,
+    conn: Any,
+    min_move_threshold_pct: float,
+    limit: int,
+) -> dict[str, Any]:
+    path = prompt_output_dir / "information_price_outcomes.json"
+    if not enabled:
+        payload = {
+            "schema_version": "information_price_outcome_report_v1",
+            "cycle_id": cycle_id,
+            "status": "skipped",
+            "evaluated_count": 0,
+            "summary": {},
+            "quality_flags": ["price_observation_collection_disabled"],
+        }
+        _write_json(path, payload)
+        return payload
+    report = evaluate_information_price_outcomes(
+        cycle_id=cycle_id,
+        min_move_threshold_pct=min_move_threshold_pct,
+        limit=limit,
+        conn=conn,
+    )
+    report["status"] = "evaluated"
+    _write_json(path, report)
+    return report
+
+
+def _price_observation_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {}
+    return {
+        "status": payload.get("status"),
+        "source": payload.get("source"),
+        "requested": len(payload.get("requested_entities") or []),
+        "resolved": len(payload.get("resolved_entities") or []),
+        "missing": len(payload.get("missing_entities") or []),
+        "persisted_count": int(payload.get("persisted_count") or 0),
+        "quality_flags": payload.get("quality_flags") or [],
+    }
+
+
+def _seed_entities(seeds: list[SeedCell]) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for seed in seeds:
+        entity = str(getattr(seed, "entity", "") or "").strip()
+        key = entity.upper()
+        if not entity or key in seen:
+            continue
+        seen.add(key)
+        out.append(entity)
     return out
 
 
@@ -1078,6 +1232,7 @@ def _blocked_report(
     ramp_policy: dict[str, Any],
     ramp_policy_application: dict[str, Any],
     ramp_policy_rehearsal: dict[str, Any],
+    price_observation_start: dict[str, Any],
     reason: str,
     elapsed_s: float,
 ) -> dict[str, Any]:
@@ -1107,12 +1262,18 @@ def _blocked_report(
         "provider_timeout_s": args.provider_timeout_s,
         "prompt_variant_override": args.prompt_variant,
         "max_tool_iterations": args.max_tool_iterations,
+        "preserve_db": args.preserve_db,
+        "collect_price_observations": args.collect_price_observations,
         "repair_tool_proposal_contracts": args.repair_tool_proposal_contracts,
         "tool_proposal_repair_limit": args.tool_proposal_repair_limit,
         "ramp_policy_path": args.ramp_policy,
         "ramp_policy": ramp_policy,
         "ramp_policy_application": ramp_policy_application,
         "ramp_policy_rehearsal": ramp_policy_rehearsal,
+        "price_observations": {
+            "start": price_observation_start,
+            "final": {},
+        },
         "preflight": preflight,
         "prompt_preview": prompt_preview,
         "slice_preview": slice_preview,
@@ -1125,11 +1286,18 @@ def _blocked_report(
             "failed_gates": [name for name, ok in gates.items() if not ok],
             "interpretation": "No live model calls were made. This is an anti-waste preflight artifact.",
         },
-        "metrics": {"elapsed_s": round(elapsed_s, 3)},
+        "metrics": {
+            "elapsed_s": round(elapsed_s, 3),
+            "price_observations": {
+                "start": _price_observation_summary(price_observation_start),
+                "final": {},
+            },
+        },
         "artifacts": {
             "seeds": str(seed_path),
             "prompt_preview": str(prompt_output_dir / "live_scout_prompt_preview.json"),
             "slice_preview": str(prompt_output_dir / "live_scout_slice_preview.json"),
+            "price_observations_start": str(prompt_output_dir / "live_price_observations_start.json"),
             "ramp_policy_rehearsal": str(prompt_output_dir / "live_scout_ramp_policy_rehearsal.json"),
             "preview_system_prompt": str(prompt_output_dir / "live_scout_preview_system_prompt.md"),
             "preview_user_prompt": str(prompt_output_dir / "live_scout_preview_user_prompt.md"),

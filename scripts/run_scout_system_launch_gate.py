@@ -127,6 +127,8 @@ def main() -> int:
         "--prompt-output-dir",
         str(live_dir),
     ]
+    if args.collect_price_observations:
+        live_cmd.append("--collect-price-observations")
     if args.repair_tool_proposal_contracts:
         live_cmd.extend([
             "--repair-tool-proposal-contracts",
@@ -1567,6 +1569,11 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--live-cost-cap-usd", type=float, default=0.10)
     parser.add_argument("--provider-timeout-s", type=float, default=45.0)
     parser.add_argument("--max-tool-iterations", type=int, default=1)
+    parser.add_argument(
+        "--collect-price-observations",
+        action="store_true",
+        help="Ask the live canary stage to collect HL allMids and score information strings against price.",
+    )
     parser.add_argument("--repair-tool-proposal-contracts", action="store_true")
     parser.add_argument("--tool-proposal-repair-limit", type=int, default=500)
     parser.add_argument("--ramp-policy", default="")
