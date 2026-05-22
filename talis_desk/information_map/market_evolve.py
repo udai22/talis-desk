@@ -929,6 +929,7 @@ def build_market_evolve_scoreboard(
     decision_counts = _count_values(str(r.get("decision") or "unknown") for r in result_window)
     experiment_status_counts = _count_values(str(e.get("status") or "unknown") for e in experiments)
     program_status_counts = _count_values(str(n.get("status") or "unknown") for n in nodes)
+    hard_experiment_attribution = build_market_evolve_experiment_attribution(result_window)
     promotion_candidates = _scoreboard_rows([
         n for n in nodes
         if str(n.get("latest_decision") or "") == "promote_candidate"
@@ -990,7 +991,7 @@ def build_market_evolve_scoreboard(
         "continuation_candidates": continuation_candidates,
         "blocked_candidates": blocked_candidates,
         "hard_experiment_gate_summary": hard_gate_summary,
-        "hard_experiment_attribution": build_market_evolve_experiment_attribution(result_window),
+        "hard_experiment_attribution": hard_experiment_attribution,
         "evolution_memory": _scoreboard_evolution_memory(
             result_window=result_window,
             recent_results=recent_results,
@@ -1005,6 +1006,7 @@ def build_market_evolve_scoreboard(
             applications=applications,
             cycle_id=cycle_id,
             result_window=result_window,
+            attribution=hard_experiment_attribution,
         ),
         "cadence_readiness": _scoreboard_cadence_readiness(
             status=status,
@@ -5471,6 +5473,7 @@ def _scoreboard_next_actions(
     applications: list[dict[str, Any]],
     cycle_id: str,
     result_window: list[dict[str, Any]],
+    attribution: Optional[dict[str, Any]] = None,
 ) -> list[dict[str, Any]]:
     actions: list[dict[str, Any]] = []
     if status == "not_started":
@@ -5506,6 +5509,7 @@ def _scoreboard_next_actions(
             "why": "A candidate beat measured score gates, but promotion proof gates were not observed.",
             "metrics": pending_metrics[:8],
         })
+    actions.extend(_scoreboard_attribution_repair_actions(attribution or {}))
     for row in frontier[:4]:
         action = str(row.get("next_action") or "")
         if action:
@@ -5534,6 +5538,68 @@ def _scoreboard_next_actions(
         seen.add(key)
         deduped.append(action)
     return deduped[:8]
+
+
+def _scoreboard_attribution_repair_actions(attribution: dict[str, Any]) -> list[dict[str, Any]]:
+    latest = attribution.get("latest") if isinstance(attribution.get("latest"), list) else []
+    actions: list[dict[str, Any]] = []
+    for row in latest[:4]:
+        if not isinstance(row, dict):
+            continue
+        signal = str(row.get("learning_signal") or "")
+        if signal not in {
+            "candidate_failed_hard_proof_gate",
+            "candidate_underperformed_or_regressed",
+        }:
+            continue
+        metrics = _attribution_repair_metrics(row)
+        if not metrics:
+            continue
+        actions.append({
+            "action": "repair_experiment_metric_regressions",
+            "why": (
+                "A hard experiment produced a concrete metric-regression map; "
+                "route the next sentinel at those failed dimensions instead of doing generic repair."
+            ),
+            "experiment_id": row.get("experiment_id"),
+            "decision": row.get("decision"),
+            "learning_signal": signal,
+            "metrics": metrics[:8],
+        })
+    return actions
+
+
+def _attribution_repair_metrics(row: dict[str, Any]) -> list[str]:
+    out: list[str] = []
+    for metric in row.get("triggered_proof_metrics") or []:
+        if str(metric).strip():
+            out.append(str(metric))
+    for delta in row.get("proof_metric_deltas") or []:
+        if not isinstance(delta, dict):
+            continue
+        if delta.get("triggered") is True or float(delta.get("improvement") or 0.0) < 0.0:
+            metric = str(delta.get("gate_metric") or delta.get("metric") or "")
+            if metric.strip():
+                out.append(metric)
+    for delta in row.get("top_negative_metric_deltas") or []:
+        if not isinstance(delta, dict):
+            continue
+        metric = str(delta.get("metric") or "")
+        if metric.strip():
+            out.append("candidate_" + metric if not metric.startswith(("candidate_", "control_")) else metric)
+    return _dedupe_metric_strings(out)[:12]
+
+
+def _dedupe_metric_strings(values: list[str]) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        text = str(value or "").strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        out.append(text)
+    return out
 
 
 def _scoreboard_cadence_readiness(

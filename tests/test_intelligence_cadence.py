@@ -190,6 +190,39 @@ def test_cadence_control_decision_blocks_scale_on_repair_state() -> None:
     assert decision["spend_gate"] == "closed"
 
 
+def test_cadence_control_decision_routes_attribution_repair_metrics() -> None:
+    decision = build_cadence_control_decision(
+        scoreboard={
+            "id": "score_attr_repair",
+            "status": "repair_needed",
+            "counts": {"open_experiments": 0, "candidate_programs": 1, "result_window": 1},
+            "next_actions": [
+                {
+                    "action": "repair_experiment_metric_regressions",
+                    "metrics": [
+                        "candidate_avg_source_independence",
+                        "candidate_avg_fragility",
+                    ],
+                }
+            ],
+            "cadence_readiness": {"eligible_for_shadow_schedule_review": False},
+            "hard_experiment_gate_summary": {"triggered": 0},
+            "evolution_memory": {"best_score_delta_recent": -0.09},
+        },
+        mode="sentinel_tick",
+        allow_live_spend=False,
+    )
+
+    assert decision["decision"] == "repair_experiment_attribution"
+    assert decision["allowed_next_step"] == "attribution_metric_repair_sentinel"
+    assert decision["blocks_wider_spend"] is True
+    assert decision["attribution_repair_metrics"] == [
+        "candidate_avg_source_independence",
+        "candidate_avg_fragility",
+    ]
+    assert "hard_experiment_attribution_repair_blocks_scale" in decision["quality_flags"]
+
+
 def test_cadence_control_decision_recommends_shadow_for_promoted_policy() -> None:
     decision = build_cadence_control_decision(
         mode="sentinel_tick",
@@ -582,6 +615,41 @@ def test_followup_plan_from_scoreboard_builds_control_when_missing(tmp_path: Pat
     assert plan.allow_live_spend is False
     assert _arg_after(plan.commands[0].command, "--live-scouts") == "1000"
     assert "--allow-live-spend" not in plan.commands[0].command
+
+
+def test_followup_plan_from_scoreboard_passes_attribution_metrics_to_scouts(tmp_path: Path) -> None:
+    scoreboard_path = tmp_path / "scoreboard.json"
+    scoreboard_path.write_text(json.dumps({
+        "id": "score_attr_repair",
+        "status": "repair_needed",
+        "counts": {"open_experiments": 0, "candidate_programs": 1, "result_window": 1},
+        "next_actions": [
+            {
+                "action": "repair_experiment_metric_regressions",
+                "metrics": [
+                    "candidate_avg_source_independence",
+                    "candidate_avg_fragility",
+                ],
+            }
+        ],
+        "cadence_readiness": {"eligible_for_shadow_schedule_review": False},
+        "hard_experiment_gate_summary": {"triggered": 0},
+        "evolution_memory": {"best_score_delta_recent": -0.09},
+    }))
+
+    plan = build_followup_plan_from_scoreboard(
+        scoreboard_path=scoreboard_path,
+        artifact_dir=tmp_path / "attr_repair",
+        allow_live_spend=False,
+    )
+
+    cmd = plan.commands[0].command
+    assert _arg_after(cmd, "--control-decision") == "repair_experiment_attribution"
+    assert _arg_after(cmd, "--control-allowed-next-step") == "attribution_metric_repair_sentinel"
+    assert _arg_after(cmd, "--control-proof-metrics") == (
+        "candidate_avg_source_independence,candidate_avg_fragility"
+    )
+    assert "seed_routing=control_decision" in plan.notes
 
 
 def _arg_after(command: list[str], flag: str) -> str:

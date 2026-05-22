@@ -10,7 +10,10 @@ from talis_desk.information_map import (
     persist_information_strings,
     run_market_evolve_step,
 )
-from talis_desk.information_map.market_evolve import build_market_evolve_experiment_attribution
+from talis_desk.information_map.market_evolve import (
+    _scoreboard_next_actions,
+    build_market_evolve_experiment_attribution,
+)
 from talis_desk.store import reset_desk_store_for_test
 from talis_desk.swarm.seed_generator import SeedCell
 
@@ -162,3 +165,54 @@ def test_market_evolve_experiment_attribution_respects_metric_direction() -> Non
     assert fragility["delta"] == -0.13
     assert fragility["improvement"] == 0.13
     assert fragility["winner"] == "candidate"
+
+
+def test_market_evolve_scoreboard_turns_failed_attribution_into_repair_action() -> None:
+    result = {
+        "id": "mres_repair",
+        "experiment_id": "mexp_repair",
+        "cycle_id": "cycle_repair",
+        "decision": "reject_candidate",
+        "score_delta": -0.09,
+        "control_score": 0.62,
+        "candidate_score": 0.53,
+        "control_metrics": {
+            "valid_string_rate": 0.82,
+            "avg_source_independence": 0.70,
+            "avg_fragility": 0.24,
+            "tool_eval_failed_rate": 0.04,
+        },
+        "candidate_metrics": {
+            "valid_string_rate": 0.55,
+            "avg_source_independence": 0.38,
+            "avg_fragility": 0.58,
+            "tool_eval_failed_rate": 0.22,
+        },
+        "falsification_gate_results": [
+            {
+                "metric": "candidate_avg_source_independence",
+                "operator": ">=",
+                "threshold": 0.45,
+                "observed": 0.38,
+                "triggered": True,
+                "decision": "reject_candidate",
+                "status": "triggered",
+            }
+        ],
+    }
+    attribution = build_market_evolve_experiment_attribution([result])
+    actions = _scoreboard_next_actions(
+        status="repair_needed",
+        frontier=[],
+        open_experiments=[],
+        applications=[],
+        cycle_id="cycle_repair",
+        result_window=[result],
+        attribution=attribution,
+    )
+
+    repair = next(a for a in actions if a["action"] == "repair_experiment_metric_regressions")
+    assert repair["experiment_id"] == "mexp_repair"
+    assert repair["learning_signal"] == "candidate_failed_hard_proof_gate"
+    assert "candidate_avg_source_independence" in repair["metrics"]
+    assert "candidate_avg_fragility" in repair["metrics"]

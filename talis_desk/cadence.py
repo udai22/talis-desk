@@ -444,6 +444,7 @@ def build_cadence_control_decision(
     next_actions = scoreboard.get("next_actions") if isinstance(scoreboard.get("next_actions"), list) else []
     primary_action = str((next_actions[0] or {}).get("action") or "") if next_actions else ""
     missing_proof_metrics = _missing_proof_metrics_from_next_actions(next_actions)
+    attribution_repair_metrics = _attribution_repair_metrics_from_next_actions(next_actions)
     open_experiments = int(counts.get("open_experiments") or 0)
     candidate_count = int(counts.get("candidate_programs") or 0)
     result_window = int(counts.get("result_window") or 0)
@@ -463,6 +464,16 @@ def build_cadence_control_decision(
         recommended_scouts = 8
         blocks_wider_spend = True
         why = "MarketEvolve has no active policy yet; initialize before scaling calls."
+    elif attribution_repair_metrics:
+        decision = "repair_experiment_attribution"
+        allowed_next_step = "attribution_metric_repair_sentinel"
+        recommended_scouts = max(16, min(96, len(attribution_repair_metrics) * 12))
+        blocks_wider_spend = True
+        why = (
+            "A hard experiment returned concrete metric attribution for the failure. "
+            "Run a focused repair sentinel against those regressed dimensions before widening spend."
+        )
+        flags.append("hard_experiment_attribution_repair_blocks_scale")
     elif status.startswith("repair_needed") or triggered_gates > 0:
         decision = "repair_before_scale"
         allowed_next_step = "tool_prompt_route_repair"
@@ -660,6 +671,7 @@ def build_cadence_control_decision(
         "information_price_loop": _control_price_loop_payload(price_loop),
         "information_perfusion": _control_perfusion_payload(perfusion),
         "missing_proof_metrics": missing_proof_metrics,
+        "attribution_repair_metrics": attribution_repair_metrics,
         "quality_flags": sorted(set(flags)),
     }
 
@@ -752,13 +764,26 @@ def _missing_proof_metrics_from_next_actions(next_actions: list[Any]) -> list[st
     return _dedupe_strings(out)[:12]
 
 
+def _attribution_repair_metrics_from_next_actions(next_actions: list[Any]) -> list[str]:
+    out: list[str] = []
+    for action in next_actions:
+        if not isinstance(action, dict):
+            continue
+        if str(action.get("action") or "") != "repair_experiment_metric_regressions":
+            continue
+        out.extend(_string_list(action.get("metrics")))
+    return _dedupe_strings(out)[:12]
+
+
 def _control_proof_metrics(control_decision: dict[str, Any]) -> list[str]:
     if not isinstance(control_decision, dict):
         return []
     metrics = _string_list(control_decision.get("missing_proof_metrics"))
+    metrics.extend(_string_list(control_decision.get("attribution_repair_metrics")))
     recommended = control_decision.get("recommended_next_run")
     if isinstance(recommended, dict):
         metrics.extend(_string_list(recommended.get("missing_proof_metrics")))
+        metrics.extend(_string_list(recommended.get("attribution_repair_metrics")))
     return _dedupe_strings(metrics)[:12]
 
 
