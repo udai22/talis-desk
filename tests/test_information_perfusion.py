@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from argparse import Namespace
+
+from scripts.run_live_scout_canary import _generate_control_aware_live_seeds
 from talis_desk.information_map import (
     InformationString,
     compute_information_perfusion,
@@ -195,6 +198,133 @@ def test_information_perfusion_routes_next_scout_seed_from_pressure_matrix(tmp_p
     assert seed.payload["pressure_gradient"] > 0.50
     assert "tic://tool/talis_native/compute_information_perfusion@v1" in seed.payload["tool_candidates"]
     assert seed.payload["why_this_seed_exists"].startswith("Information pressure is high")
+
+
+def test_information_perfusion_can_replicate_control_routed_slices(tmp_path):
+    store = reset_desk_store_for_test(tmp_path / "desk.db")
+    persist_information_strings(
+        conn=store.conn,
+        cycle_id="cycle_perf_replicate",
+        scout_id="scout_hype",
+        seed_id="seed_hype",
+        entity="HYPE",
+        theme="node_intelligence",
+        horizon="intraday",
+        lens="on_chain",
+        bias_mode="frontier",
+        strings=[
+            InformationString(
+                title="HYPE replicated pressure",
+                thesis="HYPE should be repriced upward if node absorption repeats across scout perspectives.",
+                mechanism="A control-routed sentinel should spend multiple scouts on the same pressure cell with varied bias.",
+                expected_outcome="Replicated scouts confirm or kill the pressure before a broad run.",
+                time_horizon="hour",
+                observed_at="2026-05-22T10:00:00+00:00",
+                expires_at="2099-05-23T10:00:00+00:00",
+                conviction=0.90,
+                novelty_score=0.86,
+                crowdedness=0.14,
+                entities_chain=["HYPE", "our_hl_node", "hydromancer"],
+                depth_layers=[{"layer": 1, "claim": "node absorption"}, {"layer": 2, "claim": "repricing"}],
+                evidence_refs=["fixture://our_hl_node/hype", "fixture://hydromancer/hype"],
+                quality_flags=["source_family:our_hl_node", "source_family:hydromancer"],
+            )
+        ],
+    )
+    evaluate_information_price_outcomes(
+        cycle_id="cycle_perf_replicate",
+        price_observations=[
+            {"entity": "HYPE", "observed_at": "2026-05-22T09:59:00+00:00", "price": 20.0, "source": "fixture"},
+            {"entity": "HYPE", "observed_at": "2026-05-22T11:05:00+00:00", "price": 20.1, "source": "fixture"},
+        ],
+        min_move_threshold_pct=0.02,
+        conn=store.conn,
+    )
+    compute_information_perfusion(cycle_id="cycle_perf_replicate", scout_budget=3, conn=store.conn)
+
+    seeds = generate_information_perfusion_seeds(
+        cycle_id="cycle_next_replicated",
+        source_cycle_id="cycle_perf_replicate",
+        n_seed_budget=12,
+        max_seeds=3,
+        replicate_recommended=True,
+        route_objective="pressure",
+        conn=store.conn,
+    )
+
+    assert len(seeds) == 3
+    assert [seed.payload["information_perfusion_replicate_index"] for seed in seeds] == [0, 1, 2]
+    assert len({seed.bias_mode for seed in seeds}) > 1
+    assert all(seed.payload["information_perfusion_route_objective"] == "pressure" for seed in seeds)
+    assert all("latch_risk" in seed.payload for seed in seeds)
+
+
+def test_live_canary_routes_control_decision_into_perfusion_seeds(tmp_path):
+    store = reset_desk_store_for_test(tmp_path / "desk.db")
+    persist_information_strings(
+        conn=store.conn,
+        cycle_id="cycle_perf_live_route",
+        scout_id="scout_route",
+        seed_id="seed_route",
+        entity="HYPE",
+        theme="node_perfusion",
+        horizon="intraday",
+        lens="onchain_flow",
+        bias_mode="frontier",
+        strings=[
+            InformationString(
+                title="HYPE pressure route",
+                thesis="HYPE information pressure needs follow-up before price fully absorbs node demand.",
+                mechanism="Node and onchain sources agree but the market has not moved enough.",
+                expected_outcome="HYPE reprices higher if new demand keeps absorbing unstake supply.",
+                time_horizon="hour",
+                observed_at="2026-05-22T10:00:00+00:00",
+                expires_at="2099-05-23T10:00:00+00:00",
+                conviction=0.91,
+                novelty_score=0.84,
+                crowdedness=0.18,
+                entities_chain=["HYPE", "our_hl_node", "hydromancer"],
+                depth_layers=[{"layer": 1, "claim": "node pressure"}, {"layer": 2, "claim": "repricing"}],
+                evidence_refs=["fixture://our_hl_node/hype", "fixture://hydromancer/hype"],
+                quality_flags=["source_family:our_hl_node", "source_family:hydromancer"],
+            )
+        ],
+    )
+    evaluate_information_price_outcomes(
+        cycle_id="cycle_perf_live_route",
+        price_observations=[
+            {"entity": "HYPE", "observed_at": "2026-05-22T10:00:00+00:00", "price": 20.0, "source": "fixture"},
+            {"entity": "HYPE", "observed_at": "2026-05-22T11:00:00+00:00", "price": 20.08, "source": "fixture"},
+        ],
+        min_move_threshold_pct=0.02,
+        conn=store.conn,
+    )
+    compute_information_perfusion(cycle_id="cycle_perf_live_route", scout_budget=3, conn=store.conn)
+
+    args = Namespace(
+        control_decision="perfusion_pressure_requests_sentinel",
+        control_allowed_next_step="perfusion_pressure_sentinel",
+        perfusion_source_cycle_id="cycle_perf_live_route",
+        seed_rng=7,
+        theme_share=0.0,
+        prompt_variant="temporal_pyramid_v1",
+        max_tool_iterations=3,
+    )
+    seeds, report = _generate_control_aware_live_seeds(
+        args=args,
+        cycle_id="cycle_live_next",
+        conn=store.conn,
+        universe_entities=["HYPE", "BTC"],
+        base_seed_count=3,
+    )
+
+    assert report["status"] == "perfusion_routed"
+    assert report["route_objective"] == "pressure"
+    assert report["perfusion_seed_count"] == 3
+    assert report["broad_seed_count"] == 0
+    assert all(seed.payload["source"] == "information_perfusion_route" for seed in seeds)
+    assert all(seed.payload["prompt_variant"] == "temporal_pyramid_v1" for seed in seeds)
+    assert all(seed.payload["max_tool_iterations"] == 3 for seed in seeds)
 
 
 def test_market_evolve_exploits_perfusion_pressure_when_price_has_not_absorbed(tmp_path):

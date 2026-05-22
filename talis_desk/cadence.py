@@ -329,6 +329,7 @@ def build_followup_plan_from_control_decision(
         max_tool_iterations=max_tool_iterations,
         brief_budget_usd=brief_budget_usd,
     )
+    _attach_control_seed_routing(plan, control_decision)
     plan.notes.extend([
         "Compiled from MarketEvolve cadence_control; no operator should hand-translate JSON into commands.",
         f"control_decision={decision}",
@@ -687,6 +688,38 @@ def _control_decision_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return {}
 
 
+def _attach_control_seed_routing(plan: CadenceRunPlan, control_decision: dict[str, Any]) -> None:
+    decision = str(control_decision.get("decision") or "")
+    allowed_next_step = str(control_decision.get("allowed_next_step") or "")
+    if not _control_decision_requests_seed_routing(decision, allowed_next_step):
+        return
+    source_cycle = ""
+    perfusion = control_decision.get("information_perfusion")
+    if isinstance(perfusion, dict):
+        source_cycle = str(perfusion.get("cycle_id") or "")
+    for command in plan.commands:
+        if command.name != "sentinel_live_canary":
+            continue
+        command.command.extend([
+            "--control-decision",
+            decision,
+            "--control-allowed-next-step",
+            allowed_next_step,
+        ])
+        if source_cycle:
+            command.command.extend(["--perfusion-source-cycle-id", source_cycle])
+        command.expected_artifacts["control_seed_routing"] = str(
+            Path(plan.artifact_dir) / "live_canary" / "prompt_outputs" / "live_scout_control_seed_routing.json"
+        )
+        plan.notes.append("seed_routing=control_decision")
+        break
+
+
+def _control_decision_requests_seed_routing(decision: str, allowed_next_step: str) -> bool:
+    text = f"{decision} {allowed_next_step}".lower()
+    return "perfusion_" in text
+
+
 def _control_decision_requires_live_spend(
     *,
     decision: str,
@@ -987,6 +1020,7 @@ def _control_perfusion_payload(perfusion: dict[str, Any]) -> dict[str, Any]:
         return {"status": "missing", "cell_count": 0.0, "routed_cell_count": 0.0}
     return {
         "status": perfusion.get("status") or "missing",
+        "cycle_id": str(perfusion.get("cycle_id") or ""),
         "cell_count": _floatish(perfusion.get("cell_count"), default=0.0),
         "routed_cell_count": _floatish(perfusion.get("routed_cell_count"), default=0.0),
         "avg_information_pressure": _floatish(perfusion.get("avg_information_pressure"), default=0.0),

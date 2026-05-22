@@ -66,6 +66,7 @@ from talis_desk.swarm.scout_runner import (
 from talis_desk.swarm.seed_generator import (
     DEFAULT_ENTITIES,
     SeedCell,
+    generate_information_perfusion_seeds,
     generate_seeds,
 )
 from talis_desk.tool_atlas import (
@@ -119,15 +120,15 @@ def main() -> int:
             args.n_scouts,
             requested=args.market_evolve_pairs,
         )
-        seeds = generate_seeds(
-            n_seeds=max(1, args.n_scouts - market_evolve_pair_budget),
+        base_seed_count = max(1, args.n_scouts - market_evolve_pair_budget)
+        seeds, control_seed_routing = _generate_control_aware_live_seeds(
+            args=args,
             cycle_id=cycle_id,
-            entities=universe.entity_symbols() or DEFAULT_ENTITIES,
-            themes=DEFAULT_THEMES,
-            rng_seed=args.seed_rng,
-            theme_share=args.theme_share,
+            conn=store.conn,
+            universe_entities=universe.entity_symbols() or DEFAULT_ENTITIES,
+            base_seed_count=base_seed_count,
         )
-        seeds = [_prepare_live_seed(seed, args=args) for seed in seeds]
+        _write_json(prompt_output_dir / "live_scout_control_seed_routing.json", control_seed_routing)
         market_evolve_planning_step = run_market_evolve_step(cycle_id=cycle_id, conn=store.conn)
         paired_slices = prepare_market_evolve_experiment_seed_pairs(
             seeds,
@@ -511,6 +512,21 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--prompt-variant", default="", help="Optional forced scout prompt variant for this canary.")
     parser.add_argument("--max-tool-iterations", type=int, default=1)
     parser.add_argument(
+        "--control-decision",
+        default="",
+        help="Cadence control decision that should shape the next scout slice.",
+    )
+    parser.add_argument(
+        "--control-allowed-next-step",
+        default="",
+        help="Cadence allowed_next_step paired with --control-decision.",
+    )
+    parser.add_argument(
+        "--perfusion-source-cycle-id",
+        default="",
+        help="Optional previous cycle id to read information_perfusion routes from.",
+    )
+    parser.add_argument(
         "--repair-tool-proposal-contracts",
         action="store_true",
         help=(
@@ -538,6 +554,72 @@ def _parse_args() -> argparse.Namespace:
         help="Actually call the configured live model provider under the cost cap.",
     )
     return parser.parse_args()
+
+
+def _generate_control_aware_live_seeds(
+    *,
+    args: argparse.Namespace,
+    cycle_id: str,
+    conn: Any,
+    universe_entities: list[str],
+    base_seed_count: int,
+) -> tuple[list[SeedCell], dict[str, Any]]:
+    objective = _control_perfusion_objective(
+        decision=str(args.control_decision or ""),
+        allowed_next_step=str(args.control_allowed_next_step or ""),
+    )
+    perfusion_seeds: list[SeedCell] = []
+    if objective:
+        perfusion_seeds = generate_information_perfusion_seeds(
+            cycle_id=cycle_id,
+            n_seed_budget=base_seed_count,
+            source_cycle_id=str(args.perfusion_source_cycle_id or "") or None,
+            max_seeds=base_seed_count,
+            replicate_recommended=True,
+            route_objective=objective,
+            conn=conn,
+        )
+    broad_needed = max(0, base_seed_count - len(perfusion_seeds))
+    broad_seeds: list[SeedCell] = []
+    if broad_needed:
+        broad_seeds = generate_seeds(
+            n_seeds=broad_needed,
+            cycle_id=cycle_id,
+            entities=universe_entities,
+            themes=DEFAULT_THEMES,
+            rng_seed=args.seed_rng,
+            theme_share=args.theme_share,
+        )
+    seeds = [_prepare_live_seed(seed, args=args) for seed in [*perfusion_seeds, *broad_seeds]]
+    report = {
+        "schema_version": "talis_live_control_seed_routing_v1",
+        "cycle_id": cycle_id,
+        "control_decision": str(args.control_decision or ""),
+        "control_allowed_next_step": str(args.control_allowed_next_step or ""),
+        "perfusion_source_cycle_id": str(args.perfusion_source_cycle_id or ""),
+        "route_objective": objective or "broad_market_grid",
+        "requested_seed_count": int(base_seed_count),
+        "perfusion_seed_count": len(perfusion_seeds),
+        "broad_seed_count": len(broad_seeds),
+        "status": "perfusion_routed" if perfusion_seeds else "broad_market_grid",
+        "quality_flags": (
+            []
+            if not objective or perfusion_seeds
+            else ["control_requested_perfusion_but_no_prior_perfusion_routes"]
+        ),
+    }
+    return seeds, report
+
+
+def _control_perfusion_objective(*, decision: str, allowed_next_step: str) -> str:
+    text = f"{decision} {allowed_next_step}".lower()
+    if "perfusion_latch" in text:
+        return "latch_repair"
+    if "source_oxygenation" in text or "oxygenation" in text:
+        return "source_oxygenation"
+    if "perfusion_pressure" in text:
+        return "pressure"
+    return ""
 
 
 def _prepare_live_seed(seed: SeedCell, *, args: argparse.Namespace) -> SeedCell:

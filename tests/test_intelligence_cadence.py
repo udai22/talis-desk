@@ -420,6 +420,44 @@ def test_followup_plan_compiles_prior_report_control_decision_without_opening_sp
     assert any("control_decision=collect_experiment_evidence" == note for note in plan.notes)
 
 
+def test_followup_plan_wires_perfusion_control_into_next_scout_slice(tmp_path: Path) -> None:
+    report_path = tmp_path / "report.json"
+    report_path.write_text(json.dumps({
+        "control_decision": {
+            "schema_version": "talis_cadence_control_decision_v1",
+            "decision": "perfusion_latch_repair_sentinel",
+            "allowed_next_step": "perfusion_latch_repair",
+            "source_scoreboard_id": "score_latch",
+            "blocks_wider_spend": False,
+            "information_perfusion": {
+                "cycle_id": "cycle_prior_perfusion",
+                "avg_latch_risk": 0.52,
+            },
+            "recommended_next_run": {
+                "mode": "sentinel_tick",
+                "scouts": 24,
+                "requires_allow_live_spend": True,
+            },
+        },
+    }))
+
+    plan = build_followup_plan_from_report(
+        report_path=report_path,
+        artifact_dir=tmp_path / "next",
+        cycle_id="cycle_follow_latch",
+        allow_live_spend=False,
+    )
+
+    command = plan.commands[0].command
+    assert _arg_after(command, "--control-decision") == "perfusion_latch_repair_sentinel"
+    assert _arg_after(command, "--control-allowed-next-step") == "perfusion_latch_repair"
+    assert _arg_after(command, "--perfusion-source-cycle-id") == "cycle_prior_perfusion"
+    assert plan.commands[0].expected_artifacts["control_seed_routing"].endswith(
+        "live_scout_control_seed_routing.json"
+    )
+    assert "seed_routing=control_decision" in plan.notes
+
+
 def test_followup_plan_respects_control_block_even_if_spend_requested(tmp_path: Path) -> None:
     report_path = tmp_path / "report.json"
     report_path.write_text(json.dumps({

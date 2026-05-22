@@ -551,6 +551,8 @@ def generate_information_perfusion_seeds(
     source_cycle_id: Optional[str] = None,
     program: Any = None,
     max_seeds: Optional[int] = None,
+    replicate_recommended: bool = False,
+    route_objective: str = "",
     conn: Optional[sqlite3.Connection] = None,
 ) -> list[SeedCell]:
     """Route scouts from the prior information-perfusion matrix.
@@ -591,16 +593,20 @@ def generate_information_perfusion_seeds(
     ]
     if not route_rows:
         return []
-    route_rows.sort(key=_information_perfusion_route_sort_key, reverse=True)
+    route_rows.sort(
+        key=lambda row: _information_perfusion_route_sort_key(row, route_objective=route_objective),
+        reverse=True,
+    )
 
     out: list[SeedCell] = []
     seen: set[tuple[str, str, str, str]] = set()
     for row in route_rows:
+        if len(out) >= budget:
+            break
         directive = str(row.get("route_directive") or "maintain")
         entity = str(row.get("entity") or "UNKNOWN").upper()
         horizon = str(row.get("horizon") or "intraday")
         lens = _coerce_lens_for_entity(entity, str(row.get("lens") or "anomaly"), len(out))
-        bias = _bias_for_information_perfusion_route(directive)
         key = (entity, horizon, lens, directive)
         if key in seen:
             continue
@@ -612,42 +618,55 @@ def generate_information_perfusion_seeds(
             if str(tool).strip()
         ]
         recommended = int(row.get("recommended_scouts") or 1)
-        seed = SeedCell(
-            seed_id=f"seed_{cycle_id}_P_{len(out):04d}_{_short_hash(source_cycle, row.get('cell_key'), directive)}",
-            entity=entity,
-            horizon=horizon,
-            lens=lens,
-            bias_mode=bias,
-            theme=str(row.get("theme") or f"information_perfusion_{directive}")[:80],
-            weight=_information_perfusion_route_weight(directive, metrics),
-            frontier_boost=max(1.0, 1.0 + float(metrics.get("pressure_gradient") or 0.0)),
-            coverage_penalty=max(0.1, min(1.0, 1.0 - float(metrics.get("resistance") or 0.0) * 0.35)),
-            payload={
-                "source": "information_perfusion_route",
-                "information_perfusion_source_cycle_id": source_cycle,
-                "information_perfusion_cell_key": row.get("cell_key"),
-                "information_perfusion_route_directive": directive,
-                "information_perfusion_recommended_scouts": recommended,
-                "information_pressure": float(metrics.get("information_pressure") or 0.0),
-                "price_absorption": float(metrics.get("price_absorption") or 0.0),
-                "pressure_gradient": float(metrics.get("pressure_gradient") or 0.0),
-                "source_oxygenation": float(metrics.get("source_oxygenation") or 0.0),
-                "resistance": float(metrics.get("resistance") or 0.0),
-                "dilation_score": float(metrics.get("dilation_score") or 0.0),
-                "source_families": row.get("source_families") or [],
-                "suggested_tools": suggested_tools,
-                "why_this_seed_exists": _information_perfusion_seed_reason(directive),
-            },
-        )
-        seed.payload["tool_candidates"] = _merge_tool_candidates(
-            [INFORMATION_PERFUSION_TOOL_URI],
-            suggested_tools,
-            narrow_tools_for_seed(seed, k=max(8, min(24, len(suggested_tools) + 8))),
-            k=24,
-        )
-        out.append(seed)
-        if len(out) >= min(budget, max(1, sum(max(1, int(r.get("recommended_scouts") or 1)) for r in route_rows))):
-            break
+        replicate_count = min(max(1, recommended), budget - len(out)) if replicate_recommended else 1
+        for replicate_idx in range(replicate_count):
+            bias = _bias_for_information_perfusion_route(directive, replicate_idx=replicate_idx)
+            seed = SeedCell(
+                seed_id=(
+                    f"seed_{cycle_id}_P_{len(out):04d}_"
+                    f"{_short_hash(source_cycle, row.get('cell_key'), directive, str(replicate_idx))}"
+                ),
+                entity=entity,
+                horizon=horizon,
+                lens=lens,
+                bias_mode=bias,
+                theme=str(row.get("theme") or f"information_perfusion_{directive}")[:80],
+                weight=_information_perfusion_route_weight(directive, metrics),
+                frontier_boost=max(1.0, 1.0 + float(metrics.get("pressure_gradient") or 0.0)),
+                coverage_penalty=max(0.1, min(1.0, 1.0 - float(metrics.get("resistance") or 0.0) * 0.35)),
+                payload={
+                    "source": "information_perfusion_route",
+                    "information_perfusion_source_cycle_id": source_cycle,
+                    "information_perfusion_cell_key": row.get("cell_key"),
+                    "information_perfusion_route_directive": directive,
+                    "information_perfusion_route_objective": route_objective or "pressure",
+                    "information_perfusion_recommended_scouts": recommended,
+                    "information_perfusion_replicate_index": replicate_idx,
+                    "information_perfusion_replicate_count": replicate_count,
+                    "information_pressure": float(metrics.get("information_pressure") or 0.0),
+                    "price_absorption": float(metrics.get("price_absorption") or 0.0),
+                    "pressure_gradient": float(metrics.get("pressure_gradient") or 0.0),
+                    "source_oxygenation": float(metrics.get("source_oxygenation") or 0.0),
+                    "resistance": float(metrics.get("resistance") or 0.0),
+                    "dilation_score": float(metrics.get("dilation_score") or 0.0),
+                    "latch_risk": float(metrics.get("latch_risk") or 0.0),
+                    "flow_shear": float(metrics.get("flow_shear") or 0.0),
+                    "transport_cost": float(metrics.get("transport_cost") or 0.0),
+                    "perfusion_efficiency": float(metrics.get("perfusion_efficiency") or 0.0),
+                    "source_families": row.get("source_families") or [],
+                    "suggested_tools": suggested_tools,
+                    "why_this_seed_exists": _information_perfusion_seed_reason(directive),
+                },
+            )
+            seed.payload["tool_candidates"] = _merge_tool_candidates(
+                [INFORMATION_PERFUSION_TOOL_URI],
+                suggested_tools,
+                narrow_tools_for_seed(seed, k=max(8, min(24, len(suggested_tools) + 8))),
+                k=24,
+            )
+            out.append(seed)
+            if len(out) >= budget:
+                break
     return out[:budget]
 
 
@@ -869,9 +888,27 @@ def _geometry_route_sort_key(row: dict[str, Any]) -> tuple[float, float, float, 
     )
 
 
-def _information_perfusion_route_sort_key(row: dict[str, Any]) -> tuple[float, float, float, float]:
+def _information_perfusion_route_sort_key(
+    row: dict[str, Any],
+    *,
+    route_objective: str = "",
+) -> tuple[float, float, float, float]:
     directive = str(row.get("route_directive") or "")
     metrics = dict(row.get("metrics") or {})
+    if route_objective == "latch_repair":
+        return (
+            float(metrics.get("latch_risk") or 0.0),
+            float(metrics.get("transport_cost") or 0.0),
+            float(metrics.get("pressure_gradient") or 0.0),
+            float(row.get("recommended_scouts") or 0.0),
+        )
+    if route_objective == "source_oxygenation":
+        return (
+            1.0 - float(metrics.get("source_oxygenation") or 0.0),
+            float(metrics.get("pressure_gradient") or 0.0),
+            float(metrics.get("dilation_score") or 0.0),
+            float(row.get("recommended_scouts") or 0.0),
+        )
     priority = {
         "dilate_scouts": 5.0,
         "attach_price_sensors": 4.2,
@@ -897,14 +934,15 @@ def _bias_for_geometry_route(directive: str) -> str:
     }.get(directive, "frontier")
 
 
-def _bias_for_information_perfusion_route(directive: str) -> str:
-    return {
-        "dilate_scouts": "momentum",
-        "attach_price_sensors": "frontier",
-        "oxygenate_sources": "frontier",
-        "decongest_or_repair": "contrarian",
-        "harvest_outcome": "consensus_confirm",
-    }.get(directive, "frontier")
+def _bias_for_information_perfusion_route(directive: str, *, replicate_idx: int = 0) -> str:
+    options = {
+        "dilate_scouts": ["momentum", "frontier", "consensus_confirm"],
+        "attach_price_sensors": ["frontier", "momentum"],
+        "oxygenate_sources": ["frontier", "contrarian"],
+        "decongest_or_repair": ["contrarian", "tail_risk", "frontier"],
+        "harvest_outcome": ["consensus_confirm", "mean_reversion"],
+    }.get(directive, ["frontier"])
+    return options[replicate_idx % len(options)]
 
 
 def _geometry_route_weight(directive: str, metrics: dict[str, Any]) -> float:
