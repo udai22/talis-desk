@@ -48,8 +48,11 @@ FILENAMES = {
     "market_map_self_healing_worker": "market_map_self_healing_worker.json",
     "live_scout_canary": "live_scout_canary_report.json",
     "live_scout_tournament": "live_scout_tournament_report.json",
+    "guarded_shadow_production": "guarded_shadow_production_report.json",
     "live_scout_canary_outputs": "live_scout_canary_outputs.json",
     "live_scout_canary_seeds": "live_scout_canary_seeds.json",
+    "live_scout_canary_transcript_progress": "live_scout_canary_transcript_progress.json",
+    "live_scout_performance_audit": "live_scout_performance_audit.json",
     "scout_100_readiness": "100_scout_readiness_report.json",
     "scout_100_outputs": "100_scout_outputs.json",
     "scout_100_seeds": "100_scout_seeds.json",
@@ -338,8 +341,11 @@ def render_html(data: dict[str, Any]) -> str:
         _render_panel("selfhealworker", "Self-Healing Worker", data, "market_map_self_healing_worker"),
         _render_panel("livecanary", "Live Scout Canary", data, "live_scout_canary"),
         _render_panel("livetournament", "Live Tournament Gate", data, "live_scout_tournament"),
+        _render_panel("guardedshadow", "Guarded Shadow Job", data, "guarded_shadow_production"),
         _render_panel("livecanaryout", "Live Canary Outputs", data, "live_scout_canary_outputs"),
         _render_panel("livecanaryseeds", "Live Canary Seeds", data, "live_scout_canary_seeds"),
+        _render_panel("livecanarytrace", "Provider Transcript", data, "live_scout_canary_transcript_progress"),
+        _render_panel("liveaudit", "Live Scout Audit", data, "live_scout_performance_audit"),
         _render_panel("scout100", "100 Scout Readiness", data, "scout_100_readiness"),
         _render_panel("scout100out", "100 Scout Outputs", data, "scout_100_outputs"),
         _render_panel("scout100seeds", "100 Scout Seeds", data, "scout_100_seeds"),
@@ -2067,7 +2073,9 @@ def _render_cohesive_story(
     self_healing_html = _render_self_healing_chapter(data=data)
     scout_100_html = _render_100_scout_readiness_chapter(data=data)
     live_canary_html = _render_live_scout_canary_chapter(data=data)
+    live_performance_html = _render_live_scout_performance_audit_chapter(data=data)
     live_tournament_html = _render_live_scout_tournament_chapter(data=data)
+    guarded_shadow_html = _render_guarded_shadow_chapter(data=data)
     touched_surfaces = [row for row in data_substrate.touched if row.touched]
     untouched_surfaces = [row for row in data_substrate.touched if not row.touched]
     data_surface_html = "".join(
@@ -2387,7 +2395,11 @@ def _render_cohesive_story(
 
         {live_canary_html}
 
+        {live_performance_html}
+
         {live_tournament_html}
+
+        {guarded_shadow_html}
 
         {swipe_deck_html}
 
@@ -3614,6 +3626,148 @@ def _render_live_scout_canary_chapter(*, data: dict[str, Any]) -> str:
     """
 
 
+def _render_live_scout_performance_audit_chapter(*, data: dict[str, Any]) -> str:
+    audit = _artifact_json(data, "live_scout_performance_audit")
+    if not audit:
+        return ""
+    readiness = audit.get("readiness") if isinstance(audit.get("readiness"), dict) else {}
+    metrics = audit.get("run_metrics") if isinstance(audit.get("run_metrics"), dict) else {}
+    provider = audit.get("provider_metrics") if isinstance(audit.get("provider_metrics"), dict) else {}
+    seed_distribution = audit.get("seed_distribution") if isinstance(audit.get("seed_distribution"), dict) else {}
+    storage = audit.get("storage") if isinstance(audit.get("storage"), dict) else {}
+    table_counts = storage.get("table_counts") if isinstance(storage.get("table_counts"), dict) else {}
+    geometry = audit.get("geometry") if isinstance(audit.get("geometry"), dict) else {}
+    quality = audit.get("quality") if isinstance(audit.get("quality"), dict) else {}
+    latency = provider.get("latency_s") if isinstance(provider.get("latency_s"), dict) else {}
+    top_flags = quality.get("top_quality_flags") if isinstance(quality.get("top_quality_flags"), dict) else {}
+    provider_counts = provider.get("provider_counts") if isinstance(provider.get("provider_counts"), dict) else {}
+    issues = [str(x) for x in readiness.get("issues_to_watch") or []]
+    issue_cards = "".join(
+        '<article class="output-panel">'
+        '<span>watch</span>'
+        f'<h3>{html.escape(issue)}</h3>'
+        '<p>This does not block shadow scale, but it should be tracked against the next full run.</p>'
+        '</article>'
+        for issue in issues[:6]
+    )
+    if not issue_cards:
+        issue_cards = '<article class="output-panel"><span>clean</span><h3>No material watch item was emitted.</h3><p>The run still needs normal tournament comparison before the cadence rises.</p></article>'
+    storage_cards = "".join(
+        '<article class="output-panel">'
+        f'<span>{html.escape(str(count if count is not None else "?"))}</span>'
+        f'<h3>{html.escape(label)}</h3>'
+        f'<p>{html.escape(copy)}</p>'
+        '</article>'
+        for label, count, copy in [
+            ("hypotheses", table_counts.get("hypotheses"), "Top-level scout claims that can be verified or killed."),
+            ("information strings", table_counts.get("information_strings"), "Typed causal strings stored as map memory."),
+            ("map nodes", table_counts.get("information_map_nodes"), "Graph objects created from strings, evidence, and actors."),
+            ("map edges", table_counts.get("information_map_edges"), "Queryable links between entities, mechanisms, evidence, and routes."),
+            ("tool calls", table_counts.get("tool_call_log"), "Read-only receipts available for replay and citation."),
+            ("node observations", table_counts.get("node_intelligence_observations"), "Node-derived observations available to scouts."),
+            ("tool proposals", table_counts.get("analysis_tool_proposals"), "Missing tools the system proposed from its own gaps."),
+            ("task contracts", table_counts.get("task_contracts"), "Self-healing work orders posted from the map shape."),
+        ]
+    )
+    top_cells = [row for row in (storage.get("top_geometry_cells") or []) if isinstance(row, dict)]
+    cell_cards = "".join(
+        '<article class="output-panel">'
+        f'<span>{html.escape(str(row.get("route_directive") or "observe"))}</span>'
+        f'<h3>{html.escape(str(row.get("cell_key") or ""))}</h3>'
+        f'<p>Trade-scream {html.escape(str(row.get("trade_scream_score")))}. Verifier readiness {html.escape(str(row.get("verifier_readiness")))}.</p>'
+        f'<p>{html.escape(str(row.get("quality_flags") or ""))}</p>'
+        '</article>'
+        for row in top_cells[:4]
+    )
+    proposals = [row for row in (storage.get("tool_proposals") or []) if isinstance(row, dict)]
+    proposal_cards = "".join(
+        '<article class="output-panel">'
+        f'<span>{html.escape(str(row.get("priority") or ""))}</span>'
+        f'<h3>{html.escape(str(row.get("tool_name") or ""))}</h3>'
+        f'<p>{html.escape(str(row.get("purpose") or row.get("trigger") or ""))}</p>'
+        f'<p><strong>Source:</strong> {html.escape(str(row.get("source_family") or ""))}</p>'
+        '</article>'
+        for row in proposals[:4]
+    )
+    if not proposal_cards:
+        proposal_cards = '<article class="output-panel"><span>none</span><h3>No tool proposals in this audit.</h3><p>The tool-creation loop did not emit a proposal from this run.</p></article>'
+    horizons = seed_distribution.get("horizons") if isinstance(seed_distribution.get("horizons"), dict) else {}
+    lenses = seed_distribution.get("lenses") if isinstance(seed_distribution.get("lenses"), dict) else {}
+    asset_classes = seed_distribution.get("asset_classes") if isinstance(seed_distribution.get("asset_classes"), dict) else {}
+    audit_preview = {
+        "readiness": readiness,
+        "run_metrics": metrics,
+        "provider_metrics": provider,
+        "seed_distribution": seed_distribution,
+        "top_quality_flags": top_flags,
+        "storage_counts": table_counts,
+        "top_geometry_cell": geometry.get("top_cell"),
+        "next_step": audit.get("next_step"),
+    }
+    return f"""
+        <section class="chapter">
+          <div class="chapter-head">
+            <div class="chapter-label">00g.1 / 100-scout proof</div>
+            <h2>The 100-scout slice produced real map memory, not just pretty output.</h2>
+            <p>This chapter is the run audit: provider behavior, seed coverage, storage counts, graph shape, self-healing work, and the honest blemishes that should be watched before the next full shadow cycle.</p>
+          </div>
+          <div class="score-tape">
+            <div><strong>{html.escape(str(metrics.get("completed") or 0))}/{html.escape(str(metrics.get("n_scouts_requested") or 0))}</strong><small>scouts completed</small></div>
+            <div><strong>{html.escape(str(metrics.get("information_strings") or 0))}</strong><small>information strings</small></div>
+            <div><strong>{html.escape(str(metrics.get("geometry_cells") or 0))}</strong><small>geometry cells</small></div>
+            <div><strong>{html.escape(str(metrics.get("routing_queue_count") or 0))}</strong><small>routing tasks</small></div>
+            <div><strong>${html.escape(str(metrics.get("cost_usd_estimate") or 0))}</strong><small>estimated spend</small></div>
+            <div><strong>{html.escape("yes" if readiness.get("ready_for_guarded_scheduled_shadow") else "no")}</strong><small>shadow-ready</small></div>
+            <div><strong>{html.escape("no" if readiness.get("ready_for_trade_execution") is False else "yes")}</strong><small>trade execution</small></div>
+          </div>
+          <article class="workbench-panel" style="margin-top:10px">
+            <h3>Provider health</h3>
+            <p>DeepSeek handled {html.escape(str(provider_counts.get("deepseek") or 0))} calls; fallback handled {html.escape(str(provider_counts.get("anthropic") or 0))}. The important watch item is not cost, it is whether timeout and JSON failure rates stay bounded as cadence rises.</p>
+            <div class="score-tape" style="margin-top:10px">
+              <div><strong>{html.escape(str(provider.get("call_count") or 0))}</strong><small>provider calls</small></div>
+              <div><strong>{html.escape(str(provider.get("fallback_after_primary_error") or 0))}</strong><small>primary fallbacks</small></div>
+              <div><strong>{html.escape(str(latency.get("avg") or 0))}s</strong><small>avg latency</small></div>
+              <div><strong>{html.escape(str(latency.get("p95") or 0))}s</strong><small>p95 latency</small></div>
+              <div><strong>{html.escape(str(latency.get("max") or 0))}s</strong><small>max latency</small></div>
+            </div>
+          </article>
+          <article class="workbench-panel" style="margin-top:10px">
+            <h3>Seed slice</h3>
+            <p>The router did not spray randomly. It split the 100 scouts across asset class, horizon, lens, and bias, with unique-cell ratio {html.escape(str(seed_distribution.get("unique_cell_ratio") or 0))}.</p>
+            <pre class="prompt-slice">{html.escape(json.dumps({
+                "asset_classes": asset_classes,
+                "horizons": horizons,
+                "lenses": lenses,
+                "unique_cell_count": seed_distribution.get("unique_cell_count"),
+            }, indent=2, sort_keys=True, ensure_ascii=True, default=str))}</pre>
+          </article>
+          <article class="workbench-panel" style="margin-top:10px">
+            <h3>Storage proof</h3>
+            <p>This is the “where did it go?” answer. Scout output is not a dead transcript; it became graph rows, evidence joins, geometry snapshots, tool proposals, and repair tasks.</p>
+            <div class="output-grid" style="margin-top:10px">{storage_cards}</div>
+          </article>
+          <article class="workbench-panel" style="margin-top:10px">
+            <h3>What the geometry asked for next</h3>
+            <p>The highest-scoring cells still ask for independent replication or source expansion. That is exactly the right posture for frontier claims: the shape can scream, but the verifier still has to earn the trade.</p>
+            <div class="output-grid" style="margin-top:10px">{cell_cards}</div>
+          </article>
+          <article class="workbench-panel" style="margin-top:10px">
+            <h3>Tools the system wants to create</h3>
+            <p>Tool creation is now part of analysis. When the map sees missing node or source edges, it can propose concrete readers with promotion gates.</p>
+            <div class="output-grid" style="margin-top:10px">{proposal_cards}</div>
+          </article>
+          <article class="workbench-panel" style="margin-top:10px">
+            <h3>Honest blemishes</h3>
+            <div class="output-grid" style="margin-top:10px">{issue_cards}</div>
+          </article>
+          <article class="workbench-panel" style="margin-top:10px">
+            <h3>Audit payload</h3>
+            <pre class="prompt-slice">{html.escape(json.dumps(audit_preview, indent=2, sort_keys=True, ensure_ascii=True, default=str))}</pre>
+          </article>
+        </section>
+    """
+
+
 def _render_live_scout_tournament_chapter(*, data: dict[str, Any]) -> str:
     report = _artifact_json(data, "live_scout_tournament")
     if not report:
@@ -3709,6 +3863,90 @@ def _render_live_scout_tournament_chapter(*, data: dict[str, Any]) -> str:
             <h3>Next evolution arms</h3>
             <p>{html.escape(next_call_copy)}</p>
             <div class="output-grid" style="margin-top:10px">{plan_cards}</div>
+          </article>
+        </section>
+    """
+
+
+def _render_guarded_shadow_chapter(*, data: dict[str, Any]) -> str:
+    report = _artifact_json(data, "guarded_shadow_production")
+    if not report:
+        return """
+        <section class="chapter">
+          <div class="chapter-head">
+            <div class="chapter-label">00i / guarded shadow job</div>
+            <h2>The scheduled shadow-production wrapper has not run yet.</h2>
+            <p>After the tournament promotes a policy, run <code>scripts/run_guarded_shadow_production.py</code> so the next scheduled test has a hard cap, a no-trade safety policy, and its own audit artifact.</p>
+          </div>
+        </section>
+        """
+    plan = report.get("plan") if isinstance(report.get("plan"), dict) else {}
+    preflight = report.get("preflight") if isinstance(report.get("preflight"), dict) else {}
+    safety = report.get("safety_policy") if isinstance(report.get("safety_policy"), dict) else {}
+    gates = plan.get("gates") if isinstance(plan.get("gates"), dict) else {}
+    post = report.get("post_run_gates") if isinstance(report.get("post_run_gates"), dict) else {}
+    gate_cards = "".join(
+        '<article class="output-panel">'
+        f'<span>{"pass" if ok else "fail"}</span>'
+        f'<h3>{html.escape(str(name).replace("_", " "))}</h3>'
+        f'<p>{html.escape("The scheduled envelope allows this constraint." if ok else "The scheduled job must not start until this is repaired.")}</p>'
+        '</article>'
+        for name, ok in gates.items()
+    )
+    post_cards = "".join(
+        '<article class="output-panel">'
+        f'<span>{"pass" if ok else "fail"}</span>'
+        f'<h3>{html.escape(str(name).replace("_", " "))}</h3>'
+        f'<p>{html.escape("The post-run proof stayed inside the shadow policy." if ok else "This post-run gate failed and should block the next schedule.")}</p>'
+        '</article>'
+        for name, ok in post.items()
+    )
+    forbidden = safety.get("forbidden_side_effects") if isinstance(safety.get("forbidden_side_effects"), list) else []
+    allowed = safety.get("allowed_side_effects") if isinstance(safety.get("allowed_side_effects"), list) else []
+    command = str(plan.get("command") or "")
+    status = str(report.get("status") or "unknown")
+    if status == "dry_run":
+        interpretation = (
+            "The scheduler envelope is valid and no model calls were made. "
+            "The next real test is this same wrapper with --allow-live-spend."
+        )
+    elif status == "pass":
+        interpretation = "The guarded shadow job ran and its post-run gates passed."
+    elif status.startswith("blocked"):
+        interpretation = "The wrapper refused to run live spend; inspect the failed gates before scheduling."
+    else:
+        interpretation = "Inspect the job report before increasing cadence or spend."
+    return f"""
+        <section class="chapter">
+          <div class="chapter-head">
+            <div class="chapter-label">00i / guarded shadow job</div>
+            <h2>The promotion now has a production-shaped harness.</h2>
+            <p>{html.escape(interpretation)} The key distinction: this is allowed to sense, store, score, and route. It is not allowed to place trades.</p>
+          </div>
+          <div class="score-tape">
+            <div><strong>{html.escape(status)}</strong><small>job status</small></div>
+            <div><strong>{html.escape(str(plan.get("shadow_scope") or "unknown"))}</strong><small>scope</small></div>
+            <div><strong>{html.escape(str(plan.get("n_scouts") or 0))}</strong><small>scouts</small></div>
+            <div><strong>${html.escape(str(plan.get("cost_cap_usd") or 0))}</strong><small>hard cap</small></div>
+            <div><strong>{html.escape("yes" if preflight.get("allowed_to_start") else "no")}</strong><small>allowed to start</small></div>
+            <div><strong>{html.escape("no" if safety.get("trade_execution_enabled") is False else "yes")}</strong><small>trade execution</small></div>
+          </div>
+          <article class="workbench-panel" style="margin-top:10px">
+            <h3>Shadow-only safety policy</h3>
+            <div class="output-grid" style="margin-top:10px">
+              <article class="output-panel"><span>allowed</span><h3>Read, reason, write artifacts</h3><p>{html.escape(", ".join(str(x) for x in allowed) or "No allowed effects listed.")}</p></article>
+              <article class="output-panel"><span>forbidden</span><h3>No execution side effects</h3><p>{html.escape(", ".join(str(x) for x in forbidden) or "No forbidden effects listed.")}</p></article>
+            </div>
+          </article>
+          <article class="workbench-panel" style="margin-top:10px">
+            <h3>Preflight gates</h3>
+            <div class="output-grid" style="margin-top:10px">{gate_cards}</div>
+          </article>
+          {('<article class="workbench-panel" style="margin-top:10px"><h3>Post-run gates</h3><div class="output-grid" style="margin-top:10px">' + post_cards + '</div></article>') if post_cards else ''}
+          <article class="workbench-panel" style="margin-top:10px">
+            <h3>Exact scheduled command</h3>
+            <p>The scheduler should run this only after the tournament report remains current. Add <code>--allow-live-spend</code> only when deliberately opening the model-call valve.</p>
+            <pre class="prompt-slice">{html.escape(command)}</pre>
           </article>
         </section>
     """
