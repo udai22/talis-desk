@@ -254,7 +254,12 @@ def _apply_prompt_contract_pressure(system_prompt: str, seed: SeedCell) -> str:
     require_mechanism = bool(payload.get("prompt_require_mechanism", True))
     require_kill_signal = bool(payload.get("prompt_require_kill_signal", True))
     require_evidence_refs = bool(payload.get("prompt_require_evidence_refs", True))
-    if pressure not in {"raise", "strict", "high"} and min_strings <= 1:
+    attribution_metrics = [
+        str(metric)
+        for metric in _as_list(payload.get("prompt_attribution_repair_metrics"))
+        if str(metric).strip()
+    ]
+    if pressure not in {"raise", "strict", "high"} and min_strings <= 1 and not attribution_metrics:
         return system_prompt
     requirements = [
         "\n\n<market_evolve_prompt_contract>",
@@ -262,6 +267,11 @@ def _apply_prompt_contract_pressure(system_prompt: str, seed: SeedCell) -> str:
         f"minimum_information_strings: {min_strings}",
         "This is an evolved policy requirement, not commentary. Before returning, self-check the JSON against it.",
     ]
+    if attribution_metrics:
+        requirements.append("attribution_repair_metrics: " + ", ".join(attribution_metrics[:8]))
+        requirements.append(
+            "- This candidate policy exists because a prior hard experiment failed; address or request evidence for these repair metrics explicitly."
+        )
     if min_strings > 1:
         requirements.append(f"- Return at least {min_strings} valid information_strings unless the cell is genuinely empty.")
     if require_mechanism:

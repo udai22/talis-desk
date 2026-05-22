@@ -478,6 +478,11 @@ def apply_market_evolve_policy_to_seeds(
             for x in (tool_policy.get("source_family_targets") or [])
             if str(x).strip()
         ]
+        attribution_repair_metrics = _dedupe_metric_strings([
+            str(x)
+            for x in (prompt_policy.get("attribution_repair_metrics") or [])
+            if str(x).strip()
+        ])[:12]
         seed_lineage = _market_map_seed_lineage(payload)
         prompt_variant = choose_market_evolve_prompt_variant(seed, program=assigned_program)
         existing_tools = [
@@ -499,6 +504,13 @@ def apply_market_evolve_policy_to_seeds(
             "source_family_targets": source_targets,
             "prefer_learned_tools": bool(tool_policy.get("prefer_learned_tools")),
             "learned_tool_priority_boost": _float(tool_policy.get("learned_tool_priority_boost"), 0.0),
+            "prefer_missing_source_family": bool(tool_policy.get("prefer_missing_source_family")),
+            "min_source_families_per_trade_cell": _int_between(
+                tool_policy.get("min_source_families_per_trade_cell"),
+                default=0,
+                lo=0,
+                hi=12,
+            ),
             "max_tool_promotions_per_cycle": _int_between(
                 tool_policy.get("max_tool_promotions_per_cycle"),
                 default=3,
@@ -529,8 +541,32 @@ def apply_market_evolve_policy_to_seeds(
             "prompt_require_mechanism": bool(prompt_policy.get("require_mechanism", True)),
             "prompt_require_kill_signal": bool(prompt_policy.get("require_kill_signal", True)),
             "prompt_require_evidence_refs": bool(prompt_policy.get("require_evidence_refs", True)),
+            "prompt_attribution_repair_metrics": attribution_repair_metrics,
             "market_evolve_applied": True,
         })
+        if attribution_repair_metrics:
+            existing_proof_metrics = _string_list(payload.get("control_proof_metrics"))
+            payload["control_proof_metrics"] = _dedupe_metric_strings([
+                *existing_proof_metrics,
+                *attribution_repair_metrics,
+            ])[:12]
+            payload["control_collects_missing_falsification_gate_metrics"] = True
+            if not str(payload.get("control_decision") or "").strip():
+                payload["control_decision"] = "repair_failed_experiment_attribution"
+            if not str(payload.get("control_allowed_next_step") or "").strip():
+                payload["control_allowed_next_step"] = "attribution_policy_candidate"
+            payload["proof_gate_metric_hints"] = _merge_proof_metric_hints(
+                payload.get("proof_gate_metric_hints"),
+                _policy_proof_metric_hints(attribution_repair_metrics),
+            )
+            metric_text = " ".join(attribution_repair_metrics).lower()
+            if any(token in metric_text for token in ("fragile", "geometry", "verify", "scream", "source_independence")):
+                payload["alpha_geometry_route_directive"] = payload.get("alpha_geometry_route_directive") or "observe_attribution_repair_metric"
+                payload["alpha_geometry_action"] = payload.get("alpha_geometry_action") or "repair_failed_experiment_attribution"
+            if any(token in metric_text for token in ("price", "outcome", "realized_edge", "direction_hit")):
+                payload["prefer_price_anchor_tools"] = True
+            if "perfusion" in metric_text:
+                payload["prefer_information_perfusion_tools"] = True
         if existing_tools:
             payload["tool_candidates"] = existing_tools[:tool_limit]
         if persist:
@@ -5819,6 +5855,42 @@ def _dedupe_metric_strings(values: list[str]) -> list[str]:
         seen.add(text)
         out.append(text)
     return out
+
+
+def _policy_proof_metric_hints(metrics: list[str]) -> list[dict[str, str]]:
+    hints: list[dict[str, str]] = []
+    for metric in metrics[:12]:
+        key = _metric_base_key(metric)
+        hint = "collect_evidence_for_attribution_repair_metric"
+        if any(token in key for token in ("price", "outcome", "realized_edge", "direction_hit")):
+            hint = "attach_before_after_price_or_outcome_observation"
+        elif "perfusion" in key:
+            hint = "refresh_information_perfusion_cell_metrics"
+        elif any(token in key for token in ("fragile", "geometry", "verify", "scream", "source_independence")):
+            hint = "refresh_alpha_geometry_cell_metrics"
+        elif "tool" in key or "adapter" in key:
+            hint = "exercise_tool_proposal_or_learned_tool_eval"
+        elif "prompt" in key or "valid_string" in key:
+            hint = "sample_prompt_quality_and_valid_string_metrics"
+        hints.append({"metric": metric, "hint": hint})
+    return hints
+
+
+def _merge_proof_metric_hints(raw: Any, additions: list[dict[str, str]]) -> list[dict[str, str]]:
+    out: list[dict[str, str]] = []
+    seen: set[str] = set()
+    existing = raw if isinstance(raw, list) else []
+    for item in [*existing, *additions]:
+        if not isinstance(item, dict):
+            continue
+        metric = str(item.get("metric") or "").strip()
+        hint = str(item.get("hint") or "").strip()
+        key = f"{metric}|{hint}"
+        if not metric or not hint or key in seen:
+            continue
+        seen.add(key)
+        out.append({"metric": metric, "hint": hint})
+    return out[:16]
 
 
 def _scoreboard_cadence_readiness(

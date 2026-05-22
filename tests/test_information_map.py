@@ -66,6 +66,7 @@ from talis_desk.information_map.deep_scout_prompt import (
 )
 from talis_desk.information_map.market_evolve import (
     _experiment_decision,
+    persist_market_evolve_program,
     propose_market_evolve_mutation,
     propose_market_evolve_mutations,
     seed_default_market_evolve_program,
@@ -2467,6 +2468,70 @@ def test_market_evolve_prompt_contract_pressure_reaches_scout_prompt():
     assert "<market_evolve_prompt_contract>" in prompt
     assert "minimum_information_strings: 2" in prompt
     assert "Reject your own string if mechanism is missing" in prompt
+
+
+def test_market_evolve_attribution_repair_policy_reaches_seed_prompt_contract(tmp_path):
+    store = DeskStore(db_path=tmp_path / "desk.db")
+    import talis_desk.store as store_mod
+
+    store_mod._STORE = store
+    program = seed_default_market_evolve_program(
+        cycle_id="cycle_attr_policy_plan",
+        conn=store.conn,
+    )
+    genome = json.loads(json.dumps(program.genome))
+    genome["prompt_policy"]["contract_pressure"] = "raise"
+    genome["prompt_policy"]["attribution_repair_metrics"] = [
+        "candidate_avg_source_independence",
+        "candidate_avg_fragility",
+    ]
+    genome["tool_request_policy"]["prefer_missing_source_family"] = True
+    genome["tool_request_policy"]["min_source_families_per_trade_cell"] = 3
+    genome["tool_request_policy"]["source_family_targets"] = [
+        "hydromancer",
+        "our_hl_node",
+        "market_microstructure",
+    ]
+    program.genome = genome
+    persist_market_evolve_program(program, conn=store.conn)
+
+    seed = SeedCell(
+        seed_id="seed_attr_policy",
+        entity="HYPE",
+        horizon="intraday",
+        lens="on_chain",
+        bias_mode="frontier",
+        theme="validator_unstake",
+        payload={},
+    )
+    apply_market_evolve_policy_to_seeds(
+        [seed],
+        cycle_id="cycle_attr_policy",
+        conn=store.conn,
+    )
+
+    payload = seed.payload
+    assert payload["prompt_attribution_repair_metrics"] == [
+        "candidate_avg_source_independence",
+        "candidate_avg_fragility",
+    ]
+    assert payload["control_decision"] == "repair_failed_experiment_attribution"
+    assert payload["control_allowed_next_step"] == "attribution_policy_candidate"
+    assert payload["control_collects_missing_falsification_gate_metrics"] is True
+    assert payload["control_proof_metrics"] == payload["prompt_attribution_repair_metrics"]
+    assert payload["prefer_missing_source_family"] is True
+    assert payload["min_source_families_per_trade_cell"] == 3
+    assert payload["alpha_geometry_action"] == "repair_failed_experiment_attribution"
+
+    system_prompt = _apply_prompt_contract_pressure("BASE_PROMPT", seed)
+    assert "attribution_repair_metrics: candidate_avg_source_independence, candidate_avg_fragility" in system_prompt
+    assert "prior hard experiment failed" in system_prompt
+
+    user_prompt = _build_user_prompt(seed, tool_evidence=[])
+    assert "alpha_geometry_route_contract:" in user_prompt
+    assert "candidate_avg_source_independence" in user_prompt
+    assert "candidate_avg_fragility" in user_prompt
+    assert "refresh_alpha_geometry_cell_metrics" in user_prompt
 
 
 def test_market_evolve_scores_prompt_quality_and_raises_contract_pressure(tmp_path):
