@@ -34,6 +34,7 @@ PromptVariant = Literal[
     "concise_contract_v1",
     "flash_compact_v2",
     "flash_temporal_v3",
+    "flash_temporal_v4",
 ]
 
 
@@ -389,6 +390,25 @@ def build_deep_scout_system_prompt(variant: PromptVariant = "receptive_field_v1"
             "- Every string needs mechanism, expected outcome, kill signal, evidence_refs, and a second-order link.\n"
             "- suggested_tools must be copied exactly from allowed_tool_candidates.\n"
             "- Keep JSON small; no prose outside JSON.\n\n"
+            f"Return strict JSON only:\n{_FLASH_TEMPORAL_CONTRACT}"
+        )
+    if variant == "flash_temporal_v4":
+        return (
+            "You are a Talis Flash scout in a scale repair arm. Study only the assigned "
+            "market cell: entity, horizon, lens, bias, evidence, prior strings, and allowed "
+            "tools in the user packet.\n\n"
+            "Goal: emit exactly one top-level hypothesis that summarizes the strongest "
+            "valid information_string, plus 1-2 decision-changing information_strings. "
+            "Abstain only when every provided evidence packet is empty, stale for this "
+            "horizon, or unsupported by the allowed sources.\n\n"
+            "Scale-repair rules:\n"
+            "- Do not leave `hypothesis` empty when `information_strings` is non-empty.\n"
+            "- Do not leave `information_strings` empty when at least one evidence packet is fresh enough to update a watchlist, verifier task, route decision, or gap repair.\n"
+            "- If the evidence is thin, write a low-conviction map string with a concrete missing-edge kill_signal rather than vague prose.\n"
+            "- Every string must include time_horizon, time_scale, observed_at, source_time_basis, expires_at, temporal_confidence, extends_or_contradicts, and would_change_decision=true.\n"
+            "- Every evidence_refs value must cite a provided tool_call_log_id or source ref. If none exists, abstain and say the missing source in rationale_brief.\n"
+            "- suggested_tools must be copied exactly from allowed_tool_candidates; if none are useful, return an empty list rather than inventing.\n"
+            "- No prose outside JSON. Keep JSON small.\n\n"
             f"Return strict JSON only:\n{_FLASH_TEMPORAL_CONTRACT}"
         )
     return base + (

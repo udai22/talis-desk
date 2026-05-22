@@ -56,6 +56,10 @@ FILENAMES = {
     "coverage_gap_manifest": "coverage_gap_manifest.json",
 }
 
+MAX_PARSED_ARTIFACT_BYTES = 3_000_000
+MAX_RUN_JSON_ARTIFACT_TEXT = 60_000
+MAX_RUN_JSON_ARTIFACT_JSON_BYTES = 400_000
+
 
 REFERENCE_POST = {
     "source": "X",
@@ -167,7 +171,10 @@ def main() -> int:
     html_text = render_html(data)
     (output_dir / "index.html").write_text(html_text, encoding="utf-8")
     (output_dir / ".nojekyll").write_text("", encoding="utf-8")
-    (output_dir / "run.json").write_text(json.dumps(data, indent=2, sort_keys=True), encoding="utf-8")
+    (output_dir / "run.json").write_text(
+        json.dumps(_slim_run_json_data(data), indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
     print(f"PROMPT_VIEWER_INDEX={output_dir / 'index.html'}")
     return 0
 
@@ -183,11 +190,15 @@ def _parse_args() -> argparse.Namespace:
 def _read_artifact(path: Path) -> dict[str, Any]:
     text = path.read_text(encoding="utf-8") if path.exists() else ""
     parsed: Any = None
+    parse_skipped = False
     if path.suffix == ".json" and text:
-        try:
-            parsed = json.loads(text)
-        except Exception:
-            parsed = None
+        if len(text.encode("utf-8")) > MAX_PARSED_ARTIFACT_BYTES:
+            parse_skipped = True
+        else:
+            try:
+                parsed = json.loads(text)
+            except Exception:
+                parsed = None
     return {
         "path": str(path),
         "filename": path.name,
@@ -195,6 +206,7 @@ def _read_artifact(path: Path) -> dict[str, Any]:
         "text": text,
         "json": parsed,
         "bytes": len(text.encode("utf-8")),
+        "json_parse_skipped": parse_skipped,
     }
 
 
@@ -205,7 +217,7 @@ def _read_json(path: Path) -> dict[str, Any]:
 
 
 def _slim_embedded_data(data: dict[str, Any]) -> dict[str, Any]:
-    """Keep the phone page fast while preserving full raw files in run.json."""
+    """Keep the phone page fast; run.json gets its own publication-safe slim pass."""
     artifacts = data.get("artifacts") if isinstance(data.get("artifacts"), dict) else {}
     slim = dict(data)
     slim["artifacts"] = {
@@ -216,13 +228,72 @@ def _slim_embedded_data(data: dict[str, Any]) -> dict[str, Any]:
     return slim
 
 
+def _slim_run_json_data(data: dict[str, Any]) -> dict[str, Any]:
+    """Keep the published audit bundle below GitHub Pages file-size limits.
+
+    The source artifact paths remain in the payload, but very large model-output
+    arrays are summarized so a 1,000-scout run can still ship to the phone page.
+    """
+    artifacts = data.get("artifacts") if isinstance(data.get("artifacts"), dict) else {}
+    slim = dict(data)
+    slim["artifacts"] = {
+        key: _slim_artifact_for_run_json(value)
+        for key, value in artifacts.items()
+        if isinstance(value, dict)
+    }
+    return slim
+
+
+def _slim_artifact_for_run_json(artifact: dict[str, Any]) -> dict[str, Any]:
+    out = dict(artifact)
+    text = str(out.get("text") or "")
+    if len(text) > MAX_RUN_JSON_ARTIFACT_TEXT:
+        out["text"] = (
+            text[:MAX_RUN_JSON_ARTIFACT_TEXT]
+            + "\n\n... truncated in published run.json. Full raw artifact remains at the source path. ..."
+        )
+        out["truncated_for_run_json"] = True
+    raw_json = out.get("json")
+    if raw_json is not None:
+        try:
+            raw_json_bytes = len(json.dumps(raw_json, ensure_ascii=True, default=str).encode("utf-8"))
+        except Exception:
+            raw_json_bytes = MAX_RUN_JSON_ARTIFACT_JSON_BYTES + 1
+        if raw_json_bytes > MAX_RUN_JSON_ARTIFACT_JSON_BYTES:
+            out["json"] = _summarize_large_json(raw_json)
+            out["json_summarized_for_run_json"] = True
+    return out
+
+
+def _summarize_large_json(raw: Any) -> Any:
+    if isinstance(raw, list):
+        sample = raw[:5]
+        return {
+            "summary_type": "large_list",
+            "count": len(raw),
+            "sample": sample,
+        }
+    if isinstance(raw, dict):
+        keys = list(raw.keys())
+        sample = {key: raw[key] for key in keys[:20]}
+        return {
+            "summary_type": "large_object",
+            "keys": keys[:80],
+            "sample": sample,
+        }
+    return {
+        "summary_type": type(raw).__name__,
+        "value_preview": str(raw)[:2000],
+    }
+
+
 def _slim_artifact_for_page(artifact: dict[str, Any], *, max_text: int = 12000) -> dict[str, Any]:
     out = dict(artifact)
     text = str(out.get("text") or "")
     if len(text) > max_text:
         out["text"] = (
             text[:max_text]
-            + "\n\n... truncated in embedded page data. Open run.json or the source artifact for the full audit trail. ..."
+            + "\n\n... truncated in embedded page data. Open the source artifact for the full audit trail. ..."
         )
         out["json"] = None
         out["truncated_for_page"] = True
@@ -287,6 +358,7 @@ def render_html(data: dict[str, Any]) -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <link rel="icon" href="data:,">
   <title>Talis Scout Lab</title>
   <style>
     :root {{
@@ -338,7 +410,7 @@ def render_html(data: dict[str, Any]) -> str:
       padding: max(16px, env(safe-area-inset-top)) 14px 58px;
       overflow-x: hidden;
     }}
-    header, section, article, .hero, .glass, .answer, .map, .story-card, .source-card, .scout-card, .prompt-window, .logic-card {{
+    header, section, article, .hero, .glass, .answer, .map, .story-card, .source-card, .scout-card, .prompt-window, .logic-card, .storyline, .swipe-deck {{
       min-width: 0;
       max-width: 100%;
     }}
@@ -456,6 +528,7 @@ def render_html(data: dict[str, Any]) -> str:
     .storyline {{
       display: grid;
       gap: 14px;
+      overflow-x: hidden;
     }}
     .story-hero {{
       position: relative;
@@ -569,8 +642,11 @@ def render_html(data: dict[str, Any]) -> str:
     .swipe-deck {{
       display: grid;
       grid-auto-flow: column;
-      grid-auto-columns: minmax(280px, 78%);
+      grid-auto-columns: 78%;
       gap: 10px;
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
       overflow-x: auto;
       padding: 2px 2px 16px;
       scroll-snap-type: x mandatory;
@@ -1754,7 +1830,7 @@ def render_html(data: dict[str, Any]) -> str:
     @media (max-width: 860px) {{
       .shell {{ padding-left: 12px; padding-right: 12px; }}
       .swipe-head {{ display: grid; }}
-      .swipe-deck {{ grid-auto-columns: minmax(286px, 88%); }}
+      .swipe-deck {{ grid-auto-columns: 88%; }}
       .swipe-card {{ min-height: 470px; }}
       .concierge {{ grid-template-columns: 1fr; }}
       .hero {{ grid-template-columns: 1fr; }}
@@ -1807,6 +1883,7 @@ def render_html(data: dict[str, Any]) -> str:
         grid-template-columns: 1fr;
       }}
       .geometry-plane {{ min-height: 320px; }}
+      .geo-dot span {{ display: none; }}
       .node {{ width: 118px; min-height: 70px; padding: 9px; }}
       .n1 {{ left: 3%; top: 24%; }}
       .n2 {{ right: 3%; top: 24%; }}
@@ -3328,6 +3405,32 @@ def _render_live_scout_canary_chapter(*, data: dict[str, Any]) -> str:
     )
     if not gate_cards:
         gate_cards = '<article class="output-panel"><span>blocked</span><h3>No live gates yet.</h3><p>The canary produced a preflight report, but no provider calls were made.</p></article>'
+    n_requested = int(report.get("n_scouts_requested") or 0)
+    if n_requested >= 1000:
+        stage_label = "00g / 1,000-scout shadow candidate"
+        stage_title = "The live provider layer just completed a 1,000-scout shadow run."
+        stage_copy = (
+            "This is no longer a toy canary. It calls the real provider under a hard cap, "
+            "records exact prompts and responses, stores strings into the map, builds geometry, "
+            "and then hands the run to the tournament evaluator. A pass here earns only the next "
+            "shadow proof, not scheduled production."
+        )
+    elif n_requested >= 100:
+        stage_label = "00g / 100-scout live ramp"
+        stage_title = "The live provider layer is proving distribution quality."
+        stage_copy = (
+            "This gate calls the real provider across a broader seed distribution under a hard cap, "
+            "records the exact prompts and responses, and refuses to open the 1,000-scout ramp until "
+            "provider quality, evidence, storage, and geometry stay clean."
+        )
+    else:
+        stage_label = "00g / live-provider canary"
+        stage_title = "The last gate before broader paid scale is the live provider run."
+        stage_copy = (
+            "The offline rehearsal proved mechanics. This gate calls the real provider under a hard cap, "
+            "records the exact prompts and responses, and refuses to open the next ramp until provider "
+            "quality, evidence, storage, and geometry stay clean."
+        )
     preflight_cards = "".join(
         '<div>'
         f'<strong>{html.escape("yes" if ok else "no")}</strong>'
@@ -3364,13 +3467,13 @@ def _render_live_scout_canary_chapter(*, data: dict[str, Any]) -> str:
     return f"""
         <section class="chapter">
           <div class="chapter-head">
-            <div class="chapter-label">00g / live-provider canary</div>
-            <h2>The last gate before paid scale is the tiny live canary.</h2>
-            <p>The 100-scout rehearsal proved mechanics with an offline shim. This gate calls the real provider under a hard cap, records the exact prompts and responses, and refuses to call 1,000 scouts until provider quality, evidence, storage, and geometry stay clean.</p>
+            <div class="chapter-label">{html.escape(stage_label)}</div>
+            <h2>{html.escape(stage_title)}</h2>
+            <p>{html.escape(stage_copy)}</p>
           </div>
           <div class="score-tape">
             <div><strong>{html.escape(str(verdict.get("status") or "unknown"))}</strong><small>live canary status</small></div>
-            <div><strong>{html.escape(str(scouts.get("completed") or 0))}/{html.escape(str(report.get("n_scouts_requested") or 0))}</strong><small>scouts completed</small></div>
+            <div><strong>{html.escape(str(scouts.get("completed") or 0))}/{html.escape(str(n_requested))}</strong><small>scouts completed</small></div>
             <div><strong>${html.escape(str(scouts.get("total_cost_usd_estimate", 0)))}</strong><small>estimated model/tool spend</small></div>
             <div><strong>{html.escape(str(info.get("string_count") or 0))}</strong><small>live strings stored</small></div>
             <div><strong>{html.escape(str(transcript.get("call_count") or 0))}</strong><small>provider calls captured</small></div>
@@ -3443,13 +3546,14 @@ def _render_live_scout_tournament_chapter(*, data: dict[str, Any]) -> str:
         <section class="chapter">
           <div class="chapter-head">
             <div class="chapter-label">00h / live tournament gate</div>
-            <h2>The system now grades whether it has earned a 100-scout run.</h2>
-            <p>This is the evaluator-guided evolution step: canary reports become candidates, candidates are scored on reliability, latency, string yield, evidence support, duplicate rate, geometry impact, and self-healing. A wider live run is blocked unless a candidate wins every hard gate.</p>
+            <h2>The system now grades which live ramp it has earned.</h2>
+            <p>This is the evaluator-guided evolution step: live reports become candidates, candidates are scored on reliability, latency, string yield, evidence support, duplicate rate, prompt structure, geometry impact, and self-healing. A wider live run is blocked unless a candidate wins every hard gate.</p>
           </div>
           <div class="score-tape">
             <div><strong>{html.escape(str(decision.get("decision") or "unknown"))}</strong><small>promotion decision</small></div>
             <div><strong>{html.escape("yes" if decision.get("ready_for_live_100") else "no")}</strong><small>ready for 100 scouts</small></div>
             <div><strong>{html.escape("yes" if decision.get("ready_for_live_1000") else "no")}</strong><small>ready for 1,000 scouts</small></div>
+            <div><strong>{html.escape("yes" if decision.get("ready_for_scheduled_production") else "no")}</strong><small>scheduled production</small></div>
             <div><strong>{html.escape(str(quality.get("success_rate") or 0))}</strong><small>best success rate</small></div>
             <div><strong>{html.escape(str(quality.get("provider_error_rate") or 0))}</strong><small>provider error rate</small></div>
             <div><strong>{html.escape(str(map_effect.get("geometry_cells") or 0))}</strong><small>geometry cells</small></div>
@@ -3473,7 +3577,7 @@ def _render_live_scout_tournament_chapter(*, data: dict[str, Any]) -> str:
           </article>
           <article class="workbench-panel" style="margin-top:10px">
             <h3>Next evolution arms</h3>
-            <p>The next paid calls should be these tiny arms, not a 100-scout run. If one arm passes the tournament, then it earns the 100-scout ramp.</p>
+            <p>{html.escape("The next paid call is the approved ramp below; scheduled production stays blocked." if decision.get("ready_for_live_1000") else "The next paid calls should be these repair arms until one earns the next ramp.")}</p>
             <div class="output-grid" style="margin-top:10px">{plan_cards}</div>
           </article>
         </section>
@@ -5222,7 +5326,7 @@ def _render_panel(panel_id: str, title: str, data: dict[str, Any], key: str, *, 
         content = (
             content[:60000]
             + f"\n\n... trimmed for mobile display after 60000 of {full_len} characters. "
-            "Open run.json or the source artifact for the full audit trail. ..."
+            "Open the source artifact for the full audit trail. ..."
         )
     return f"""
       <article class="panel {'active' if active else ''}" data-panel="{html.escape(panel_id)}">

@@ -35,6 +35,13 @@ DEFAULT_THRESHOLDS = {
     "distribution_max_duplicate_rate": 0.20,
     "distribution_max_structural_flag_rate": 0.10,
     "distribution_min_geometry_cells": 50,
+    "scale_min_scouts": 1000,
+    "scale_min_success_rate": 0.90,
+    "scale_max_provider_error_rate": 0.02,
+    "scale_max_duplicate_rate": 0.20,
+    "scale_max_structural_flag_rate": 0.10,
+    "scale_min_geometry_cells": 500,
+    "scale_min_information_strings": 1000,
 }
 
 
@@ -57,6 +64,13 @@ def main() -> int:
         "distribution_max_duplicate_rate": args.distribution_max_duplicate_rate,
         "distribution_max_structural_flag_rate": args.distribution_max_structural_flag_rate,
         "distribution_min_geometry_cells": args.distribution_min_geometry_cells,
+        "scale_min_scouts": args.scale_min_scouts,
+        "scale_min_success_rate": args.scale_min_success_rate,
+        "scale_max_provider_error_rate": args.scale_max_provider_error_rate,
+        "scale_max_duplicate_rate": args.scale_max_duplicate_rate,
+        "scale_max_structural_flag_rate": args.scale_max_structural_flag_rate,
+        "scale_min_geometry_cells": args.scale_min_geometry_cells,
+        "scale_min_information_strings": args.scale_min_information_strings,
     }
     report_paths = [Path(p).expanduser().resolve() for p in args.reports]
     tournament = evaluate_live_scout_tournament(report_paths, thresholds=thresholds)
@@ -96,6 +110,13 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--distribution-max-duplicate-rate", type=float, default=DEFAULT_THRESHOLDS["distribution_max_duplicate_rate"])
     parser.add_argument("--distribution-max-structural-flag-rate", type=float, default=DEFAULT_THRESHOLDS["distribution_max_structural_flag_rate"])
     parser.add_argument("--distribution-min-geometry-cells", type=int, default=DEFAULT_THRESHOLDS["distribution_min_geometry_cells"])
+    parser.add_argument("--scale-min-scouts", type=int, default=DEFAULT_THRESHOLDS["scale_min_scouts"])
+    parser.add_argument("--scale-min-success-rate", type=float, default=DEFAULT_THRESHOLDS["scale_min_success_rate"])
+    parser.add_argument("--scale-max-provider-error-rate", type=float, default=DEFAULT_THRESHOLDS["scale_max_provider_error_rate"])
+    parser.add_argument("--scale-max-duplicate-rate", type=float, default=DEFAULT_THRESHOLDS["scale_max_duplicate_rate"])
+    parser.add_argument("--scale-max-structural-flag-rate", type=float, default=DEFAULT_THRESHOLDS["scale_max_structural_flag_rate"])
+    parser.add_argument("--scale-min-geometry-cells", type=int, default=DEFAULT_THRESHOLDS["scale_min_geometry_cells"])
+    parser.add_argument("--scale-min-information-strings", type=int, default=DEFAULT_THRESHOLDS["scale_min_information_strings"])
     return parser.parse_args()
 
 
@@ -105,15 +126,30 @@ def evaluate_live_scout_tournament(
     thresholds: dict[str, float | int] | None = None,
 ) -> dict[str, Any]:
     thresholds = {**DEFAULT_THRESHOLDS, **(thresholds or {})}
-    candidates = [
-        evaluate_live_scout_candidate(path, thresholds=thresholds)
-        for path in report_paths
-        if path.exists()
-    ]
+    candidates = []
+    for input_order, path in enumerate(report_paths):
+        if not path.exists():
+            continue
+        candidate = evaluate_live_scout_candidate(path, thresholds=thresholds)
+        if candidate:
+            candidate["input_order"] = input_order
+            candidates.append(candidate)
     candidates = [c for c in candidates if c]
     candidates.sort(key=lambda row: (_stage_level(row), bool(row["promotion_eligible"]), row["score"]), reverse=True)
     top_stage = _stage_level(candidates[0]) if candidates else 0
     promoted = [c for c in candidates if c["promotion_eligible"] and _stage_level(c) == top_stage]
+    if not promoted and top_stage >= 3:
+        top_stage_latest_order = max(
+            int(c.get("input_order") or 0)
+            for c in candidates
+            if _stage_level(c) == top_stage
+        )
+        promoted = [
+            c for c in candidates
+            if c["promotion_eligible"]
+            and _stage_level(c) >= 2
+            and int(c.get("input_order") or 0) > top_stage_latest_order
+        ]
     winner = promoted[0] if promoted else (candidates[0] if candidates else None)
     decision = _promotion_decision(winner=winner, promoted=promoted, thresholds=thresholds)
     report = {
@@ -121,7 +157,7 @@ def evaluate_live_scout_tournament(
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "purpose": (
             "Decide whether a live prompt/provider policy is good enough to spend on "
-            "the next 100-scout ramp."
+            "the next 100-scout, 1,000-scout, or shadow-production ramp."
         ),
         "thresholds": thresholds,
         "input_reports": [str(p) for p in report_paths],
@@ -212,6 +248,16 @@ def evaluate_live_scout_candidate(path: Path, *, thresholds: dict[str, float | i
             "distribution_structural_flag_rate_le_0_10": structural_flag_rate <= float(thresholds["distribution_max_structural_flag_rate"]),
             "distribution_geometry_cells_ge_50": int(geometry.get("cell_count") or 0) >= int(thresholds["distribution_min_geometry_cells"]),
         })
+    if n_requested >= int(thresholds["scale_min_scouts"]):
+        gates.update({
+            "scale_sample_size_ge_1000": n_requested >= int(thresholds["scale_min_scouts"]),
+            "scale_success_rate_ge_0_90": success_rate >= float(thresholds["scale_min_success_rate"]),
+            "scale_provider_error_rate_le_0_02": provider_error_rate <= float(thresholds["scale_max_provider_error_rate"]),
+            "scale_duplicate_rate_le_0_20": duplicate_rate <= float(thresholds["scale_max_duplicate_rate"]),
+            "scale_structural_flag_rate_le_0_10": structural_flag_rate <= float(thresholds["scale_max_structural_flag_rate"]),
+            "scale_geometry_cells_ge_500": int(geometry.get("cell_count") or 0) >= int(thresholds["scale_min_geometry_cells"]),
+            "scale_information_strings_ge_1000": string_count >= int(thresholds["scale_min_information_strings"]),
+        })
     failed_gates = [name for name, ok in gates.items() if not ok]
     prompt_variants = _prompt_variants(report, scouts, output_rows)
     candidate = {
@@ -289,6 +335,7 @@ def render_tournament_markdown(report: dict[str, Any]) -> str:
         f"- decision: `{decision.get('decision')}`",
         f"- ready_for_live_100: `{decision.get('ready_for_live_100')}`",
         f"- ready_for_live_1000: `{decision.get('ready_for_live_1000')}`",
+        f"- ready_for_scheduled_production: `{decision.get('ready_for_scheduled_production')}`",
         f"- reason: {decision.get('reason')}",
         "",
         "## Candidates",
@@ -359,6 +406,8 @@ def _score_candidate(candidate: dict[str, Any]) -> float:
 def _stage_level(candidate: dict[str, Any]) -> int:
     sample = candidate.get("sample") if isinstance(candidate.get("sample"), dict) else {}
     requested = int(sample.get("requested") or 0)
+    if requested >= DEFAULT_THRESHOLDS["scale_min_scouts"]:
+        return 3
     if requested >= DEFAULT_THRESHOLDS["distribution_min_scouts"]:
         return 2
     if requested >= DEFAULT_THRESHOLDS["min_scouts"]:
@@ -378,18 +427,35 @@ def _promotion_decision(
             "promoted_candidate_id": "",
             "ready_for_live_100": False,
             "ready_for_live_1000": False,
+            "ready_for_scheduled_production": False,
             "reason": "No readable canary reports were provided.",
         }
     if promoted:
         sample = winner.get("sample") if isinstance(winner.get("sample"), dict) else {}
+        if int(sample.get("requested") or 0) >= int(thresholds["scale_min_scouts"]):
+            return {
+                "decision": "promote_to_shadow_production_trial",
+                "promoted_candidate_id": winner["candidate_id"],
+                "ready_for_live_100": True,
+                "ready_for_live_1000": True,
+                "ready_for_scheduled_production": False,
+                "reason": (
+                    "The 1,000-scout live distribution passed provider reliability, "
+                    "string yield, duplicate, prompt-quality, temporal-structure, "
+                    "geometry, self-healing, and scale-volume gates. It earns a repeat "
+                    "1,000-scout shadow-production trial. Scheduled production remains "
+                    "blocked until repeatability is proven across independent runs."
+                ),
+            }
         if int(sample.get("requested") or 0) >= int(thresholds["distribution_min_scouts"]):
             return {
                 "decision": "promote_to_1000_scout_ramp",
                 "promoted_candidate_id": winner["candidate_id"],
                 "ready_for_live_100": True,
                 "ready_for_live_1000": True,
+                "ready_for_scheduled_production": False,
                 "reason": (
-                    "The 100-scout live distribution passed provider reliability, "
+                    "The 100+ scout live distribution passed provider reliability, "
                     "string yield, duplicate, prompt-quality, temporal-structure, "
                     "geometry, and self-healing gates. A 1,000-scout ramp is allowed "
                     "under a hard cap; it is still a ramp, not an always-on production schedule."
@@ -400,6 +466,7 @@ def _promotion_decision(
             "promoted_candidate_id": winner["candidate_id"],
             "ready_for_live_100": True,
             "ready_for_live_1000": False,
+            "ready_for_scheduled_production": False,
             "reason": (
                 "The best live candidate passed sample size, provider reliability, "
                 "string yield, evidence, duplicate, geometry, and self-healing gates. "
@@ -412,9 +479,11 @@ def _promotion_decision(
         "promoted_candidate_id": "",
         "ready_for_live_100": False,
         "ready_for_live_1000": False,
+        "ready_for_scheduled_production": False,
         "reason": (
             f"The top candidate `{winner['candidate_id']}` still failed: "
-            f"{', '.join(winner.get('failed_gates') or [])}. Do not spend on 100 scouts yet."
+            f"{', '.join(winner.get('failed_gates') or [])}. "
+            f"Do not promote the {_stage_name(winner)} stage yet."
         ),
     }
 
@@ -440,6 +509,25 @@ def _next_experiment_plan(
         ]
     if winner.get("promotion_eligible"):
         sample = winner.get("sample") if isinstance(winner.get("sample"), dict) else {}
+        if int(sample.get("requested") or 0) >= int(thresholds["scale_min_scouts"]):
+            return [
+                {
+                    "id": "repeat_1000_shadow_trial",
+                    "purpose": "Prove the 1,000-scout policy is repeatable before any scheduled production posture.",
+                    "command": (
+                        "PYTHONPATH=. python scripts/run_live_scout_canary.py --n-scouts 1000 "
+                        "--concurrency 8 --cost-cap-usd 5.00 --provider-timeout-s 45 "
+                        f"--prompt-variant {winner['configuration']['prompt_variants'][0]} "
+                        "--max-tool-iterations 0 --seed-rng 20260523 --allow-live-spend"
+                    ),
+                    "promotion_rule": (
+                        "Scheduled production requires two independent 1,000-scout shadow runs with provider errors <= "
+                        f"{thresholds['scale_max_provider_error_rate']}, success >= {thresholds['scale_min_success_rate']}, "
+                        f"duplicate rate <= {thresholds['scale_max_duplicate_rate']}, structural flag rate <= "
+                        f"{thresholds['scale_max_structural_flag_rate']}, and stable geometry/coverage deltas."
+                    ),
+                }
+            ]
         if int(sample.get("requested") or 0) >= int(thresholds["distribution_min_scouts"]):
             return [
                 {
@@ -452,9 +540,11 @@ def _next_experiment_plan(
                         "--max-tool-iterations 0 --allow-live-spend"
                     ),
                     "promotion_rule": (
-                        "Promote to scheduled production only if the 1,000-scout run keeps provider errors <= "
+                        "Promote to a repeat 1,000-scout shadow trial only if the 1,000-scout run keeps provider errors <= "
                         f"{thresholds['distribution_max_provider_error_rate']}, success >= {thresholds['distribution_min_success_rate']}, "
-                        f"duplicate rate <= {thresholds['distribution_max_duplicate_rate']}, and produces usable geometry/coverage deltas."
+                        f"duplicate rate <= {thresholds['distribution_max_duplicate_rate']}, structural misses <= "
+                        f"{thresholds['distribution_max_structural_flag_rate']}, and produces usable geometry/coverage deltas. "
+                        "Scheduled production remains blocked until an independent repeat 1,000 run passes."
                     ),
                 }
             ]
@@ -477,6 +567,47 @@ def _next_experiment_plan(
         ]
     failed = set(winner.get("failed_gates") or [])
     plan: list[dict[str, Any]] = []
+    sample = winner.get("sample") if isinstance(winner.get("sample"), dict) else {}
+    requested = int(sample.get("requested") or 0)
+    scale_quality_failed = bool({
+        "distribution_success_rate_ge_0_90",
+        "distribution_structural_flag_rate_le_0_10",
+        "scale_success_rate_ge_0_90",
+        "scale_structural_flag_rate_le_0_10",
+        "scale_information_strings_ge_1000",
+    }.intersection(failed))
+    if requested >= int(thresholds["scale_min_scouts"]) and scale_quality_failed:
+        plan.append({
+            "id": "flash_temporal_v4_repair_200",
+            "purpose": "Repair the 1,000-run failure mode before buying another broad ramp: missing top-level hypotheses, empty model strings, and structural metadata gaps.",
+            "command": (
+                "PYTHONPATH=. python scripts/run_live_scout_canary.py --n-scouts 200 "
+                "--concurrency 4 --cost-cap-usd 1.00 --provider-timeout-s 45 "
+                "--prompt-variant flash_temporal_v4 --max-tool-iterations 0 "
+                "--seed-rng 20260524 --allow-live-spend"
+            ),
+            "promotion_rule": (
+                "Only rerun 1,000 if the 200-scout repair arm achieves success >= "
+                f"{thresholds['distribution_min_success_rate']}, structural flag rate <= "
+                f"{thresholds['distribution_max_structural_flag_rate']}, provider errors <= "
+                f"{thresholds['distribution_max_provider_error_rate']}, duplicate rate <= "
+                f"{thresholds['distribution_max_duplicate_rate']}, and preserves string yield."
+            ),
+        })
+        plan.append({
+            "id": "seed_routing_gap_audit",
+            "purpose": "Audit failed cells by lens/horizon/source family so scarce scouts stop landing on cells whose required evidence route is missing.",
+            "command": (
+                "python - <<'PY'\n"
+                "import json, collections, pathlib\n"
+                "p=pathlib.Path('PROMPT_OUTPUT_DIR/live_scout_canary_outputs.json')\n"
+                "rows=json.loads(p.read_text())\n"
+                "bad=[r for r in rows if any('missing_hypothesis' in str(f) or 'missing_information_strings' in str(f) or 'unresolved_evidence_refs' in str(f) for f in (r.get('quality_flags') or []))]\n"
+                "print(collections.Counter((r.get('lens'), r.get('horizon')) for r in bad).most_common(30))\n"
+                "PY"
+            ),
+            "promotion_rule": "The repair prompt is not enough if failures cluster in lenses whose tool routes are missing; patch routing/tool coverage before another 1,000 run.",
+        })
     if "provider_error_rate_le_max" in failed or "avg_latency_le_max" in failed:
         plan.append({
             "id": "flash_compact_latency_arm",
@@ -510,14 +641,20 @@ def _next_experiment_plan(
             ),
             "promotion_rule": "Duplicate hypothesis rate must fall below 35% while preserving string yield and evidence support.",
         })
-    if "structural_flag_rate_le_max" in failed or "avg_prompt_quality_ge_min" in failed or "low_prompt_quality_rate_le_max" in failed:
+    if (
+        "structural_flag_rate_le_max" in failed
+        or "distribution_structural_flag_rate_le_0_10" in failed
+        or "scale_structural_flag_rate_le_0_10" in failed
+        or "avg_prompt_quality_ge_min" in failed
+        or "low_prompt_quality_rate_le_max" in failed
+    ):
         plan.append({
             "id": "flash_temporal_quality_arm",
             "purpose": "Keep the compact latency envelope while restoring mandatory temporal metadata.",
             "command": (
                 "PYTHONPATH=. python scripts/run_live_scout_canary.py --n-scouts 10 "
                 "--concurrency 1 --cost-cap-usd 0.10 --provider-timeout-s 45 "
-                "--prompt-variant flash_temporal_v3 --max-tool-iterations 0 --allow-live-spend"
+                "--prompt-variant flash_temporal_v4 --max-tool-iterations 0 --allow-live-spend"
             ),
             "promotion_rule": "Temporal/structural quality flags must stay <= 10% while provider errors remain <= 10%.",
         })
@@ -547,9 +684,17 @@ def _system_performance(candidates: list[dict[str, Any]], *, winner: dict[str, A
     sample = best.get("sample") if isinstance(best.get("sample"), dict) else {}
     requested = int(sample.get("requested") or 0)
     if best.get("promotion_eligible"):
-        if requested >= int(DEFAULT_THRESHOLDS["distribution_min_scouts"]):
+        if requested >= int(DEFAULT_THRESHOLDS["scale_min_scouts"]):
             summary = (
-                "The live 100-scout distribution is clean enough for a capped 1,000-scout ramp: "
+                "The live 1,000-scout distribution is clean enough for a repeated "
+                "shadow-production trial: provider calls completed, strings were stored, "
+                "synthesis promoted hypotheses, geometry cells were created, and self-healing "
+                "tasks ran at scale. The remaining blocker is repeatability across an "
+                "independent 1,000-scout run before any scheduled production posture."
+            )
+        elif requested >= int(DEFAULT_THRESHOLDS["distribution_min_scouts"]):
+            summary = (
+                "The live 100+ scout distribution is clean enough for a capped 1,000-scout ramp: "
                 "provider calls completed, strings were stored, synthesis promoted hypotheses, "
                 "geometry cells were created, and self-healing tasks ran. The remaining blocker "
                 "is 1,000-scout stability before any scheduled production posture."
@@ -562,11 +707,19 @@ def _system_performance(candidates: list[dict[str, Any]], *, winner: dict[str, A
                 "is distributional stability at 100, not the 10-scout gate."
             )
     else:
-        summary = (
-            "The map path is functioning when provider calls complete: strings are stored, "
-            "synthesis promotes hypotheses, geometry cells are created, and self-healing tasks run. "
-            "The current blocker is provider/prompt reliability, not graph storage."
-        )
+        if requested >= int(DEFAULT_THRESHOLDS["scale_min_scouts"]):
+            summary = (
+                "The 1,000-scout map path functioned: strings were stored, synthesis promoted "
+                "hypotheses, geometry cells were created, and self-healing tasks ran. The current "
+                "blocker is scale-quality: too many scouts left the top-level hypothesis or model "
+                "string contract empty, and structural metadata misses exceeded the 10% gate."
+            )
+        else:
+            summary = (
+                "The map path is functioning when provider calls complete: strings are stored, "
+                "synthesis promotes hypotheses, geometry cells are created, and self-healing tasks run. "
+                "The current blocker is provider/prompt reliability, not graph storage."
+            )
     return {
         "summary": summary,
         "ready_for_full_run": False,
@@ -579,9 +732,17 @@ def _system_performance(candidates: list[dict[str, Any]], *, winner: dict[str, A
         "best_geometry_cells": m["geometry_cells"],
         "best_coverage_ratio": m["coverage_ratio"],
         "full_run_boundary": (
-            "A 1,000-scout ramp is now allowed under a hard cap, but scheduled production remains blocked until that broader run repeats the same quality curve."
-            if best.get("promotion_eligible") and requested >= int(DEFAULT_THRESHOLDS["distribution_min_scouts"]) else
-            "A 100-scout live ramp is blocked unless one candidate passes all hard gates. A 1,000-scout run remains blocked until the 100-scout ramp repeats the same curve."
+            "Scheduled production remains blocked until a repeat 1,000-scout shadow trial passes with stable provider reliability, duplicate rate, prompt structure, geometry, and coverage deltas."
+            if best.get("promotion_eligible") and requested >= int(DEFAULT_THRESHOLDS["scale_min_scouts"]) else
+            (
+                "A 1,000-scout ramp is now allowed under a hard cap, but scheduled production remains blocked until that broader run repeats the same quality curve."
+                if best.get("promotion_eligible") and requested >= int(DEFAULT_THRESHOLDS["distribution_min_scouts"]) else
+                (
+                    "Do not repeat the 1,000-scout ramp until a smaller repair arm proves success >= 90% and structural misses <= 10%."
+                    if requested >= int(DEFAULT_THRESHOLDS["scale_min_scouts"]) else
+                    "A 100-scout live ramp is blocked unless one candidate passes all hard gates. A 1,000-scout run remains blocked until the 100-scout ramp repeats the same curve."
+                )
+            )
         ),
     }
 
@@ -589,6 +750,8 @@ def _system_performance(candidates: list[dict[str, Any]], *, winner: dict[str, A
 def _interpret_candidate(candidate: dict[str, Any]) -> str:
     if candidate["promotion_eligible"]:
         sample = candidate.get("sample") if isinstance(candidate.get("sample"), dict) else {}
+        if int(sample.get("requested") or 0) >= DEFAULT_THRESHOLDS["scale_min_scouts"]:
+            return "This 1,000-scout distribution is clean enough for a repeat shadow-production trial, but not scheduled production."
         if int(sample.get("requested") or 0) >= DEFAULT_THRESHOLDS["distribution_min_scouts"]:
             return "This 100-scout distribution is clean enough for a capped 1,000-scout ramp, but not scheduled production."
         return "This candidate is clean enough for a 100-scout live ramp, but not for direct 1,000."
@@ -598,6 +761,10 @@ def _interpret_candidate(candidate: dict[str, Any]) -> str:
         fragments.append("provider reliability is not stable enough")
     if "structural_flag_rate_le_max" in failed:
         fragments.append("the output contract is missing required temporal/structural fields")
+    if "distribution_structural_flag_rate_le_0_10" in failed or "scale_structural_flag_rate_le_0_10" in failed:
+        fragments.append("structural misses are above the 10% distribution gate")
+    if "distribution_success_rate_ge_0_90" in failed or "scale_success_rate_ge_0_90" in failed:
+        fragments.append("useful scout completion is below the 90% scale gate")
     if "avg_prompt_quality_ge_min" in failed or "low_prompt_quality_rate_le_max" in failed:
         fragments.append("prompt quality is not consistently high enough")
     if "success_rate_ge_min" in failed:
@@ -611,6 +778,17 @@ def _interpret_candidate(candidate: dict[str, Any]) -> str:
     if not fragments:
         fragments.append("one or more map-quality gates failed")
     return "Blocked from scale because " + ", ".join(fragments) + "."
+
+
+def _stage_name(candidate: dict[str, Any]) -> str:
+    level = _stage_level(candidate)
+    if level >= 3:
+        return "1,000-scout"
+    if level == 2:
+        return "100-scout"
+    if level == 1:
+        return "10-scout"
+    return "canary"
 
 
 def _prompt_variants(report: dict[str, Any], scouts: dict[str, Any], output_rows: list[Any]) -> list[str]:

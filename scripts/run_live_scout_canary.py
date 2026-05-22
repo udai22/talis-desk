@@ -1,10 +1,12 @@
 #!/usr/bin/env python
-"""Run the tiny live-provider canary before scaling scout spend.
+"""Run a live-provider scout canary/ramp before scaling scout spend.
 
-The 100-scout readiness slice proves orchestration with a deterministic local
-model/tool shim. This canary proves the next layer: the real provider import,
-real prompt formatting, real tool atlas, real evidence dispatch, real string
-storage, and the same map/geometry/governor path under a hard cost cap.
+The deterministic readiness slice proves orchestration with a local model/tool
+shim. This runner proves the next layer: real provider import, real prompt
+formatting, real tool atlas, real evidence dispatch, real string storage, and
+the same map/geometry/governor path under a hard cost cap. It can run tiny
+canaries, 100-scout distribution ramps, and 1,000-scout shadow candidates; the
+tournament evaluator remains the promotion authority.
 
 Live calls require ``--allow-live-spend`` on purpose. Running without it still
 writes a preflight report and viewer artifacts, but it will not call a model.
@@ -443,15 +445,19 @@ def _live_canary_verdict(
         for k, v in flags.items()
         if "provider" in str(k).lower() or "json_unparseable" in str(k).lower()
     )
+    scout_error_count = int(scouts.get("errored") or 0)
+    sample_n = int(n_scouts or 0)
+    stage_error_budget = max(1, int(sample_n * 0.02))
     gates = {
-        "sample_size_ge_10": int(n_scouts or 0) >= 10,
+        "sample_size_ge_10": sample_n >= 10,
         "cost_below_cap": cost <= max(0.0, cost_cap_usd),
         "provider_call_errors_eq_0": len(transcript_summary.get("errors") or []) == 0,
         "scout_success_rate_ge_0_70": _to_float(scouts.get("success_rate")) >= 0.70,
         "avg_strings_ge_1_00": _to_float(scouts.get("avg_information_strings_per_scout")) >= 1.00,
         "evidence_ok_rate_ge_0_60": _to_float(scouts.get("evidence_ok_rate")) >= 0.60,
         "duplicate_hypothesis_rate_le_0_35": _to_float(scouts.get("duplicate_hypothesis_rate"), default=1.0) <= 0.35,
-        "provider_json_errors_le_1": provider_error_count <= 1,
+        "provider_json_errors_within_stage_budget": provider_error_count <= stage_error_budget,
+        "scout_errors_within_stage_budget": scout_error_count <= stage_error_budget,
         "information_strings_created": int(info.get("string_count") or 0) >= 1,
         "synthesis_promoted": int(info.get("promoted_hypotheses") or 0) >= 1,
         "geometry_cells_created": int(geometry.get("cell_count") or 0) >= 1,
@@ -459,26 +465,38 @@ def _live_canary_verdict(
     }
     failed = [name for name, ok in gates.items() if not ok]
     status = "pass" if not failed else "warn" if len(failed) <= 2 else "fail"
-    sample_n = int(n_scouts or 0)
     ready_for_next = status == "pass" and sample_n >= 10
     ready_for_100 = ready_for_next and sample_n < 100
-    ready_for_1000_tournament = ready_for_next and sample_n >= 100
+    ready_for_tournament = ready_for_next and sample_n >= 100
+    if ready_for_next and sample_n >= 1000:
+        interpretation = (
+            "The 1,000-scout live shadow candidate has clean raw canary gates. "
+            "Run the tournament evaluator next; only the tournament can promote it "
+            "to a repeat shadow trial, and scheduled production stays blocked until "
+            "repeatability is proven."
+        )
+    elif ready_for_tournament:
+        interpretation = (
+            "The 100-scout live ramp is clean. Run the tournament evaluator before "
+            "any 1,000-scout spend."
+        )
+    elif ready_for_100:
+        interpretation = (
+            "The live provider canary is clean. Run a 100-scout live ramp next, "
+            "then promote to 1,000 only if the same quality curve holds."
+        )
+    elif status in {"pass", "warn"} and sample_n < 10:
+        interpretation = "This was a useful live smoke, but not enough to open the next spend gate."
+    else:
+        interpretation = "The live canary found provider/data-quality issues. Fix these before increasing spend."
     return {
         "status": status,
         "ready_for_next_live_100": ready_for_100,
-        "ready_for_live_1000_tournament": ready_for_1000_tournament,
+        "ready_for_live_1000_tournament": ready_for_tournament,
         "ready_for_direct_live_1000": False,
         "gates": gates,
         "failed_gates": failed,
-        "interpretation": (
-            "The live provider canary is clean. Run a 100-scout live ramp next, then promote to 1,000 if the same quality curve holds."
-            if ready_for_100 else
-            "The 100-scout live ramp is clean. Run the tournament evaluator before any 1,000-scout spend."
-            if ready_for_1000_tournament else
-            "This was a useful live smoke, but not enough to open the next spend gate."
-            if status in {"pass", "warn"} and int(n_scouts or 0) < 10 else
-            "The live canary found provider/data-quality issues. Fix these before increasing spend."
-        ),
+        "interpretation": interpretation,
     }
 
 
@@ -538,6 +556,20 @@ def _blocked_report(
 
 
 def _scale_decision(verdict: dict[str, Any], *, n_scouts: int) -> dict[str, Any]:
+    if verdict.get("ready_for_live_1000_tournament") and int(n_scouts or 0) >= 1000:
+        return {
+            "decision": "evaluate_shadow_production_trial",
+            "next_step": (
+                "Run the live scout tournament evaluator over this 1,000-scout report. "
+                "Promote only to a repeat 1,000-scout shadow trial if scale gates pass; "
+                "scheduled production requires repeatability across independent 1,000-scout runs."
+            ),
+            "why_not_scheduled_production": (
+                "A single 1,000-scout pass proves scale shape, not operational repeatability. "
+                "The next proof is a second independent 1,000-scout shadow run with stable "
+                "provider reliability, prompt structure, geometry, and coverage deltas."
+            ),
+        }
     if verdict.get("ready_for_live_1000_tournament"):
         return {
             "decision": "evaluate_live_1000_ramp_next",

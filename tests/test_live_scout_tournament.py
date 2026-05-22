@@ -62,6 +62,84 @@ def test_live_scout_tournament_promotes_clean_hundred_scout_distribution_to_1000
     assert tournament["next_experiment_plan"][0]["id"] == "live_1000_ramp"
 
 
+def test_live_scout_tournament_promotes_clean_thousand_scout_distribution_to_shadow_trial(tmp_path):
+    report_path = _write_canary(
+        tmp_path,
+        n_requested=1000,
+        success_rate=0.93,
+        transcript_errors=0,
+        duplicate_rate=0.06,
+        completed=930,
+        geometry_cells=1000,
+        string_count=2870,
+    )
+
+    tournament = evaluate_live_scout_tournament([report_path])
+
+    assert tournament["promotion_decision"]["decision"] == "promote_to_shadow_production_trial"
+    assert tournament["promotion_decision"]["ready_for_live_1000"] is True
+    assert tournament["promotion_decision"]["ready_for_scheduled_production"] is False
+    assert tournament["winner"]["promotion_eligible"] is True
+    assert "scale_success_rate_ge_0_90" in tournament["winner"]["gates"]
+    assert tournament["next_experiment_plan"][0]["id"] == "repeat_1000_shadow_trial"
+
+
+def test_live_scout_tournament_routes_failed_thousand_to_repair_arm(tmp_path):
+    report_path = _write_canary(
+        tmp_path,
+        n_requested=1000,
+        success_rate=0.896,
+        transcript_errors=1,
+        duplicate_rate=0.103,
+        completed=896,
+        structural_flags=149,
+        geometry_cells=982,
+        string_count=2799,
+    )
+
+    tournament = evaluate_live_scout_tournament([report_path])
+
+    assert tournament["promotion_decision"]["decision"] == "no_promotion"
+    assert tournament["promotion_decision"]["ready_for_live_1000"] is False
+    assert "Do not promote the 1,000-scout stage yet" in tournament["promotion_decision"]["reason"]
+    assert "scale_success_rate_ge_0_90" in tournament["winner"]["failed_gates"]
+    assert tournament["next_experiment_plan"][0]["id"] == "flash_temporal_v4_repair_200"
+
+
+def test_live_scout_tournament_uses_later_repair_arm_after_failed_thousand(tmp_path):
+    failed_path = _write_canary(
+        tmp_path / "failed",
+        n_requested=1000,
+        success_rate=0.896,
+        transcript_errors=1,
+        duplicate_rate=0.103,
+        completed=896,
+        structural_flags=149,
+        geometry_cells=982,
+        string_count=2799,
+        prompt_variant="flash_temporal_v3",
+    )
+    repair_path = _write_canary(
+        tmp_path / "repair",
+        n_requested=200,
+        success_rate=0.975,
+        transcript_errors=0,
+        duplicate_rate=0.02,
+        completed=195,
+        structural_flags=8,
+        geometry_cells=199,
+        string_count=592,
+        prompt_variant="flash_temporal_v4",
+    )
+
+    tournament = evaluate_live_scout_tournament([failed_path, repair_path])
+
+    assert tournament["promotion_decision"]["decision"] == "promote_to_1000_scout_ramp"
+    assert tournament["winner"]["candidate_id"].startswith("flash_temporal_v4")
+    assert tournament["promotion_decision"]["ready_for_live_1000"] is True
+    assert tournament["next_experiment_plan"][0]["id"] == "live_1000_ramp"
+
+
 def test_live_scout_tournament_blocks_temporal_contract_regression(tmp_path):
     report_path = _write_canary(
         tmp_path,
@@ -91,7 +169,10 @@ def _write_canary(
     completed: int,
     structural_flags: int = 0,
     geometry_cells: int = 6,
+    string_count: int | None = None,
+    prompt_variant: str = "flash_compact_v2",
 ) -> Path:
+    tmp_path.mkdir(parents=True, exist_ok=True)
     report_path = tmp_path / "live_scout_canary_report.json"
     report = {
         "schema_version": "talis_live_scout_canary_v1",
@@ -102,7 +183,7 @@ def _write_canary(
         "provider_timeout_s": 45,
         "concurrency": 1,
         "seed_rng": 1,
-        "prompt_variant_override": "flash_compact_v2",
+        "prompt_variant_override": prompt_variant,
         "max_tool_iterations": 0,
         "metrics": {
             "scouts": {
@@ -116,11 +197,11 @@ def _write_canary(
                 "top_quality_flags": {
                     "scout_provider_unavailable": transcript_errors,
                     "prompt_string_missing_temporal_metadata": structural_flags,
-                "prompt_quality:0.90": n_requested,
+                    "prompt_quality:0.90": n_requested,
                 },
             },
             "information_map": {
-                "string_count": max(12, completed),
+                "string_count": string_count if string_count is not None else max(12, completed),
                 "cells_with_strings": max(8, completed),
                 "confluences": 4,
                 "tensions": 1,
@@ -158,7 +239,7 @@ def _write_canary(
         calls.append(call)
     (tmp_path / "live_scout_transcript.json").write_text(json.dumps({"calls": calls}), encoding="utf-8")
     outputs = [
-        {"quality_flags": ["prompt_variant:flash_compact_v2"]}
+        {"quality_flags": [f"prompt_variant:{prompt_variant}"]}
         for _ in range(n_requested)
     ]
     (tmp_path / "live_scout_canary_outputs.json").write_text(json.dumps(outputs), encoding="utf-8")

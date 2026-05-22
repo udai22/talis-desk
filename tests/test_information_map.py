@@ -302,6 +302,8 @@ def test_deep_scout_prompt_quality_gate():
     assert "Hard blockers" in build_deep_scout_system_prompt("concise_contract_v1")
     assert "Keep JSON small" in build_deep_scout_system_prompt("flash_compact_v2")
     assert "temporal_confidence" in build_deep_scout_system_prompt("flash_temporal_v3")
+    assert "scale repair arm" in build_deep_scout_system_prompt("flash_temporal_v4")
+    assert "Do not leave `hypothesis` empty" in build_deep_scout_system_prompt("flash_temporal_v4")
     assert len(build_deep_scout_system_prompt("flash_temporal_v3")) < len(build_deep_scout_system_prompt("concise_contract_v1"))
     assert len(build_deep_scout_system_prompt("flash_compact_v2")) < len(build_deep_scout_system_prompt("concise_contract_v1"))
     assert "event_intelligence" in build_deep_scout_system_prompt("mycelial_network_v1")
